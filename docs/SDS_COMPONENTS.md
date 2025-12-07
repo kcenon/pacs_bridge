@@ -1,6 +1,6 @@
 # SDS - Component Designs
 
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 > **Parent Document:** [SDS.md](SDS.md)
 > **Last Updated:** 2025-12-07
 
@@ -16,6 +16,7 @@
 - [6. pacs_system Adapter Module](#6-pacs_system-adapter-module)
 - [7. Configuration Module](#7-configuration-module)
 - [8. Integration Module](#8-integration-module)
+- [9. Monitoring Module](#9-monitoring-module)
 
 ---
 
@@ -1932,6 +1933,276 @@ public:
 
 ---
 
-*Document Version: 1.0.0*
+## 9. Monitoring Module
+
+### 9.1 Module Overview
+
+**Namespace:** `pacs::bridge::monitoring`
+**Purpose:** Provide health check endpoints for load balancer integration and operational monitoring
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                           Monitoring Module                                 │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                       health_server                                  │  │
+│   │                                                                      │  │
+│   │  GET /health/live   → liveness_result   → 200/503                   │  │
+│   │  GET /health/ready  → readiness_result  → 200/503                   │  │
+│   │  GET /health/deep   → deep_health_result → 200/503                  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                      ▲                                      │
+│                                      │                                      │
+│   ┌──────────────────────────────────┴───────────────────────────────────┐ │
+│   │                        health_checker                                 │ │
+│   │                                                                       │ │
+│   │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ │ │
+│   │  │mllp_server   │ │pacs_system   │ │message_queue │ │memory_check  │ │ │
+│   │  │    _check    │ │    _check    │ │    _check    │ │              │ │ │
+│   │  └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘ │ │
+│   └──────────────────────────────────────────────────────────────────────┘ │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### DES-MON-001: health_types
+
+**Traces to:** NFR-2.1, NFR-2.3, NFR-2.4
+
+```cpp
+namespace pacs::bridge::monitoring {
+
+/**
+ * @brief Health status enumeration
+ */
+enum class health_status {
+    healthy,   // Component is fully operational (UP)
+    degraded,  // Operational but with warnings (DEGRADED)
+    unhealthy  // Not operational (DOWN)
+};
+
+/**
+ * @brief Health check error codes (-980 to -989)
+ */
+enum class health_error : int {
+    timeout = -980,
+    component_unavailable = -981,
+    threshold_exceeded = -982,
+    invalid_configuration = -983,
+    not_initialized = -984,
+    serialization_failed = -985
+};
+
+/**
+ * @brief Component health information
+ */
+struct component_health {
+    std::string name;
+    health_status status;
+    std::optional<int64_t> response_time_ms;
+    std::optional<std::string> details;
+    std::map<std::string, std::string> metrics;
+};
+
+/**
+ * @brief Liveness check result (K8s livenessProbe)
+ */
+struct liveness_result {
+    health_status status;
+    std::chrono::system_clock::time_point timestamp;
+};
+
+/**
+ * @brief Readiness check result (K8s readinessProbe)
+ */
+struct readiness_result {
+    health_status status;
+    std::chrono::system_clock::time_point timestamp;
+    std::map<std::string, health_status> components;
+};
+
+/**
+ * @brief Deep health check result
+ */
+struct deep_health_result {
+    health_status status;
+    std::chrono::system_clock::time_point timestamp;
+    std::vector<component_health> components;
+    std::optional<std::string> message;
+};
+
+/**
+ * @brief Health check configuration
+ */
+struct health_config {
+    bool enabled = true;
+    uint16_t port = 8081;
+    std::string base_path = "/health";
+    health_thresholds thresholds;
+};
+
+} // namespace pacs::bridge::monitoring
+```
+
+### DES-MON-002: health_checker
+
+**Traces to:** NFR-2.1, NFR-2.3
+
+```cpp
+namespace pacs::bridge::monitoring {
+
+/**
+ * @brief Interface for component health checks
+ */
+class component_check {
+public:
+    virtual ~component_check() = default;
+
+    [[nodiscard]] virtual std::string name() const = 0;
+    [[nodiscard]] virtual component_health check(
+        std::chrono::milliseconds timeout) = 0;
+    [[nodiscard]] virtual bool is_critical() const noexcept { return true; }
+};
+
+/**
+ * @brief Central health checker
+ *
+ * Coordinates health checks across all registered components.
+ * Thread-safe: All public methods are thread-safe.
+ */
+class health_checker {
+public:
+    explicit health_checker(const health_config& config);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Component Registration
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void register_check(std::unique_ptr<component_check> check);
+    void register_check(
+        std::string name,
+        std::function<component_health(std::chrono::milliseconds)> check_fn,
+        bool critical = true);
+    bool unregister_check(std::string_view name);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Health Check Operations
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] liveness_result check_liveness() const;
+    [[nodiscard]] readiness_result check_readiness() const;
+    [[nodiscard]] deep_health_result check_deep() const;
+    [[nodiscard]] std::optional<component_health> check_component(
+        std::string_view name) const;
+};
+
+} // namespace pacs::bridge::monitoring
+```
+
+### DES-MON-003: health_server
+
+**Traces to:** NFR-2.1, NFR-2.4
+
+```cpp
+namespace pacs::bridge::monitoring {
+
+/**
+ * @brief HTTP server for health check endpoints
+ *
+ * Endpoints:
+ *   GET /health/live  - Liveness check (100ms response)
+ *   GET /health/ready - Readiness check (component status)
+ *   GET /health/deep  - Deep health with metrics
+ */
+class health_server {
+public:
+    struct config {
+        uint16_t port = 8081;
+        std::string base_path = "/health";
+        std::string bind_address = "0.0.0.0";
+        int connection_timeout_seconds = 30;
+        size_t max_connections = 100;
+    };
+
+    health_server(health_checker& checker, const config& cfg = {});
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Server Lifecycle
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] bool start();
+    void stop(bool wait_for_connections = true);
+    [[nodiscard]] bool is_running() const noexcept;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Request Handling
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] http_response handle_request(std::string_view path) const;
+};
+
+/**
+ * @brief Generate Kubernetes probe configuration
+ */
+[[nodiscard]] std::string generate_k8s_probe_config(
+    uint16_t port, std::string_view base_path = "/health");
+
+/**
+ * @brief Generate Docker HEALTHCHECK instruction
+ */
+[[nodiscard]] std::string generate_docker_healthcheck(
+    uint16_t port, std::string_view base_path = "/health");
+
+} // namespace pacs::bridge::monitoring
+```
+
+### DES-MON-004: Built-in Component Checks
+
+```cpp
+namespace pacs::bridge::monitoring {
+
+/**
+ * @brief MLLP server health check
+ */
+class mllp_server_check : public component_check {
+    // Checks if MLLP server is running and accepting connections
+};
+
+/**
+ * @brief PACS system connection health check
+ */
+class pacs_connection_check : public component_check {
+    // Performs DICOM C-ECHO to verify connectivity
+};
+
+/**
+ * @brief Message queue health check
+ */
+class queue_health_check : public component_check {
+    // Checks queue database and threshold metrics
+};
+
+/**
+ * @brief FHIR server health check (non-critical)
+ */
+class fhir_server_check : public component_check {
+    // Checks if FHIR server is running (optional component)
+};
+
+/**
+ * @brief Memory usage health check (non-critical)
+ */
+class memory_health_check : public component_check {
+    // Monitors process memory against thresholds
+};
+
+} // namespace pacs::bridge::monitoring
+```
+
+---
+
+*Document Version: 1.1.0*
 *Created: 2025-12-07*
+*Updated: 2025-12-07 - Added Monitoring Module (Section 9)*
 *Author: kcenon@naver.com*
