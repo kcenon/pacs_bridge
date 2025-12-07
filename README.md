@@ -31,13 +31,36 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
+## CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration with multi-platform support:
+
+| Platform | Compiler | Status |
+|----------|----------|--------|
+| Ubuntu 24.04 | GCC 13+ | ✓ std::format support |
+| Ubuntu 24.04 | Clang | ✓ |
+| macOS 14 (ARM64) | Apple Clang | ✓ |
+| Windows 2022 | MSVC | ✓ vcpkg integration |
+
+### Code Coverage
+
+Code coverage reports are generated on Ubuntu GCC builds and uploaded to Codecov.
+Target coverage: 80% by Phase 5.
+
+### CI Features
+
+- **Dependency Caching**: kcenon ecosystem dependencies are cached for faster builds
+- **Parallel Builds**: All platform builds run in parallel
+- **Artifact Upload**: Test results and coverage reports are archived
+
 ## Requirements
 
 - **C++23 compatible compiler**:
-  - GCC 11+ (Linux)
+  - GCC 13+ (Linux) - Required for `std::format` support
   - Clang 14+ (macOS)
   - MSVC 2022+ (Windows)
 - CMake 3.20+
+- Ninja (recommended for faster builds)
 - Optional: OpenSSL 1.1+ (for TLS support)
 - Optional: [kcenon ecosystem](https://github.com/kcenon) dependencies (for full integration)
 
