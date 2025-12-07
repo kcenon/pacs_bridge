@@ -3546,6 +3546,7 @@ The testing module supports the following test scenarios as specified in Issue #
 
 | Range | Module |
 |-------|--------|
+| -940 to -949 | Performance |
 | -960 to -969 | Testing |
 | -970 to -979 | MLLP |
 | -980 to -989 | Health Check |
@@ -3553,7 +3554,281 @@ The testing module supports the following test scenarios as specified in Issue #
 
 ---
 
-*Document Version: 1.3.0*
+## 12. Performance Module
+
+### 12.1 Module Overview
+
+**Namespace:** `pacs::bridge::performance`
+**Purpose:** High-performance optimization layer for meeting SRS throughput, latency, and memory targets
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         Performance Module                                  │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐   │
+│   │  zero_copy_parser │   │  object_pool      │   │  lockfree_queue   │   │
+│   │                   │   │                   │   │                   │   │
+│   │  - String views   │   │  - Pre-allocation │   │  - MPMC queue     │   │
+│   │  - Lazy parsing   │   │  - Cache hits     │   │  - Work stealing  │   │
+│   │  - Field index    │   │  - Buffer pool    │   │  - Priority queue │   │
+│   └───────────────────┘   └───────────────────┘   └───────────────────┘   │
+│            │                       │                       │               │
+│            ▼                       ▼                       ▼               │
+│   ┌────────────────────────────────────────────────────────────────────┐  │
+│   │                   Thread Pool Manager                               │  │
+│   │   Work-Stealing Scheduler │ Priority Tasks │ Dynamic Scaling       │  │
+│   └────────────────────────────────────────────────────────────────────┘  │
+│            │                       │                                       │
+│   ┌────────┴───────────┐   ┌──────┴────────────┐                          │
+│   │ connection_pool    │   │ benchmark_runner  │                          │
+│   │                    │   │                   │                          │
+│   │  - Pre-warming     │   │  - Throughput     │                          │
+│   │  - Health check    │   │  - Latency        │                          │
+│   │  - TCP tuning      │   │  - Memory         │                          │
+│   └────────────────────┘   └───────────────────┘                          │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 12.2 Performance Targets
+
+From SRS NFR-1.1 to NFR-1.6:
+
+| Target | Value | Implementation |
+|--------|-------|----------------|
+| Throughput | ≥500 msg/s | Thread pool with work-stealing |
+| Latency P95 | <50 ms | Zero-copy parser, lock-free queues |
+| MWL Creation | <100 ms | Object pooling, connection reuse |
+| Connections | ≥50 concurrent | Connection pooling, TCP tuning |
+| Memory | <200 MB | Buffer pooling, size-class allocation |
+| CPU Idle | <20% | Work-stealing scheduler |
+
+### DES-PERF-001: performance_types
+
+**Traces to:** NFR-1.1 to NFR-1.6, SRS-PERF-001 to SRS-PERF-006
+
+```cpp
+namespace pacs::bridge::performance {
+
+/**
+ * @brief Performance error codes (-940 to -949)
+ */
+enum class performance_error : int {
+    thread_pool_init_failed = -940,
+    pool_exhausted = -941,
+    queue_full = -942,
+    invalid_configuration = -943,
+    allocation_failed = -944,
+    timeout = -945,
+    not_initialized = -946,
+    benchmark_failed = -947,
+    parser_error = -948,
+    memory_limit_exceeded = -949
+};
+
+/**
+ * @brief Performance target constants from SRS requirements
+ */
+struct performance_targets {
+    static constexpr size_t MIN_THROUGHPUT_MSG_PER_SEC = 500;
+    static constexpr std::chrono::milliseconds MAX_P95_LATENCY{50};
+    static constexpr std::chrono::milliseconds MAX_MWL_LATENCY{100};
+    static constexpr size_t MIN_CONCURRENT_CONNECTIONS = 50;
+    static constexpr size_t MAX_MEMORY_BASELINE_MB = 200;
+    static constexpr double MAX_CPU_IDLE_PERCENT = 20.0;
+};
+
+} // namespace pacs::bridge::performance
+```
+
+### DES-PERF-002: zero_copy_parser
+
+**Traces to:** NFR-1.1, NFR-1.2, SRS-PERF-002
+
+```cpp
+namespace pacs::bridge::performance {
+
+/**
+ * @brief Zero-copy field reference
+ */
+struct field_ref {
+    std::string_view value;
+
+    [[nodiscard]] bool empty() const noexcept;
+    [[nodiscard]] std::string_view get() const noexcept;
+    [[nodiscard]] std::string to_string() const;
+};
+
+/**
+ * @brief Zero-copy HL7 message parser
+ */
+class zero_copy_parser {
+public:
+    [[nodiscard]] static std::expected<zero_copy_parser, performance_error>
+    parse(std::string_view data, const zero_copy_config& config = {});
+
+    [[nodiscard]] std::optional<segment_ref> segment(std::string_view segment_id) const;
+    [[nodiscard]] size_t segment_count() const noexcept;
+
+    [[nodiscard]] field_ref message_type() const;
+    [[nodiscard]] field_ref message_control_id() const;
+
+    [[nodiscard]] std::chrono::nanoseconds parse_duration() const noexcept;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::performance
+```
+
+### DES-PERF-003: object_pool
+
+**Traces to:** NFR-1.5, SRS-PERF-005
+
+```cpp
+namespace pacs::bridge::performance {
+
+/**
+ * @brief Pool statistics for monitoring
+ */
+struct pool_statistics {
+    std::atomic<uint64_t> cache_hits{0};
+    std::atomic<uint64_t> cache_misses{0};
+    [[nodiscard]] double hit_rate() const noexcept;
+};
+
+/**
+ * @brief Thread-safe buffer pool with size classes
+ */
+class message_buffer_pool {
+public:
+    struct buffer_handle {
+        uint8_t* data = nullptr;
+        size_t capacity = 0;
+        size_t size = 0;
+        [[nodiscard]] bool valid() const noexcept;
+    };
+
+    explicit message_buffer_pool(const memory_config& config = {});
+    [[nodiscard]] std::expected<buffer_handle, performance_error> acquire(size_t min_size);
+    void release(buffer_handle& buffer) noexcept;
+    [[nodiscard]] const pool_statistics& statistics() const noexcept;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::performance
+```
+
+### DES-PERF-004: thread_pool_manager
+
+**Traces to:** NFR-1.1, NFR-1.4, SRS-PERF-001, SRS-PERF-004
+
+```cpp
+namespace pacs::bridge::performance {
+
+enum class task_priority : uint8_t {
+    critical = 0, high = 1, normal = 2, low = 3, background = 4
+};
+
+/**
+ * @brief Work-stealing thread pool manager
+ */
+class thread_pool_manager {
+public:
+    explicit thread_pool_manager(const thread_pool_config& config = {});
+
+    [[nodiscard]] std::expected<void, performance_error> start();
+    [[nodiscard]] std::expected<void, performance_error> stop(bool wait_for_tasks = true);
+    [[nodiscard]] bool is_running() const noexcept;
+
+    template <typename F, typename... Args>
+    [[nodiscard]] auto submit_priority(task_priority priority, F&& f, Args&&... args)
+        -> std::future<std::invoke_result_t<F, Args...>>;
+
+    bool post(task_fn task, task_priority priority = task_priority::normal);
+
+    [[nodiscard]] static thread_pool_manager& instance();
+    static void initialize(const thread_pool_config& config);
+    static void shutdown();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::performance
+```
+
+### DES-PERF-005: benchmark_runner
+
+**Traces to:** NFR-1.1 to NFR-1.6, SRS-PERF-001 to SRS-PERF-006
+
+```cpp
+namespace pacs::bridge::performance {
+
+enum class benchmark_type {
+    parsing, throughput, latency, memory, concurrent, pool_efficiency, thread_scaling
+};
+
+struct benchmark_result {
+    benchmark_type type;
+    double throughput = 0.0;
+    double p95_latency_us = 0.0;
+    uint64_t total_messages = 0;
+    bool targets_met = false;
+    [[nodiscard]] bool passed() const noexcept;
+};
+
+/**
+ * @brief Performance benchmark runner
+ */
+class benchmark_runner {
+public:
+    explicit benchmark_runner(const benchmark_config& config = {});
+
+    [[nodiscard]] std::expected<benchmark_suite_result, performance_error> run_all();
+    [[nodiscard]] std::expected<benchmark_result, performance_error>
+    run_benchmark(benchmark_type type);
+
+    [[nodiscard]] std::expected<void, performance_error>
+    save_results(const std::string& path, const std::string& format = "json");
+
+    void cancel();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::performance
+```
+
+### 12.3 Integration with thread_system
+
+The Performance Module integrates with the kcenon ecosystem's `thread_system`:
+
+```cpp
+#include <thread_system/thread_pool.h>
+#include <thread_system/job_queue.h>
+
+auto pool = thread_system::create_thread_pool({
+    .min_threads = 4,
+    .max_threads = std::thread::hardware_concurrency(),
+    .enable_work_stealing = true
+});
+
+auto job_queue = thread_system::create_lockfree_queue<hl7_message>();
+```
+
+---
+
+*Document Version: 1.4.0*
 *Created: 2025-12-07*
-*Updated: 2025-12-07 - Added Testing Module (Section 11)*
+*Updated: 2025-12-07 - Added Performance Module (Section 12)*
 *Author: kcenon@naver.com*
