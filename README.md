@@ -87,18 +87,28 @@ cmake --build build
 | Option | Default | Description |
 |--------|---------|-------------|
 | `BRIDGE_STANDALONE_BUILD` | `ON` | Build without external kcenon dependencies |
+| `BRIDGE_BUILD_PACS_INTEGRATION` | `ON` | Enable pacs_system for DICOM MWL/MPPS (requires full build) |
 | `BRIDGE_BUILD_HL7` | `ON` | Build HL7 gateway module |
 | `BRIDGE_BUILD_FHIR` | `OFF` | Build FHIR gateway module (future) |
-| `BRIDGE_BUILD_TESTS` | `OFF` | Build unit tests |
+| `BRIDGE_BUILD_TESTS` | `ON` | Build unit tests |
 | `BRIDGE_BUILD_EXAMPLES` | `ON` | Build example applications |
 | `BRIDGE_BUILD_BENCHMARKS` | `OFF` | Build performance benchmarks |
+| `BRIDGE_ENABLE_TLS` | `ON` | Enable TLS support with OpenSSL |
 
 ### vcpkg Integration
 
-For cross-platform dependency management:
+The project uses vcpkg manifest mode (`vcpkg.json`) for managing standard third-party
+dependencies (OpenSSL, GTest, fmt, spdlog, etc.). The kcenon ecosystem packages are
+managed via CMake FetchContent.
 
 ```bash
+# With vcpkg (recommended for cross-platform builds)
 cmake -B build -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build
+
+# Or using VCPKG_ROOT environment variable
+export VCPKG_ROOT=/path/to/vcpkg
+cmake -B build
 cmake --build build
 ```
 
@@ -188,9 +198,14 @@ cmake --build build
 ./build/bin/mllp_test
 ./build/bin/config_test
 ./build/bin/mwl_client_test
+./build/bin/ecosystem_integration_test  # Verify dependency setup
 
 # Or run all tests with CTest
 cd build && ctest --output-on-failure
+
+# Run tests by label
+ctest --test-dir build -L phase1      # Phase 1 tests only
+ctest --test-dir build -L integration # Integration tests only
 ```
 
 ## License
