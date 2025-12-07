@@ -241,7 +241,8 @@ bool test_orm_error_to_string() {
 // =============================================================================
 
 bool test_extract_order_info_nw() {
-    auto parse_result = hl7_parser::parse(SAMPLE_ORM_NW);
+    hl7_parser parser;
+    auto parse_result = parser.parse(SAMPLE_ORM_NW);
     TEST_ASSERT(parse_result.has_value(), "Should parse NW message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
@@ -272,7 +273,8 @@ bool test_extract_order_info_nw() {
 }
 
 bool test_extract_order_info_xo() {
-    auto parse_result = hl7_parser::parse(SAMPLE_ORM_XO);
+    hl7_parser parser;
+    auto parse_result = parser.parse(SAMPLE_ORM_XO);
     TEST_ASSERT(parse_result.has_value(), "Should parse XO message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
@@ -289,7 +291,8 @@ bool test_extract_order_info_xo() {
 }
 
 bool test_extract_order_info_ca() {
-    auto parse_result = hl7_parser::parse(SAMPLE_ORM_CA);
+    hl7_parser parser;
+    auto parse_result = parser.parse(SAMPLE_ORM_CA);
     TEST_ASSERT(parse_result.has_value(), "Should parse CA message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
@@ -334,7 +337,7 @@ bool test_handler_with_custom_config() {
     orm_handler_config config;
     config.allow_nw_update = true;
     config.allow_xo_create = true;
-    config.default_modality = "CT";
+    config.auto_generate_study_uid = false;
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl),
@@ -344,6 +347,8 @@ bool test_handler_with_custom_config() {
                 "Config allow_nw_update should be true");
     TEST_ASSERT(handler.config().allow_xo_create == true,
                 "Config allow_xo_create should be true");
+    TEST_ASSERT(handler.config().auto_generate_study_uid == false,
+                "Config auto_generate_study_uid should be false");
 
     return true;
 }
@@ -353,7 +358,8 @@ bool test_handler_with_custom_config() {
 // =============================================================================
 
 bool test_can_handle_orm_message() {
-    auto parse_result = hl7_parser::parse(SAMPLE_ORM_NW);
+    hl7_parser parser;
+    auto parse_result = parser.parse(SAMPLE_ORM_NW);
     TEST_ASSERT(parse_result.has_value(), "Should parse ORM message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
@@ -371,7 +377,8 @@ bool test_cannot_handle_adt_message() {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115110000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r";
 
-    auto parse_result = hl7_parser::parse(adt_msg);
+    hl7_parser parser;
+    auto parse_result = parser.parse(adt_msg);
     TEST_ASSERT(parse_result.has_value(), "Should parse ADT message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
@@ -445,7 +452,8 @@ bool test_reset_statistics() {
 // =============================================================================
 
 bool test_generate_ack_success() {
-    auto parse_result = hl7_parser::parse(SAMPLE_ORM_NW);
+    hl7_parser parser;
+    auto parse_result = parser.parse(SAMPLE_ORM_NW);
     TEST_ASSERT(parse_result.has_value(), "Should parse ORM message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
@@ -467,7 +475,8 @@ bool test_generate_ack_success() {
 }
 
 bool test_generate_ack_error() {
-    auto parse_result = hl7_parser::parse(SAMPLE_ORM_NW);
+    hl7_parser parser;
+    auto parse_result = parser.parse(SAMPLE_ORM_NW);
     TEST_ASSERT(parse_result.has_value(), "Should parse ORM message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
