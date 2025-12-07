@@ -164,6 +164,15 @@ set_tests_properties(mwl_client_test PROPERTIES
 )
 
 # =============================================================================
+# Ecosystem Integration Test (Issue #4 - Dependency Setup Verification)
+# =============================================================================
+
+add_bridge_test(ecosystem_integration_test)
+set_tests_properties(ecosystem_integration_test PROPERTIES
+    LABELS "integration;ecosystem;phase0"
+)
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -188,5 +197,6 @@ message(STATUS "  - health_check_test")
 message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
 message(STATUS "  - mwl_client_test")
+message(STATUS "  - ecosystem_integration_test")
 message(STATUS "==========================")
 message(STATUS "")
