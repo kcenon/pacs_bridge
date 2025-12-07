@@ -1,0 +1,244 @@
+# PACS Bridge Configuration Example
+# This file demonstrates all available configuration options
+#
+# Environment variables can be referenced using ${VAR} syntax:
+#   - ${VAR} - Required (error if not set)
+#   - ${VAR:-default} - Optional with default value
+#
+# Example: ${PACS_BRIDGE_PORT:-2575}
+
+# =============================================================================
+# Server Configuration
+# =============================================================================
+
+server:
+  # Unique name for this PACS Bridge instance
+  name: "${PACS_BRIDGE_NAME:-PACS_BRIDGE}"
+
+# =============================================================================
+# HL7/MLLP Configuration
+# =============================================================================
+
+hl7:
+  # Inbound MLLP listener settings
+  listener:
+    # Port to listen on (default: 2575, MLLPS: 2576)
+    port: ${PACS_BRIDGE_MLLP_PORT:-2575}
+
+    # Bind address (empty = all interfaces)
+    # bind_address: "0.0.0.0"
+
+    # Maximum concurrent connections
+    max_connections: 50
+
+    # Connection idle timeout (seconds)
+    idle_timeout: 300s
+
+    # Maximum HL7 message size (bytes)
+    max_message_size: 10485760  # 10MB
+
+    # TLS configuration (optional)
+    # tls:
+    #   enabled: true
+    #   cert_path: "/etc/pacs_bridge/certs/server.crt"
+    #   key_path: "/etc/pacs_bridge/certs/server.key"
+    #   ca_path: "/etc/pacs_bridge/certs/ca.crt"
+    #   client_auth: optional  # none, optional, required
+    #   min_version: tls_1_2
+
+  # Outbound destinations for generated messages
+  outbound:
+    # Primary RIS endpoint
+    - name: "RIS_PRIMARY"
+      host: "${RIS_HOST:-ris.hospital.local}"
+      port: ${RIS_PORT:-2576}
+      message_types:
+        - "ORM^O01"
+        - "ORU^R01"
+      priority: 1
+      enabled: true
+      retry_count: 3
+      retry_delay: 1000  # milliseconds
+
+    # Backup RIS endpoint (failover)
+    - name: "RIS_BACKUP"
+      host: "${RIS_BACKUP_HOST:-ris-backup.hospital.local}"
+      port: ${RIS_BACKUP_PORT:-2576}
+      message_types:
+        - "ORM^O01"
+        - "ORU^R01"
+      priority: 2
+      enabled: true
+      retry_count: 3
+      retry_delay: 1000
+
+# =============================================================================
+# FHIR Gateway Configuration
+# =============================================================================
+
+fhir:
+  # Enable/disable FHIR REST API
+  enabled: false
+
+  server:
+    # FHIR server port
+    port: 8080
+
+    # Base path for FHIR endpoints
+    base_path: "/fhir/r4"
+
+    # Maximum concurrent requests
+    max_connections: 100
+
+    # Request timeout (seconds)
+    request_timeout: 60s
+
+    # Pagination page size
+    page_size: 100
+
+    # TLS configuration (optional)
+    # tls:
+    #   enabled: true
+    #   cert_path: "/etc/pacs_bridge/certs/server.crt"
+    #   key_path: "/etc/pacs_bridge/certs/server.key"
+
+# =============================================================================
+# pacs_system Integration
+# =============================================================================
+
+pacs:
+  # pacs_system hostname
+  host: "${PACS_HOST:-localhost}"
+
+  # DICOM port
+  port: ${PACS_PORT:-11112}
+
+  # Our AE title (calling)
+  ae_title: "PACS_BRIDGE"
+
+  # pacs_system AE title (called)
+  called_ae: "PACS_SCP"
+
+  # Connection timeout
+  timeout: 30s
+
+# =============================================================================
+# Code Mapping Configuration
+# =============================================================================
+
+mapping:
+  # AE titles by modality type
+  modality_ae_titles:
+    CT:
+      - "CT_SCANNER_1"
+      - "CT_SCANNER_2"
+    MR:
+      - "MR_SCANNER_1"
+      - "MR_SCANNER_2"
+    XR:
+      - "XRAY_ROOM_1"
+      - "XRAY_ROOM_2"
+    US:
+      - "US_SCANNER_1"
+
+  # Procedure code to modality mapping
+  procedure_to_modality:
+    "CT001": "CT"
+    "CT002": "CT"
+    "MR001": "MR"
+    "XR001": "XR"
+    "US001": "US"
+
+  # Default issuer of patient ID
+  default_patient_id_issuer: "HOSPITAL_MRN"
+
+# =============================================================================
+# Message Routing Rules
+# =============================================================================
+
+routing_rules:
+  # Route ADT messages to patient cache
+  - name: "ADT to Patient Cache"
+    message_type_pattern: "ADT^A*"
+    destination: "patient_cache"
+    priority: 10
+    enabled: true
+
+  # Route new orders to MWL manager
+  - name: "New Orders to MWL"
+    message_type_pattern: "ORM^O01"
+    source_pattern: "HIS_*"
+    destination: "mwl_manager"
+    priority: 20
+    enabled: true
+
+  # Route status updates to notification handler
+  - name: "Status Updates"
+    message_type_pattern: "ORM^O01"
+    source_pattern: "PACS_*"
+    destination: "status_handler"
+    priority: 15
+    enabled: true
+
+# =============================================================================
+# Message Queue Configuration
+# =============================================================================
+
+queue:
+  # SQLite database path for queue persistence
+  database_path: "${PACS_BRIDGE_QUEUE_DB:-/var/lib/pacs_bridge/queue.db}"
+
+  # Maximum queue size (messages)
+  max_queue_size: 50000
+
+  # Maximum retry attempts before dead-lettering
+  max_retry_count: 5
+
+  # Initial retry delay
+  initial_retry_delay: 5s
+
+  # Retry delay multiplier (exponential backoff)
+  retry_backoff_multiplier: 2.0
+
+  # Message time-to-live (hours)
+  message_ttl: 24h
+
+  # Number of delivery worker threads
+  worker_count: 4
+
+# =============================================================================
+# Patient Cache Configuration
+# =============================================================================
+
+patient_cache:
+  # Maximum cache entries
+  max_entries: 10000
+
+  # Cache entry time-to-live
+  ttl: 3600s  # 1 hour
+
+  # Enable LRU eviction when full
+  evict_on_full: true
+
+# =============================================================================
+# Logging Configuration
+# =============================================================================
+
+logging:
+  # Log level: trace, debug, info, warn, error, fatal
+  level: "${LOG_LEVEL:-info}"
+
+  # Log format: json, text
+  format: "json"
+
+  # Log file path (empty = stdout only)
+  file: "${PACS_BRIDGE_LOG_FILE:-/var/log/pacs_bridge/bridge.log}"
+
+  # Maximum log file size (MB)
+  max_file_size_mb: 100
+
+  # Number of rotated log files to keep
+  max_files: 5
+
+  # Include source location in logs
+  include_source_location: false

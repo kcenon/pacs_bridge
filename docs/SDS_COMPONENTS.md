@@ -1,6 +1,6 @@
 # SDS - Component Designs
 
-> **Version:** 1.3.0
+> **Version:** 1.5.0
 > **Parent Document:** [SDS.md](SDS.md)
 > **Last Updated:** 2025-12-07
 
@@ -3119,6 +3119,7 @@ Incoming Request
 
 | Component        | Error Code Range |
 |------------------|-----------------|
+| Configuration    | -900 to -909    |
 | Access Control   | -950 to -959    |
 | Input Validation | -960 to -969    |
 | MLLP Protocol    | -970 to -979    |
@@ -3546,6 +3547,7 @@ The testing module supports the following test scenarios as specified in Issue #
 
 | Range | Module |
 |-------|--------|
+| -900 to -909 | Configuration |
 | -940 to -949 | Performance |
 | -960 to -969 | Testing |
 | -970 to -979 | MLLP |
