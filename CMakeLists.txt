@@ -139,9 +139,11 @@ list(APPEND PACS_BRIDGE_HEADERS
 # Mapping Layer
 list(APPEND PACS_BRIDGE_SOURCES
     src/mapping/hl7_dicom_mapper.cpp
+    src/mapping/dicom_hl7_mapper.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/mapping/hl7_dicom_mapper.h
+    include/pacs/bridge/mapping/dicom_hl7_mapper.h
 )
 
 # Router

@@ -86,6 +86,12 @@ if(BRIDGE_BUILD_HL7)
         LABELS "unit;mapping;phase1"
     )
 
+    # DICOM-HL7 Mapping Tests (MPPS to ORM - Issue #24)
+    add_bridge_test(dicom_hl7_mapper_test)
+    set_tests_properties(dicom_hl7_mapper_test PROPERTIES
+        LABELS "unit;mapping;phase2"
+    )
+
     # Message Router Tests
     add_bridge_test(router_test)
     set_tests_properties(router_test PROPERTIES
