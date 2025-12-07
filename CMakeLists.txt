@@ -212,6 +212,7 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/performance/connection_optimizer.h
     include/pacs/bridge/performance/lockfree_queue.h
     include/pacs/bridge/performance/object_pool.h
+    include/pacs/bridge/performance/performance_types.h
     include/pacs/bridge/performance/thread_pool_manager.h
     include/pacs/bridge/performance/zero_copy_parser.h
 )
@@ -371,6 +372,7 @@ message(STATUS "  Benchmarks:       ${BRIDGE_BUILD_BENCHMARKS}")
 message(STATUS "")
 message(STATUS "Features:")
 message(STATUS "  TLS Support:      ${PACS_BRIDGE_HAS_OPENSSL}")
+message(STATUS "  PACS System:      ${PACS_BRIDGE_HAS_PACS_SYSTEM}")
 message(STATUS "")
 message(STATUS "Install Prefix:     ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "========================================")
