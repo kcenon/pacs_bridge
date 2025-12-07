@@ -128,7 +128,8 @@ jobs:
         sudo apt install -y libsqlite3-dev libssl-dev libfmt-dev
         sudo apt install -y libgtest-dev libgmock-dev
         if [ "${{ matrix.compiler }}" = "clang" ]; then
-          sudo apt install -y clang lld
+          # Clang + libc++ for full C++23 support (std::expected)
+          sudo apt install -y clang lld libc++-dev libc++abi-dev
         fi
 
     - name: Install dependencies (macOS)
@@ -140,11 +141,19 @@ jobs:
       if: runner.os == 'Windows'
       uses: ilammy/msvc-dev-cmd@v1
 
+    - name: Install Ninja (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        choco install ninja -y
+        ninja --version
+
     - name: Setup vcpkg (Windows)
       if: runner.os == 'Windows'
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgGitCommitId: 'e7d7451462697d77ef319ddf2da8ff7320a82662'
+        # Use a stable, recent vcpkg commit (2024-11)
+        vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'

@@ -76,6 +76,17 @@ if(PACS_BRIDGE_COMPILER_GNU OR PACS_BRIDGE_COMPILER_CLANG)
             -Wduplicated-cond
             -Wduplicated-branches
             -Wlogical-op
+            -Wno-changes-meaning  # Allow method names that match type names
+        )
+    endif()
+
+    # Clang on Linux needs libc++ for full C++23 support (std::expected)
+    if(PACS_BRIDGE_COMPILER_CLANG AND UNIX AND NOT APPLE)
+        target_compile_options(pacs_bridge_compile_options INTERFACE
+            -stdlib=libc++
+        )
+        target_link_options(pacs_bridge_compile_options INTERFACE
+            -stdlib=libc++
         )
     endif()
 
