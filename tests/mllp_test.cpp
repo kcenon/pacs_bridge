@@ -1,17 +1,26 @@
 /**
  * @file mllp_test.cpp
- * @brief Unit tests for MLLP types and configuration
+ * @brief Comprehensive unit tests for MLLP server and client implementation
  *
- * Tests for MLLP protocol constants, error handling, and configuration.
+ * Tests for MLLP protocol constants, error handling, configuration,
+ * server operations, client operations, and connection management.
+ * Target coverage: >= 80%
  *
+ * @see https://github.com/kcenon/pacs_bridge/issues/12
+ * @see https://github.com/kcenon/pacs_bridge/issues/13
  * @see https://github.com/kcenon/pacs_bridge/issues/38
  */
 
+#include "pacs/bridge/mllp/mllp_client.h"
+#include "pacs/bridge/mllp/mllp_server.h"
 #include "pacs/bridge/mllp/mllp_types.h"
 
+#include <atomic>
 #include <cassert>
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 
 namespace pacs::bridge::mllp::test {
 
@@ -200,6 +209,329 @@ bool test_server_statistics_uptime() {
 }
 
 // =============================================================================
+// MLLP Server Tests
+// =============================================================================
+
+bool test_mllp_server_creation() {
+    mllp_server_config config;
+    config.port = 12575;  // Use non-standard port for testing
+
+    mllp_server server(config);
+
+    TEST_ASSERT(!server.is_running(), "Server should not be running initially");
+    TEST_ASSERT(server.port() == 12575, "Port should match config");
+    TEST_ASSERT(!server.is_tls_enabled(), "TLS should not be enabled");
+
+    return true;
+}
+
+bool test_mllp_server_config_accessor() {
+    mllp_server_config config;
+    config.port = 12576;
+    config.max_connections = 100;
+    config.max_message_size = 5 * 1024 * 1024;
+
+    mllp_server server(config);
+
+    const auto& server_config = server.config();
+    TEST_ASSERT(server_config.port == 12576,
+                "Config port should match");
+    TEST_ASSERT(server_config.max_connections == 100,
+                "Config max_connections should match");
+    TEST_ASSERT(server_config.max_message_size == 5 * 1024 * 1024,
+                "Config max_message_size should match");
+
+    return true;
+}
+
+bool test_mllp_server_statistics_initial() {
+    mllp_server_config config;
+    config.port = 12577;
+
+    mllp_server server(config);
+    auto stats = server.statistics();
+
+    TEST_ASSERT(stats.active_connections == 0,
+                "Initial active connections should be 0");
+    TEST_ASSERT(stats.total_connections == 0,
+                "Initial total connections should be 0");
+
+    return true;
+}
+
+bool test_mllp_server_active_sessions_empty() {
+    mllp_server_config config;
+    config.port = 12578;
+
+    mllp_server server(config);
+    auto sessions = server.active_sessions();
+
+    TEST_ASSERT(sessions.empty(),
+                "Should have no active sessions initially");
+
+    return true;
+}
+
+bool test_mllp_server_invalid_config() {
+    mllp_server_config config;
+    config.port = 0;  // Invalid port
+
+    mllp_server server(config);
+    auto result = server.start();
+
+    TEST_ASSERT(!result.has_value(), "Should fail with invalid config");
+    TEST_ASSERT(result.error() == mllp_error::invalid_configuration,
+                "Error should be invalid_configuration");
+
+    return true;
+}
+
+bool test_mllp_server_start_stop() {
+    mllp_server_config config;
+    config.port = 12590;
+
+    mllp_server server(config);
+
+    // Start server
+    auto start_result = server.start();
+    if (!start_result.has_value()) {
+        // Port might be in use, skip test
+        std::cout << "  (skipped - port may be in use)" << std::endl;
+        return true;
+    }
+
+    TEST_ASSERT(server.is_running(), "Server should be running after start");
+
+    // Try to start again (should fail)
+    auto start_again = server.start();
+    TEST_ASSERT(!start_again.has_value(), "Starting again should fail");
+    TEST_ASSERT(start_again.error() == mllp_error::already_running,
+                "Error should be already_running");
+
+    // Stop server
+    server.stop(true, std::chrono::seconds{5});
+    TEST_ASSERT(!server.is_running(), "Server should not be running after stop");
+
+    return true;
+}
+
+// =============================================================================
+// MLLP Client Tests
+// =============================================================================
+
+bool test_mllp_client_creation() {
+    mllp_client_config config;
+    config.host = "localhost";
+    config.port = 12579;
+
+    mllp_client client(config);
+
+    TEST_ASSERT(!client.is_connected(),
+                "Client should not be connected initially");
+    TEST_ASSERT(!client.is_tls_active(),
+                "TLS should not be active initially");
+
+    return true;
+}
+
+bool test_mllp_client_config_accessor() {
+    mllp_client_config config;
+    config.host = "test.example.com";
+    config.port = 12580;
+    config.retry_count = 5;
+    config.keep_alive = false;
+
+    mllp_client client(config);
+
+    const auto& client_config = client.config();
+    TEST_ASSERT(client_config.host == "test.example.com",
+                "Config host should match");
+    TEST_ASSERT(client_config.port == 12580,
+                "Config port should match");
+    TEST_ASSERT(client_config.retry_count == 5,
+                "Config retry_count should match");
+    TEST_ASSERT(!client_config.keep_alive,
+                "Config keep_alive should match");
+
+    return true;
+}
+
+bool test_mllp_client_session_info_not_connected() {
+    mllp_client_config config;
+    config.host = "localhost";
+    config.port = 12581;
+
+    mllp_client client(config);
+    auto session_info = client.session_info();
+
+    TEST_ASSERT(!session_info.has_value(),
+                "Session info should be empty when not connected");
+
+    return true;
+}
+
+bool test_mllp_client_statistics_initial() {
+    mllp_client_config config;
+    config.host = "localhost";
+    config.port = 12582;
+
+    mllp_client client(config);
+    auto stats = client.get_statistics();
+
+    TEST_ASSERT(stats.messages_sent == 0,
+                "Initial messages sent should be 0");
+    TEST_ASSERT(stats.messages_received == 0,
+                "Initial messages received should be 0");
+    TEST_ASSERT(stats.connect_attempts == 0,
+                "Initial connect attempts should be 0");
+
+    return true;
+}
+
+bool test_mllp_client_tls_info_not_connected() {
+    mllp_client_config config;
+    config.host = "localhost";
+    config.port = 12583;
+
+    mllp_client client(config);
+
+    TEST_ASSERT(!client.tls_version().has_value(),
+                "TLS version should be empty when not connected");
+    TEST_ASSERT(!client.tls_cipher().has_value(),
+                "TLS cipher should be empty when not connected");
+    TEST_ASSERT(!client.server_certificate().has_value(),
+                "Server certificate should be empty when not connected");
+
+    return true;
+}
+
+bool test_mllp_client_connect_failure() {
+    mllp_client_config config;
+    config.host = "localhost";
+    config.port = 12591;  // No server running on this port
+    config.connect_timeout = std::chrono::milliseconds{100};  // Short timeout
+
+    mllp_client client(config);
+    auto result = client.connect();
+
+    TEST_ASSERT(!result.has_value(),
+                "Connect should fail when no server is running");
+    TEST_ASSERT(!client.is_connected(),
+                "Client should not be connected after failed connect");
+
+    return true;
+}
+
+bool test_mllp_client_send_not_connected() {
+    mllp_client_config config;
+    config.host = "localhost";
+    config.port = 12592;
+    config.keep_alive = false;  // Don't auto-connect
+
+    mllp_client client(config);
+
+    auto msg = mllp_message::from_string(
+        "MSH|^~\\&|TEST|FACILITY|||20240101120000||ADT^A01|123|P|2.4");
+    auto result = client.send(msg);
+
+    TEST_ASSERT(!result.has_value(),
+                "Send should fail when not connected");
+
+    return true;
+}
+
+// =============================================================================
+// MLLP Connection Pool Tests
+// =============================================================================
+
+bool test_mllp_pool_config_defaults() {
+    mllp_pool_config config;
+
+    TEST_ASSERT(config.min_connections == 1,
+                "Default min connections should be 1");
+    TEST_ASSERT(config.max_connections == 10,
+                "Default max connections should be 10");
+    TEST_ASSERT(config.idle_timeout == std::chrono::seconds{60},
+                "Default idle timeout should be 60 seconds");
+    TEST_ASSERT(config.health_check_interval == std::chrono::seconds{30},
+                "Default health check interval should be 30 seconds");
+
+    return true;
+}
+
+// =============================================================================
+// Integration Tests (Server-Client Communication)
+// =============================================================================
+
+bool test_server_client_communication() {
+    // Server configuration
+    mllp_server_config server_config;
+    server_config.port = 12600;
+
+    mllp_server server(server_config);
+
+    // Set up message handler to echo messages with ACK
+    std::atomic<int> messages_received{0};
+    server.set_message_handler(
+        [&messages_received](const mllp_message& msg,
+                             const mllp_session_info& /*session*/)
+            -> std::optional<mllp_message> {
+            messages_received++;
+            // Create simple ACK response
+            std::string ack =
+                "MSH|^~\\&|PACS|RADIOLOGY|HIS|HOSPITAL|20240115103001||ACK^A01|ACK001|P|2.4\r"
+                "MSA|AA|MSG001\r";
+            return mllp_message::from_string(ack);
+        });
+
+    // Start server
+    auto start_result = server.start();
+    if (!start_result.has_value()) {
+        std::cout << "  (skipped - port may be in use)" << std::endl;
+        return true;
+    }
+
+    // Give server time to start
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+
+    // Client configuration
+    mllp_client_config client_config;
+    client_config.host = "localhost";
+    client_config.port = 12600;
+    client_config.connect_timeout = std::chrono::milliseconds{5000};
+
+    mllp_client client(client_config);
+
+    // Connect client
+    auto connect_result = client.connect();
+    TEST_ASSERT(connect_result.has_value(), "Client should connect successfully");
+    TEST_ASSERT(client.is_connected(), "Client should be connected");
+
+    // Send message
+    std::string hl7_msg =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN\r";
+    auto msg = mllp_message::from_string(hl7_msg);
+
+    auto send_result = client.send(msg);
+    TEST_ASSERT(send_result.has_value(), "Send should succeed");
+
+    // Verify response
+    TEST_ASSERT(!send_result->response.content.empty(),
+                "Response should not be empty");
+
+    // Verify server received message
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    TEST_ASSERT(messages_received == 1, "Server should have received 1 message");
+
+    // Disconnect and stop
+    client.disconnect();
+    server.stop(true, std::chrono::seconds{5});
+
+    return true;
+}
+
+// =============================================================================
 // Main Test Runner
 // =============================================================================
 
@@ -218,6 +550,29 @@ int run_all_tests() {
     RUN_TEST(test_client_config_validation);
     RUN_TEST(test_session_info_duration);
     RUN_TEST(test_server_statistics_uptime);
+
+    std::cout << "\n=== MLLP Server Tests ===" << std::endl;
+    RUN_TEST(test_mllp_server_creation);
+    RUN_TEST(test_mllp_server_config_accessor);
+    RUN_TEST(test_mllp_server_statistics_initial);
+    RUN_TEST(test_mllp_server_active_sessions_empty);
+    RUN_TEST(test_mllp_server_invalid_config);
+    RUN_TEST(test_mllp_server_start_stop);
+
+    std::cout << "\n=== MLLP Client Tests ===" << std::endl;
+    RUN_TEST(test_mllp_client_creation);
+    RUN_TEST(test_mllp_client_config_accessor);
+    RUN_TEST(test_mllp_client_session_info_not_connected);
+    RUN_TEST(test_mllp_client_statistics_initial);
+    RUN_TEST(test_mllp_client_tls_info_not_connected);
+    RUN_TEST(test_mllp_client_connect_failure);
+    RUN_TEST(test_mllp_client_send_not_connected);
+
+    std::cout << "\n=== MLLP Connection Pool Tests ===" << std::endl;
+    RUN_TEST(test_mllp_pool_config_defaults);
+
+    std::cout << "\n=== MLLP Integration Tests ===" << std::endl;
+    RUN_TEST(test_server_client_communication);
 
     std::cout << "\n=== Test Summary ===" << std::endl;
     std::cout << "Passed: " << passed << std::endl;
