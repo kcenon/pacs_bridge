@@ -5,6 +5,16 @@
 #
 # Note: Uses Ubuntu 24.04 for GCC 13+ support which provides std::format
 # (required by logger_system dependency)
+#
+# Test Suites:
+#   Unit Tests (Phase 1): hl7_test, mapping_test, router_test, cache_test,
+#                         mllp_test, config_test, security_test, tls_test,
+#                         health_check_test, performance_test, load_test
+#   Integration Tests (Phase 2, Issue #29):
+#     - mpps_integration_test    : MPPS N-CREATE/N-SET message flows
+#     - queue_persistence_test   : Message queue recovery scenarios
+#     - failover_test            : RIS failover routing
+#     - stress_test              : High volume load testing
 
 name: CI
 

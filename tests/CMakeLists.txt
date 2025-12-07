@@ -173,6 +173,68 @@ set_tests_properties(ecosystem_integration_test PROPERTIES
 )
 
 # =============================================================================
+# Phase 2 Integration Tests (Issue #29 - MPPS & Bidirectional)
+# =============================================================================
+
+# Macro for integration tests (longer timeout, different labels)
+macro(add_integration_test TEST_NAME)
+    add_executable(${TEST_NAME} integration/${TEST_NAME}.cpp)
+
+    target_link_libraries(${TEST_NAME}
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+
+    target_include_directories(${TEST_NAME}
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/integration
+    )
+
+    target_compile_definitions(${TEST_NAME}
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+
+    add_test(
+        NAME ${TEST_NAME}
+        COMMAND ${TEST_NAME}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+
+    # Integration tests have longer timeout
+    set_tests_properties(${TEST_NAME} PROPERTIES
+        TIMEOUT 300
+        LABELS "integration;phase2"
+    )
+endmacro()
+
+# MPPS Integration Tests (N-CREATE/N-SET flows)
+add_integration_test(mpps_integration_test)
+set_tests_properties(mpps_integration_test PROPERTIES
+    LABELS "integration;mpps;phase2"
+)
+
+# Queue Persistence Tests (message recovery)
+add_integration_test(queue_persistence_test)
+set_tests_properties(queue_persistence_test PROPERTIES
+    LABELS "integration;queue;phase2"
+)
+
+# Failover Routing Tests (RIS failover)
+add_integration_test(failover_test)
+set_tests_properties(failover_test PROPERTIES
+    LABELS "integration;failover;phase2"
+)
+
+# Stress Tests (high volume)
+add_integration_test(stress_test)
+set_tests_properties(stress_test PROPERTIES
+    LABELS "integration;stress;phase2"
+    TIMEOUT 600  # Stress tests may take longer
+)
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -198,5 +260,11 @@ message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
 message(STATUS "  - mwl_client_test")
 message(STATUS "  - ecosystem_integration_test")
+message(STATUS "")
+message(STATUS "Phase 2 Integration Tests:")
+message(STATUS "  - mpps_integration_test")
+message(STATUS "  - queue_persistence_test")
+message(STATUS "  - failover_test")
+message(STATUS "  - stress_test")
 message(STATUS "==========================")
 message(STATUS "")
