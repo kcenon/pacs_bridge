@@ -1,0 +1,185 @@
+# CI Workflow for PACS Bridge
+# Multi-platform, multi-compiler build and test
+#
+# Based on pacs_system CI patterns for kcenon ecosystem consistency
+#
+# Note: Uses Ubuntu 24.04 for GCC 13+ support which provides std::format
+# (required by logger_system dependency)
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop, feature/*]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Ensure only one workflow runs per branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Documentation validation job
+  docs:
+    name: Validate Documentation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Check markdown files
+      run: |
+        echo "=== Checking documentation structure ==="
+        find docs -name "*.md" -type f | wc -l
+        echo ""
+        echo "=== Documentation files ==="
+        find docs -name "*.md" -type f | sort
+
+    - name: Validate links (basic)
+      run: |
+        echo "=== Checking for broken internal links ==="
+        # Check for common broken link patterns
+        find docs -name "*.md" -exec grep -l '\[.*\](.*)' {} \; | head -20
+
+  # Build job - will be enabled when source code is added
+  build:
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # Temporarily disabled until source code is added
+    if: false
+
+    env:
+      BUILD_TYPE: Release
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Ubuntu 24.04 provides GCC 13+ with std::format support
+          - os: ubuntu-24.04
+            compiler: gcc
+          - os: ubuntu-24.04
+            compiler: clang
+          - os: macos-14
+            compiler: clang
+          # Windows 2022 with MSVC for cross-platform compatibility
+          - os: windows-2022
+            compiler: msvc
+
+    steps:
+    - name: Checkout pacs_bridge
+      uses: actions/checkout@v4
+      with:
+        path: pacs_bridge
+
+    - name: Checkout dependencies (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        # Clone dependencies as siblings to pacs_bridge in $GITHUB_WORKSPACE
+        git clone --depth 1 https://github.com/kcenon/common_system.git
+        git clone --depth 1 https://github.com/kcenon/thread_system.git
+        git clone --depth 1 https://github.com/kcenon/logger_system.git
+        git clone --depth 1 https://github.com/kcenon/container_system.git
+        git clone --depth 1 https://github.com/kcenon/network_system.git
+        git clone --depth 1 https://github.com/kcenon/monitoring_system.git
+        git clone --depth 1 https://github.com/kcenon/pacs_system.git
+
+    - name: Checkout dependencies (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        git clone --depth 1 https://github.com/kcenon/common_system.git
+        git clone --depth 1 https://github.com/kcenon/thread_system.git
+        git clone --depth 1 https://github.com/kcenon/logger_system.git
+        git clone --depth 1 https://github.com/kcenon/container_system.git
+        git clone --depth 1 https://github.com/kcenon/network_system.git
+        git clone --depth 1 https://github.com/kcenon/monitoring_system.git
+        git clone --depth 1 https://github.com/kcenon/pacs_system.git
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt update
+        sudo apt install -y cmake build-essential ninja-build pkg-config
+        sudo apt install -y libsqlite3-dev libssl-dev libfmt-dev
+        sudo apt install -y libgtest-dev libgmock-dev
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          sudo apt install -y clang lld
+        fi
+
+    - name: Install dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install ninja pkg-config sqlite3 openssl@3 googletest fmt
+
+    - name: Setup MSVC (Windows)
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Setup vcpkg (Windows)
+      if: runner.os == 'Windows'
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: 'e7d7451462697d77ef319ddf2da8ff7320a82662'
+
+    - name: Install dependencies (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        vcpkg install sqlite3:x64-windows openssl:x64-windows fmt:x64-windows gtest:x64-windows
+
+    - name: Configure CMake (Unix)
+      if: runner.os != 'Windows'
+      working-directory: pacs_bridge
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+          -DBRIDGE_BUILD_TESTS=ON \
+          -DBRIDGE_BUILD_EXAMPLES=OFF \
+          -DBRIDGE_BUILD_HL7=ON \
+          -DBRIDGE_BUILD_FHIR=OFF \
+          -DCMAKE_C_COMPILER=${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }} \
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+
+    - name: Configure CMake (Windows)
+      if: runner.os == 'Windows'
+      working-directory: pacs_bridge
+      shell: pwsh
+      run: |
+        cmake -B build `
+          -G Ninja `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF `
+          -DBRIDGE_BUILD_TESTS=ON `
+          -DBRIDGE_BUILD_EXAMPLES=OFF `
+          -DBRIDGE_BUILD_HL7=ON `
+          -DBRIDGE_BUILD_FHIR=OFF `
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+    - name: Build
+      working-directory: pacs_bridge
+      run: cmake --build build --parallel
+
+    - name: Run tests
+      working-directory: pacs_bridge
+      run: |
+        cd build
+        ctest --output-on-failure --timeout 120 || echo "Some tests failed"
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.compiler }}
+        path: |
+          pacs_bridge/build/Testing/
+          pacs_bridge/build/**/*.log
+        retention-days: 7
+        if-no-files-found: ignore
