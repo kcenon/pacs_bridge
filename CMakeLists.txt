@@ -113,6 +113,7 @@ if(BRIDGE_BUILD_HL7)
         src/protocol/hl7/hl7_parser.cpp
         src/protocol/hl7/hl7_builder.cpp
         src/protocol/hl7/adt_handler.cpp
+        src/protocol/hl7/orm_handler.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/protocol/hl7/hl7_types.h
@@ -120,6 +121,7 @@ if(BRIDGE_BUILD_HL7)
         include/pacs/bridge/protocol/hl7/hl7_parser.h
         include/pacs/bridge/protocol/hl7/hl7_builder.h
         include/pacs/bridge/protocol/hl7/adt_handler.h
+        include/pacs/bridge/protocol/hl7/orm_handler.h
     )
 endif()
 
