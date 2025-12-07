@@ -1,0 +1,30 @@
+# PACS Bridge Minimal Configuration
+# This file contains only the essential settings for quick setup
+
+server:
+  name: "PACS_BRIDGE"
+
+hl7:
+  listener:
+    port: 2575
+
+pacs:
+  host: "localhost"
+  port: 11112
+  ae_title: "PACS_BRIDGE"
+  called_ae: "PACS_SCP"
+
+routing_rules:
+  - name: "ADT to Cache"
+    message_type_pattern: "ADT^A*"
+    destination: "patient_cache"
+    priority: 10
+
+  - name: "Orders to MWL"
+    message_type_pattern: "ORM^O01"
+    destination: "mwl_manager"
+    priority: 20
+
+logging:
+  level: "info"
+  format: "json"

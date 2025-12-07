@@ -1,0 +1,157 @@
+# PACS Bridge Production Configuration
+# Optimized settings for production deployment with TLS and high availability
+
+server:
+  name: "${PACS_BRIDGE_INSTANCE_NAME:-PACS_BRIDGE_PROD}"
+
+hl7:
+  listener:
+    port: ${PACS_BRIDGE_PORT:-2576}
+    max_connections: 100
+    idle_timeout: 120s
+    max_message_size: 10485760
+    tls:
+      enabled: true
+      cert_path: "${PACS_BRIDGE_CERT_PATH:-/etc/pacs_bridge/certs/server.crt}"
+      key_path: "${PACS_BRIDGE_KEY_PATH:-/etc/pacs_bridge/certs/server.key}"
+      ca_path: "${PACS_BRIDGE_CA_PATH:-/etc/pacs_bridge/certs/ca.crt}"
+
+  outbound:
+    - name: "RIS_PRIMARY"
+      host: "${RIS_PRIMARY_HOST}"
+      port: ${RIS_PRIMARY_PORT:-2576}
+      message_types:
+        - "ORM^O01"
+        - "ORU^R01"
+      priority: 1
+      enabled: true
+      retry_count: 5
+      retry_delay: 2000
+      tls:
+        enabled: true
+        ca_path: "${RIS_CA_PATH:-/etc/pacs_bridge/certs/ris-ca.crt}"
+
+    - name: "RIS_SECONDARY"
+      host: "${RIS_SECONDARY_HOST}"
+      port: ${RIS_SECONDARY_PORT:-2576}
+      message_types:
+        - "ORM^O01"
+        - "ORU^R01"
+      priority: 2
+      enabled: true
+      retry_count: 5
+      retry_delay: 2000
+      tls:
+        enabled: true
+        ca_path: "${RIS_CA_PATH:-/etc/pacs_bridge/certs/ris-ca.crt}"
+
+fhir:
+  enabled: true
+  server:
+    port: 8443
+    base_path: "/fhir/r4"
+    max_connections: 200
+    request_timeout: 30s
+    page_size: 50
+    tls:
+      enabled: true
+      cert_path: "${PACS_BRIDGE_CERT_PATH:-/etc/pacs_bridge/certs/server.crt}"
+      key_path: "${PACS_BRIDGE_KEY_PATH:-/etc/pacs_bridge/certs/server.key}"
+
+pacs:
+  host: "${PACS_HOST}"
+  port: ${PACS_PORT:-11112}
+  ae_title: "${PACS_BRIDGE_AE_TITLE:-PACS_BRIDGE}"
+  called_ae: "${PACS_CALLED_AE:-PACS_SCP}"
+  timeout: 60s
+
+mapping:
+  modality_ae_titles:
+    CT:
+      - "CT_SCANNER_1"
+      - "CT_SCANNER_2"
+      - "CT_SCANNER_3"
+    MR:
+      - "MR_SCANNER_1"
+      - "MR_SCANNER_2"
+    XR:
+      - "XRAY_ROOM_1"
+      - "XRAY_ROOM_2"
+      - "XRAY_ROOM_3"
+      - "XRAY_ROOM_4"
+    US:
+      - "US_SCANNER_1"
+      - "US_SCANNER_2"
+    NM:
+      - "NM_SCANNER_1"
+    PT:
+      - "PET_SCANNER_1"
+    MG:
+      - "MAMMO_1"
+      - "MAMMO_2"
+
+  procedure_to_modality:
+    "CTHEAD": "CT"
+    "CTCHEST": "CT"
+    "CTABD": "CT"
+    "MRHEAD": "MR"
+    "MRSPINE": "MR"
+    "XRCHEST": "XR"
+    "XRHAND": "XR"
+    "USABD": "US"
+
+  default_patient_id_issuer: "${HOSPITAL_OID:-1.2.3.4.5.6}"
+
+routing_rules:
+  - name: "ADT Admit"
+    message_type_pattern: "ADT^A01"
+    destination: "patient_cache"
+    priority: 10
+    enabled: true
+
+  - name: "ADT Registration"
+    message_type_pattern: "ADT^A04"
+    destination: "patient_cache"
+    priority: 10
+    enabled: true
+
+  - name: "ADT Update"
+    message_type_pattern: "ADT^A08"
+    destination: "patient_cache"
+    priority: 10
+    enabled: true
+
+  - name: "ADT Merge"
+    message_type_pattern: "ADT^A40"
+    destination: "patient_merge_handler"
+    priority: 5
+    enabled: true
+
+  - name: "New Orders"
+    message_type_pattern: "ORM^O01"
+    source_pattern: "HIS_*"
+    destination: "mwl_manager"
+    priority: 20
+    enabled: true
+
+queue:
+  database_path: "${PACS_BRIDGE_QUEUE_DB:-/var/lib/pacs_bridge/queue.db}"
+  max_queue_size: 100000
+  max_retry_count: 10
+  initial_retry_delay: 5s
+  retry_backoff_multiplier: 2.0
+  message_ttl: 48h
+  worker_count: 8
+
+patient_cache:
+  max_entries: 50000
+  ttl: 7200s  # 2 hours
+  evict_on_full: true
+
+logging:
+  level: "${LOG_LEVEL:-info}"
+  format: "json"
+  file: "${PACS_BRIDGE_LOG_FILE:-/var/log/pacs_bridge/bridge.log}"
+  max_file_size_mb: 500
+  max_files: 10
+  include_source_location: false
