@@ -1936,7 +1936,9 @@ private:
 
 ### DES-PACS-002: mpps_handler
 
-**Traces to:** IR-1 (mpps_scp), FR-3.2
+**Traces to:** IR-1 (mpps_scp), FR-3.2.1 - FR-3.2.5, SRS-PACS-002
+
+**Implementation Status:** ✅ Implemented (Issue #23)
 
 ```cpp
 namespace pacs::bridge::pacs_adapter {
@@ -1945,9 +1947,44 @@ namespace pacs::bridge::pacs_adapter {
  * @brief MPPS event types
  */
 enum class mpps_event {
-    in_progress,
-    completed,
-    discontinued
+    in_progress,   // N-CREATE with IN PROGRESS
+    completed,     // N-SET with COMPLETED
+    discontinued   // N-SET with DISCONTINUED
+};
+
+/**
+ * @brief MPPS dataset with all relevant attributes
+ */
+struct mpps_dataset {
+    // SOP Instance identification
+    std::string sop_instance_uid;
+
+    // Relationship
+    std::string study_instance_uid;
+    std::string accession_number;
+    std::string scheduled_procedure_step_id;
+    std::string performed_procedure_step_id;
+
+    // Patient
+    std::string patient_id;
+    std::string patient_name;
+
+    // Status
+    mpps_event status;
+    std::string performed_procedure_description;
+
+    // Timing
+    std::string start_date;  // YYYYMMDD
+    std::string start_time;  // HHMMSS
+    std::string end_date;
+    std::string end_time;
+
+    // Modality
+    std::string modality;
+    std::string station_ae_title;
+
+    // Performed series
+    std::vector<mpps_performed_series> performed_series;
 };
 
 /**
@@ -1955,35 +1992,67 @@ enum class mpps_event {
  */
 using mpps_callback = std::function<void(
     mpps_event event,
-    const pacs::core::dicom_dataset& mpps)>;
+    const mpps_dataset& mpps)>;
+
+/**
+ * @brief MPPS handler configuration
+ */
+struct mpps_handler_config {
+    std::string pacs_host = "localhost";
+    uint16_t pacs_port = 11113;
+    std::string our_ae_title = "PACS_BRIDGE";
+    std::string pacs_ae_title = "MPPS_SCP";
+    bool auto_reconnect = true;
+    std::chrono::seconds reconnect_delay{5};
+};
 
 /**
  * @brief MPPS handler
  *
  * Receives MPPS notifications from pacs_system and forwards to HL7.
+ * Thread-safe with automatic reconnection support.
  */
 class mpps_handler {
 public:
-    explicit mpps_handler(const mpps_callback& callback);
+    /**
+     * @brief Factory function
+     */
+    [[nodiscard]] static std::unique_ptr<mpps_handler>
+    create(const mpps_handler_config& config);
+
+    virtual ~mpps_handler() = default;
 
     /**
-     * @brief Register with pacs_system MPPS SCP
-     * @param mpps_scp Reference to pacs_system MPPS SCP
+     * @brief Set callback for MPPS events
      */
-    void register_with_pacs(pacs::services::mpps_scp& mpps_scp);
+    virtual void set_callback(mpps_callback callback) = 0;
 
     /**
-     * @brief Handle incoming MPPS N-CREATE
+     * @brief Start receiving MPPS events
      */
-    void on_n_create(const pacs::core::dicom_dataset& mpps);
+    [[nodiscard]] virtual std::expected<void, mpps_error> start() = 0;
 
     /**
-     * @brief Handle incoming MPPS N-SET
+     * @brief Stop receiving events
      */
-    void on_n_set(const pacs::core::dicom_dataset& mpps);
+    virtual void stop(bool graceful = true) = 0;
 
-private:
-    mpps_callback callback_;
+    /**
+     * @brief Handle incoming MPPS N-CREATE (for testing/manual invocation)
+     */
+    [[nodiscard]] virtual std::expected<void, mpps_error>
+    on_n_create(const mpps_dataset& mpps) = 0;
+
+    /**
+     * @brief Handle incoming MPPS N-SET (for testing/manual invocation)
+     */
+    [[nodiscard]] virtual std::expected<void, mpps_error>
+    on_n_set(const mpps_dataset& mpps) = 0;
+
+    /**
+     * @brief Get handler statistics
+     */
+    [[nodiscard]] virtual statistics get_statistics() const = 0;
 };
 
 } // namespace pacs::bridge::pacs_adapter
