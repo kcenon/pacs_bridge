@@ -25,6 +25,7 @@
 #include <cstring>
 #include <mutex>
 #include <queue>
+#include <set>
 #include <shared_mutex>
 #include <thread>
 #include <condition_variable>
