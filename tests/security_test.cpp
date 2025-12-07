@@ -259,9 +259,10 @@ bool test_log_sanitizer_hl7_message() {
     config.phi_segments = {"PID"};
     healthcare_log_sanitizer sanitizer(config);
 
+    // Standard HL7 PID segment: PID-3=PatientID, PID-5=Name, PID-7=DOB, PID-8=Sex
     std::string hl7 =
         "MSH|^~\\&|SENDER|FAC|RECV|FAC|20240101||ADT^A01|1|P|2.4\r"
-        "PID|1|MRN123||Doe^John||19800101|M|||123 Main St";
+        "PID|1||MRN123||Doe^John||19800101|M|||123 Main St";
 
     auto result = sanitizer.sanitize_hl7(hl7);
 
@@ -717,9 +718,10 @@ bool test_security_pipeline_integration() {
     rate_limiter limiter(rl_config);
 
     std::string client_ip = "192.168.1.100";
+    // PID structure: PID|1|PID-2|PID-3|PID-4|PID-5 (Patient Name)|...
     std::string hl7_message =
         "MSH|^~\\&|SENDER|FAC|RECV|FAC|20240101||ADT^A01|MSG001|P|2.4\r"
-        "PID|1|MRN123||Doe^John||19800101|M";
+        "PID|1||MRN123||Doe^John||19800101|M|||123 Main St";
 
     // Step 1: Check access control
     auto access_result = access.check(client_ip);

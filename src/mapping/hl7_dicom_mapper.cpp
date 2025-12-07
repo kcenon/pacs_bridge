@@ -167,8 +167,11 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
     // Map observation request (OBR segment)
     const auto* obr = message.segment("OBR");
     if (obr) {
-        // Accession Number (OBR-18 or generate)
-        std::string_view accession = obr->field_value(18);
+        // Accession Number: OBR-3 (Filler Order Number), fallback to OBR-18
+        std::string_view accession = obr->field(3).component(1).value();
+        if (accession.empty()) {
+            accession = obr->field_value(18);
+        }
         if (accession.empty()) {
             accession = obr->field(2).component(1).value();  // Placer field #
         }

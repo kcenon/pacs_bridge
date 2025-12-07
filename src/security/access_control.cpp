@@ -53,6 +53,13 @@ std::optional<ip_range> ip_range::from_cidr(std::string_view cidr,
         return std::nullopt;
     }
 
+    // Validate prefix length
+    bool is_ipv6 = result.address.find(':') != std::string::npos;
+    uint8_t max_prefix = is_ipv6 ? 128 : 32;
+    if (result.prefix_length > max_prefix) {
+        return std::nullopt;
+    }
+
     return result;
 }
 

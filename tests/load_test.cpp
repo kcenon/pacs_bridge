@@ -193,6 +193,7 @@ bool test_load_config_validation() {
     TEST_ASSERT(valid.is_valid(), "complete config should be valid");
 
     load_config no_host;
+    no_host.target_host = "";  // Explicitly set empty (default is "localhost")
     no_host.target_port = 2575;
     no_host.messages_per_second = 500;
     no_host.concurrent_connections = 10;
@@ -345,9 +346,11 @@ bool test_metrics_success_rate() {
     test_metrics metrics;
     metrics.start_time = std::chrono::steady_clock::now();
 
-    metrics.messages_sent.store(100);
-    metrics.messages_acked.store(95);
-    metrics.messages_failed.store(5);
+    // total_messages() = messages_sent + messages_failed = 95 + 5 = 100
+    // success_rate() = messages_acked / total_messages() = 95 / 100 = 95%
+    metrics.messages_sent.store(95);   // Successfully transmitted messages
+    metrics.messages_acked.store(95);  // Messages that received ACK
+    metrics.messages_failed.store(5);  // Messages that failed to send
 
     auto success_rate = metrics.success_rate();
     TEST_ASSERT(success_rate >= 94.9 && success_rate <= 95.1,

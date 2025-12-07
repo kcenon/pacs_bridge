@@ -858,7 +858,8 @@ bool test_route_builder_filter() {
     auto r = route_builder::create("filter_route")
                  .match_type("ADT")
                  .filter([](const hl7::hl7_message& msg) {
-                     return msg.get_value("PID.8") == "M";
+                     // PID-9 is the sex field in standard HL7 v2.x
+                     return msg.get_value("PID.9") == "M";
                  })
                  .handler("h1")
                  .build();
