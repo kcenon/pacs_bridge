@@ -237,9 +237,11 @@ list(APPEND PACS_BRIDGE_HEADERS
 # PACS Adapter (pacs_system Integration)
 list(APPEND PACS_BRIDGE_SOURCES
     src/pacs_adapter/mwl_client.cpp
+    src/pacs_adapter/mpps_handler.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/pacs_adapter/mwl_client.h
+    include/pacs/bridge/pacs_adapter/mpps_handler.h
 )
 
 # =============================================================================
