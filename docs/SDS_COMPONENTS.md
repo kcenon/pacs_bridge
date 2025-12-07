@@ -1,6 +1,6 @@
 # SDS - Component Designs
 
-> **Version:** 1.1.0
+> **Version:** 1.2.0
 > **Parent Document:** [SDS.md](SDS.md)
 > **Last Updated:** 2025-12-07
 
@@ -17,6 +17,7 @@
 - [7. Configuration Module](#7-configuration-module)
 - [8. Integration Module](#8-integration-module)
 - [9. Monitoring Module](#9-monitoring-module)
+- [10. Security Module](#10-security-module)
 
 ---
 
@@ -2202,7 +2203,363 @@ class memory_health_check : public component_check {
 
 ---
 
-*Document Version: 1.1.0*
+## 10. Security Module
+
+### 10.1 Module Overview
+
+**Namespace:** `pacs::bridge::security`
+**Purpose:** Provide TLS/SSL support for secure MLLP and HTTPS communications
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                           Security Module                                   │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                         tls_context                                  │  │
+│   │                                                                      │  │
+│   │  create_server_context()    create_client_context()                  │  │
+│   │         │                           │                                │  │
+│   │         ▼                           ▼                                │  │
+│   │    ┌─────────────────────────────────────────────────────────┐      │  │
+│   │    │                    SSL_CTX (OpenSSL)                     │      │  │
+│   │    │  - Certificate loading       - Session cache            │      │  │
+│   │    │  - Key verification          - Cipher configuration     │      │  │
+│   │    │  - Client auth mode          - TLS version control      │      │  │
+│   │    └─────────────────────────────────────────────────────────┘      │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                      │                                      │
+│                                      ▼                                      │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                          tls_socket                                  │  │
+│   │                                                                      │  │
+│   │  accept()  connect()  create_pending()                               │  │
+│   │     │          │            │                                        │  │
+│   │     ▼          ▼            ▼                                        │  │
+│   │  ┌───────────────────────────────────────────────────────────────┐  │  │
+│   │  │                      SSL (OpenSSL)                             │  │  │
+│   │  │  - Handshake management    - Encrypted I/O                    │  │  │
+│   │  │  - Peer certificate access - Session resumption               │  │  │
+│   │  └───────────────────────────────────────────────────────────────┘  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### DES-SEC-001: tls_types
+
+**Traces to:** FR-1.3.5, NFR-4.1, SR-1, SRS-SEC-001
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief TLS error codes (-990 to -999)
+ */
+enum class tls_error : int {
+    initialization_failed = -990,
+    certificate_invalid = -991,
+    private_key_invalid = -992,
+    ca_certificate_invalid = -993,
+    key_certificate_mismatch = -994,
+    handshake_failed = -995,
+    client_verification_failed = -996,
+    unsupported_version = -997,
+    invalid_cipher_suite = -998,
+    connection_closed = -999
+};
+
+/**
+ * @brief TLS protocol version
+ */
+enum class tls_version {
+    tls_1_2,  // Minimum for HIPAA compliance
+    tls_1_3   // Preferred when available
+};
+
+/**
+ * @brief Client certificate authentication mode
+ */
+enum class client_auth_mode {
+    none,      // No client certificate required
+    optional,  // Request but don't require
+    required   // Require valid client certificate (mutual TLS)
+};
+
+/**
+ * @brief TLS configuration
+ */
+struct tls_config {
+    bool enabled = false;
+    std::filesystem::path cert_path;     // Server/client certificate
+    std::filesystem::path key_path;      // Private key
+    std::filesystem::path ca_path;       // CA certificate(s)
+    client_auth_mode client_auth = client_auth_mode::none;
+    tls_version min_version = tls_version::tls_1_2;
+    std::vector<std::string> cipher_suites;
+    bool verify_peer = true;
+    std::optional<std::string> verify_hostname;
+    std::chrono::milliseconds handshake_timeout{5000};
+    size_t session_cache_size = 1024;
+
+    [[nodiscard]] bool is_valid_for_server() const noexcept;
+    [[nodiscard]] bool is_valid_for_client() const noexcept;
+    [[nodiscard]] bool is_mutual_tls() const noexcept;
+};
+
+/**
+ * @brief TLS connection statistics
+ */
+struct tls_statistics {
+    size_t handshakes_attempted = 0;
+    size_t handshakes_succeeded = 0;
+    size_t handshakes_failed = 0;
+    size_t client_auth_failures = 0;
+    size_t sessions_resumed = 0;
+    double avg_handshake_ms = 0.0;
+    size_t active_connections = 0;
+
+    [[nodiscard]] double success_rate() const noexcept;
+    [[nodiscard]] double resumption_rate() const noexcept;
+};
+
+/**
+ * @brief X.509 certificate information
+ */
+struct certificate_info {
+    std::string subject;
+    std::string issuer;
+    std::string serial_number;
+    std::chrono::system_clock::time_point not_before;
+    std::chrono::system_clock::time_point not_after;
+    std::vector<std::string> san_entries;
+    std::string fingerprint_sha256;
+
+    [[nodiscard]] bool is_valid() const noexcept;
+    [[nodiscard]] bool expires_within(std::chrono::hours within) const noexcept;
+};
+
+} // namespace pacs::bridge::security
+```
+
+### DES-SEC-002: tls_context
+
+**Traces to:** FR-1.3.5, NFR-4.1, SRS-SEC-001
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief TLS context wrapper for OpenSSL SSL_CTX
+ *
+ * Manages TLS configuration including certificates, keys, and session cache.
+ * Each context can create multiple TLS connections.
+ */
+class tls_context {
+public:
+    using verify_callback = std::function<bool(bool preverify_ok,
+                                                const certificate_info& cert_info)>;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Factory Methods
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Create server-side TLS context
+     * @param config TLS configuration with cert and key paths
+     */
+    [[nodiscard]] static std::expected<tls_context, tls_error>
+    create_server_context(const tls_config& config);
+
+    /**
+     * @brief Create client-side TLS context
+     * @param config TLS configuration with CA path
+     */
+    [[nodiscard]] static std::expected<tls_context, tls_error>
+    create_client_context(const tls_config& config);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Configuration
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void set_verify_callback(verify_callback callback);
+    [[nodiscard]] std::expected<void, tls_error>
+    load_ca_certificates(const std::filesystem::path& ca_path);
+    [[nodiscard]] std::expected<void, tls_error>
+    set_cipher_suites(std::string_view cipher_string);
+    void enable_session_resumption(size_t cache_size);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Information
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] bool is_server() const noexcept;
+    [[nodiscard]] bool is_client() const noexcept;
+    [[nodiscard]] tls_version min_version() const noexcept;
+    [[nodiscard]] client_auth_mode client_auth() const noexcept;
+    [[nodiscard]] std::optional<certificate_info> certificate_info() const noexcept;
+    [[nodiscard]] tls_statistics statistics() const noexcept;
+    [[nodiscard]] void* native_handle() noexcept;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Global TLS Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+[[nodiscard]] std::expected<void, tls_error> initialize_tls();
+void cleanup_tls();
+
+/**
+ * @brief RAII guard for TLS library initialization
+ */
+class tls_library_guard {
+public:
+    tls_library_guard();
+    ~tls_library_guard();
+    [[nodiscard]] bool is_initialized() const noexcept;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Utility Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+[[nodiscard]] std::expected<security::certificate_info, tls_error>
+read_certificate_info(const std::filesystem::path& cert_path);
+
+[[nodiscard]] std::expected<void, tls_error>
+verify_key_pair(const std::filesystem::path& cert_path,
+                const std::filesystem::path& key_path);
+
+[[nodiscard]] std::string openssl_version();
+
+} // namespace pacs::bridge::security
+```
+
+### DES-SEC-003: tls_socket
+
+**Traces to:** FR-1.3.5, SRS-MLLP-003, SRS-SEC-001
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief TLS socket for encrypted communication
+ *
+ * Wraps an existing TCP socket with TLS encryption.
+ * Supports both blocking and non-blocking operations.
+ */
+class tls_socket {
+public:
+    enum class handshake_status {
+        not_started,
+        want_read,
+        want_write,
+        complete,
+        failed
+    };
+
+    enum class io_status {
+        success,
+        want_read,
+        want_write,
+        closed,
+        error
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Factory Methods
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Accept incoming TLS connection (server-side)
+     */
+    [[nodiscard]] static std::expected<tls_socket, tls_error>
+    accept(tls_context& context, int socket_fd);
+
+    /**
+     * @brief Connect with TLS (client-side)
+     */
+    [[nodiscard]] static std::expected<tls_socket, tls_error>
+    connect(tls_context& context, int socket_fd, std::string_view hostname);
+
+    /**
+     * @brief Create pending TLS socket for async handshake
+     */
+    [[nodiscard]] static std::expected<tls_socket, tls_error>
+    create_pending(tls_context& context, int socket_fd, bool is_server,
+                   std::string_view hostname = "");
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Handshake
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] handshake_status perform_handshake_step();
+    [[nodiscard]] bool is_handshake_complete() const noexcept;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // I/O Operations
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<size_t, tls_error> read(std::span<uint8_t> buffer);
+    [[nodiscard]] std::expected<size_t, tls_error> write(std::span<const uint8_t> data);
+    [[nodiscard]] std::expected<std::vector<uint8_t>, tls_error> read_all(size_t max_size);
+    [[nodiscard]] std::expected<void, tls_error> write_all(std::span<const uint8_t> data);
+    [[nodiscard]] bool has_pending_data() const noexcept;
+
+    // Non-blocking variants
+    [[nodiscard]] std::pair<io_status, size_t> try_read(std::span<uint8_t> buffer);
+    [[nodiscard]] std::pair<io_status, size_t> try_write(std::span<const uint8_t> data);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Connection Management
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<void, tls_error> shutdown(
+        std::chrono::milliseconds timeout = std::chrono::milliseconds{1000});
+    void close();
+    [[nodiscard]] bool is_open() const noexcept;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Connection Information
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] int socket_fd() const noexcept;
+    [[nodiscard]] std::optional<security::certificate_info> peer_certificate() const noexcept;
+    [[nodiscard]] std::string protocol_version() const;
+    [[nodiscard]] std::string cipher_suite() const;
+    [[nodiscard]] bool is_session_resumed() const noexcept;
+    [[nodiscard]] std::string last_error_message() const;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::security
+```
+
+### 10.2 TLS Integration Points
+
+The security module integrates with:
+
+1. **MLLP Server** (`mllp::mllp_server_config.tls`)
+   - Server certificate for client connections
+   - Optional client certificate verification (mTLS)
+
+2. **MLLP Client** (`mllp::mllp_client_config.tls`)
+   - CA certificate for server verification
+   - Optional client certificate for mTLS
+
+3. **FHIR Server** (`fhir::fhir_server_config.tls`)
+   - HTTPS support for REST API
+
+---
+
+*Document Version: 1.2.0*
 *Created: 2025-12-07*
-*Updated: 2025-12-07 - Added Monitoring Module (Section 9)*
+*Updated: 2025-12-07 - Added Security Module (Section 10)*
 *Author: kcenon@naver.com*
