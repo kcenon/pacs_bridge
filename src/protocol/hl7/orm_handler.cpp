@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <iomanip>
 #include <sstream>
 
 namespace pacs::bridge::hl7 {
@@ -96,9 +97,11 @@ public:
 
     // Update statistics for processing time
     void update_processing_time(std::chrono::milliseconds elapsed) {
-        double total_time = stats_.avg_processing_ms * stats_.total_processed;
-        total_time += elapsed.count();
-        stats_.avg_processing_ms = total_time / (stats_.total_processed + 1);
+        double total_time =
+            stats_.avg_processing_ms * static_cast<double>(stats_.total_processed);
+        total_time += static_cast<double>(elapsed.count());
+        stats_.avg_processing_ms =
+            total_time / static_cast<double>(stats_.total_processed + 1);
     }
 };
 
