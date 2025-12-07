@@ -188,8 +188,8 @@ Source code implementation follows the phased approach outlined in the PRD:
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| Phase 1 | Core HL7 Gateway & MWL Integration | **In Progress** |
-| Phase 2 | MPPS and Bidirectional Flow | Planning |
+| Phase 1 | Core HL7 Gateway & MWL Integration | **Implemented** |
+| Phase 2 | MPPS and Bidirectional Flow | **In Progress** |
 | Phase 3 | FHIR Gateway and Reporting | Planning |
 | Phase 4 | Production Hardening | Planning |
 
@@ -206,6 +206,20 @@ Source code implementation follows the phased approach outlined in the PRD:
 | PACS Adapter | MWL Client (pacs_system integration) | Implemented |
 | Unit Tests | HL7, mapping, router, cache, MWL | Implemented |
 
+### Phase 2 Implementation Status
+
+| Module | Component | Status |
+|--------|-----------|--------|
+| Integration Tests | Test infrastructure | Implemented |
+| MPPS Tests | N-CREATE/N-SET flows | Implemented |
+| Queue Tests | Message persistence & recovery | Implemented |
+| Failover Tests | RIS failover routing | Implemented |
+| Stress Tests | High volume load testing | Implemented |
+| MPPS Handler | MPPS event processing | Pending |
+| HL7 Mapper | MPPS to ORM^O01 conversion | Pending |
+| Message Queue | Outbound queue with persistence | Pending |
+| Message Router | Failover routing support | Pending |
+
 ## Running Tests
 
 ```bash
@@ -213,7 +227,7 @@ Source code implementation follows the phased approach outlined in the PRD:
 cmake -B build -DBRIDGE_BUILD_TESTS=ON
 cmake --build build
 
-# Run individual test suites
+# Run Phase 1 unit tests
 ./build/bin/hl7_test
 ./build/bin/mapping_test
 ./build/bin/router_test
@@ -223,12 +237,20 @@ cmake --build build
 ./build/bin/mwl_client_test
 ./build/bin/ecosystem_integration_test  # Verify dependency setup
 
+# Run Phase 2 integration tests
+./build/bin/mpps_integration_test       # MPPS N-CREATE/N-SET flows
+./build/bin/queue_persistence_test      # Message queue recovery
+./build/bin/failover_test               # RIS failover routing
+./build/bin/stress_test                 # High volume load testing
+
 # Or run all tests with CTest
 cd build && ctest --output-on-failure
 
 # Run tests by label
-ctest --test-dir build -L phase1      # Phase 1 tests only
-ctest --test-dir build -L integration # Integration tests only
+ctest --test-dir build -L phase1      # Phase 1 unit tests only
+ctest --test-dir build -L phase2      # Phase 2 integration tests only
+ctest --test-dir build -L integration # All integration tests
+ctest --test-dir build -L stress      # Stress tests only
 ```
 
 ## License
