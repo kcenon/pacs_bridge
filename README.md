@@ -118,14 +118,42 @@ pacs_system:
 
 ## Development Status
 
-This project is currently in the **documentation and design phase**. Source code implementation will follow the phased approach outlined in the PRD:
+Source code implementation follows the phased approach outlined in the PRD:
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| Phase 1 | Core HL7 Gateway & MWL Integration | Planning |
+| Phase 1 | Core HL7 Gateway & MWL Integration | **In Progress** |
 | Phase 2 | MPPS and Bidirectional Flow | Planning |
 | Phase 3 | FHIR Gateway and Reporting | Planning |
 | Phase 4 | Production Hardening | Planning |
+
+### Phase 1 Implementation Status
+
+| Module | Component | Status |
+|--------|-----------|--------|
+| HL7 Protocol | Message types, parser, builder | Implemented |
+| HL7-DICOM Mapping | ORM to MWL mapper | Implemented |
+| Message Routing | Pattern matching, handler chains | Implemented |
+| Patient Cache | TTL/LRU cache with aliases | Implemented |
+| Configuration | YAML config loader | Implemented |
+| MLLP Transport | Client/Server with TLS | Implemented |
+| Unit Tests | HL7, mapping, router, cache | Implemented |
+
+## Running Tests
+
+```bash
+# Build with tests enabled
+cmake .. -DBRIDGE_BUILD_TESTS=ON
+cmake --build .
+
+# Run individual test suites
+./bin/hl7_test
+./bin/mapping_test
+./bin/router_test
+./bin/cache_test
+./bin/mllp_test
+./bin/config_test
+```
 
 ## License
 
