@@ -266,7 +266,7 @@ This document establishes bidirectional traceability between:
 | DES-MLLP-002 | mllp_client | tests/mllp/mllp_client_test.cpp | 10 |
 | DES-MLLP-003 | mllp_connection | tests/mllp/mllp_frame_test.cpp | 8 |
 | DES-TRANS-001 | hl7_dicom_mapper | tests/mapping/hl7_dicom_mapper_test.cpp | 20 |
-| DES-TRANS-002 | dicom_hl7_mapper | tests/mapping/dicom_hl7_mapper_test.cpp | 15 |
+| DES-TRANS-002 | dicom_hl7_mapper | tests/dicom_hl7_mapper_test.cpp | 17 |
 | DES-ROUTE-001 | message_router | tests/router/message_router_test.cpp | 10 |
 | DES-ROUTE-002 | queue_manager | tests/router/queue_manager_test.cpp | 15 |
 | DES-PACS-001 | mwl_client | tests/pacs/mwl_client_test.cpp | 10 |
@@ -274,7 +274,7 @@ This document establishes bidirectional traceability between:
 | DES-PACS-003 | patient_cache | tests/pacs/patient_cache_test.cpp | 10 |
 | DES-CFG-001 | bridge_config | tests/config/bridge_config_test.cpp | 10 |
 
-**Total Estimated Unit Tests:** ~178
+**Total Estimated Unit Tests:** ~180
 
 ### 5.2 Integration Test Scenarios
 
