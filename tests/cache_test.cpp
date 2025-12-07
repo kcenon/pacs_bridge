@@ -10,6 +10,7 @@
 
 #include "pacs/bridge/cache/patient_cache.h"
 
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <iostream>
@@ -767,6 +768,283 @@ bool test_cache_statistics_max_size() {
 }
 
 // =============================================================================
+// Concurrency Tests
+// =============================================================================
+
+bool test_cache_concurrent_put() {
+    patient_cache_config config;
+    config.max_entries = 10000;
+
+    patient_cache cache(config);
+
+    constexpr int num_threads = 8;
+    constexpr int items_per_thread = 100;
+
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+
+    for (int t = 0; t < num_threads; t++) {
+        threads.emplace_back([&cache, &success_count, t]() {
+            for (int i = 0; i < items_per_thread; i++) {
+                std::string key = std::to_string(t * items_per_thread + i);
+                auto patient = create_test_patient(key, "PATIENT^" + key);
+                cache.put(key, patient);
+                ++success_count;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    TEST_ASSERT(success_count == num_threads * items_per_thread,
+                "All puts should succeed");
+    TEST_ASSERT(cache.size() == num_threads * items_per_thread,
+                "Cache should contain all entries");
+
+    return true;
+}
+
+bool test_cache_concurrent_get() {
+    patient_cache cache;
+
+    // Pre-populate cache
+    constexpr int num_entries = 100;
+    for (int i = 0; i < num_entries; i++) {
+        cache.put(std::to_string(i), create_test_patient(std::to_string(i)));
+    }
+
+    constexpr int num_threads = 8;
+    constexpr int reads_per_thread = 500;
+
+    std::atomic<int> hit_count{0};
+    std::atomic<int> miss_count{0};
+    std::vector<std::thread> threads;
+
+    for (int t = 0; t < num_threads; t++) {
+        threads.emplace_back([&cache, &hit_count, &miss_count]() {
+            for (int i = 0; i < reads_per_thread; i++) {
+                std::string key = std::to_string(i % 150);  // Some will miss
+                auto result = cache.get(key);
+                if (result.has_value()) {
+                    ++hit_count;
+                } else {
+                    ++miss_count;
+                }
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    int total_ops = num_threads * reads_per_thread;
+    TEST_ASSERT(hit_count + miss_count == total_ops,
+                "All operations should complete");
+
+    return true;
+}
+
+bool test_cache_concurrent_mixed_operations() {
+    patient_cache_config config;
+    config.max_entries = 500;
+    config.lru_eviction = true;
+
+    patient_cache cache(config);
+
+    constexpr int num_readers = 4;
+    constexpr int num_writers = 4;
+    constexpr int ops_per_thread = 200;
+
+    std::atomic<bool> start_flag{false};
+    std::atomic<int> write_count{0};
+    std::atomic<int> read_count{0};
+    std::vector<std::thread> threads;
+
+    // Writer threads
+    for (int t = 0; t < num_writers; t++) {
+        threads.emplace_back([&cache, &start_flag, &write_count, t]() {
+            while (!start_flag.load()) {
+                std::this_thread::yield();
+            }
+
+            for (int i = 0; i < ops_per_thread; i++) {
+                std::string key = std::to_string((t * ops_per_thread + i) % 1000);
+                cache.put(key, create_test_patient(key));
+                ++write_count;
+            }
+        });
+    }
+
+    // Reader threads
+    for (int t = 0; t < num_readers; t++) {
+        threads.emplace_back([&cache, &start_flag, &read_count]() {
+            while (!start_flag.load()) {
+                std::this_thread::yield();
+            }
+
+            for (int i = 0; i < ops_per_thread; i++) {
+                std::string key = std::to_string(i % 1000);
+                [[maybe_unused]] auto result = cache.get(key);
+                ++read_count;
+            }
+        });
+    }
+
+    // Start all threads simultaneously
+    start_flag.store(true);
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    TEST_ASSERT(write_count == num_writers * ops_per_thread,
+                "All writes should complete");
+    TEST_ASSERT(read_count == num_readers * ops_per_thread,
+                "All reads should complete");
+
+    return true;
+}
+
+bool test_cache_concurrent_eviction() {
+    patient_cache_config config;
+    config.max_entries = 100;
+    config.lru_eviction = true;
+
+    patient_cache cache(config);
+
+    constexpr int num_threads = 4;
+    constexpr int items_per_thread = 200;
+
+    std::vector<std::thread> threads;
+    std::atomic<int> put_count{0};
+
+    for (int t = 0; t < num_threads; t++) {
+        threads.emplace_back([&cache, &put_count, t]() {
+            for (int i = 0; i < items_per_thread; i++) {
+                std::string key = "thread" + std::to_string(t) + "_" + std::to_string(i);
+                cache.put(key, create_test_patient(key));
+                ++put_count;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    TEST_ASSERT(put_count == num_threads * items_per_thread,
+                "All puts should succeed");
+    TEST_ASSERT(cache.size() <= config.max_entries,
+                "Cache should not exceed max entries");
+
+    auto stats = cache.get_statistics();
+    TEST_ASSERT(stats.eviction_count > 0, "Evictions should have occurred");
+
+    return true;
+}
+
+bool test_cache_concurrent_alias_operations() {
+    patient_cache cache;
+
+    // Pre-populate
+    constexpr int num_entries = 50;
+    for (int i = 0; i < num_entries; i++) {
+        cache.put(std::to_string(i), create_test_patient(std::to_string(i)));
+    }
+
+    constexpr int num_threads = 4;
+    std::atomic<int> alias_added{0};
+    std::atomic<int> alias_accessed{0};
+    std::vector<std::thread> threads;
+
+    // Threads adding aliases
+    for (int t = 0; t < num_threads / 2; t++) {
+        threads.emplace_back([&cache, &alias_added, t, num_entries]() {
+            for (int i = 0; i < num_entries; i++) {
+                std::string primary = std::to_string(i);
+                std::string alias = "alias_t" + std::to_string(t) + "_" + std::to_string(i);
+                if (cache.add_alias(alias, primary)) {
+                    ++alias_added;
+                }
+            }
+        });
+    }
+
+    // Threads accessing via aliases
+    for (int t = 0; t < num_threads / 2; t++) {
+        threads.emplace_back([&cache, &alias_accessed, t, num_entries]() {
+            for (int i = 0; i < num_entries; i++) {
+                std::string alias = "alias_t" + std::to_string(t) + "_" + std::to_string(i);
+                auto result = cache.get(alias);
+                if (result.has_value()) {
+                    ++alias_accessed;
+                }
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Some aliases may have been added while others were accessed
+    // The important thing is no crashes or data corruption
+    TEST_ASSERT(alias_added > 0, "Some aliases should be added");
+
+    return true;
+}
+
+bool test_cache_concurrent_statistics() {
+    patient_cache cache;
+
+    constexpr int num_threads = 8;
+    constexpr int ops_per_thread = 100;
+
+    std::atomic<bool> start_flag{false};
+    std::vector<std::thread> threads;
+
+    // Mixed operations
+    for (int t = 0; t < num_threads; t++) {
+        threads.emplace_back([&cache, &start_flag, t]() {
+            while (!start_flag.load()) {
+                std::this_thread::yield();
+            }
+
+            for (int i = 0; i < ops_per_thread; i++) {
+                std::string key = std::to_string((t * 10 + i) % 50);
+                if (i % 3 == 0) {
+                    cache.put(key, create_test_patient(key));
+                } else {
+                    [[maybe_unused]] auto result = cache.get(key);
+                }
+
+                // Periodically check statistics
+                if (i % 20 == 0) {
+                    [[maybe_unused]] auto stats = cache.get_statistics();
+                }
+            }
+        });
+    }
+
+    start_flag.store(true);
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    auto final_stats = cache.get_statistics();
+    TEST_ASSERT(final_stats.get_count > 0, "Should have get operations");
+    TEST_ASSERT(final_stats.put_count > 0, "Should have put operations");
+    TEST_ASSERT(final_stats.hit_count + final_stats.miss_count == final_stats.get_count,
+                "Hit + miss should equal total gets");
+
+    return true;
+}
+
+// =============================================================================
 // Main Test Runner
 // =============================================================================
 
@@ -833,6 +1111,14 @@ int run_all_tests() {
     RUN_TEST(test_cache_statistics_reset);
     RUN_TEST(test_cache_statistics_eviction);
     RUN_TEST(test_cache_statistics_max_size);
+
+    std::cout << "\n=== Concurrency Tests ===" << std::endl;
+    RUN_TEST(test_cache_concurrent_put);
+    RUN_TEST(test_cache_concurrent_get);
+    RUN_TEST(test_cache_concurrent_mixed_operations);
+    RUN_TEST(test_cache_concurrent_eviction);
+    RUN_TEST(test_cache_concurrent_alias_operations);
+    RUN_TEST(test_cache_concurrent_statistics);
 
     std::cout << "\n=== Test Summary ===" << std::endl;
     std::cout << "Passed: " << passed << std::endl;
