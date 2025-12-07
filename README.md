@@ -170,7 +170,8 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Patient Cache | TTL/LRU cache with aliases | Implemented |
 | Configuration | YAML config loader | Implemented |
 | MLLP Transport | Client/Server with TLS | Implemented |
-| Unit Tests | HL7, mapping, router, cache | Implemented |
+| PACS Adapter | MWL Client (pacs_system integration) | Implemented |
+| Unit Tests | HL7, mapping, router, cache, MWL | Implemented |
 
 ## Running Tests
 
@@ -186,6 +187,7 @@ cmake --build build
 ./build/bin/cache_test
 ./build/bin/mllp_test
 ./build/bin/config_test
+./build/bin/mwl_client_test
 
 # Or run all tests with CTest
 cd build && ctest --output-on-failure
