@@ -442,6 +442,172 @@ struct validation_rules {
 } // namespace pacs::bridge::hl7
 ```
 
+### DES-HL7-005: adt_handler
+
+**추적 대상:** FR-1.1.2, FR-1.1.3, FR-2.1
+
+```cpp
+namespace pacs::bridge::hl7 {
+
+/**
+ * @brief ADT 핸들러 전용 오류 코드
+ *
+ * 할당 범위: -850 ~ -859
+ */
+enum class adt_error : int {
+    not_adt_message = -850,         // ADT 메시지가 아님
+    unsupported_trigger_event = -851, // 지원하지 않는 트리거 이벤트
+    missing_patient_id = -852,       // 환자 ID 누락
+    patient_not_found = -853,        // 환자를 찾을 수 없음
+    merge_failed = -854,             // 병합 실패
+    cache_operation_failed = -855,   // 캐시 작업 실패
+    invalid_patient_data = -856,     // 잘못된 환자 데이터
+    duplicate_patient = -857,        // 중복 환자
+    handler_not_registered = -858,   // 핸들러 미등록
+    processing_failed = -859         // 처리 실패
+};
+
+/**
+ * @brief 지원되는 ADT 트리거 이벤트
+ */
+enum class adt_trigger_event {
+    A01,  // 입원/방문 통지
+    A04,  // 환자 등록
+    A08,  // 환자 정보 업데이트
+    A40,  // 환자 병합 - 환자 식별자 목록
+    unknown
+};
+
+/**
+ * @brief ADT 메시지 처리 결과
+ */
+struct adt_result {
+    bool success = false;
+    adt_trigger_event trigger = adt_trigger_event::unknown;
+    std::string patient_id;
+    std::string merged_patient_id;
+    std::string description;
+    hl7_message ack_message;
+    std::vector<std::string> warnings;
+};
+
+/**
+ * @brief ADT 핸들러 설정
+ */
+struct adt_handler_config {
+    bool allow_a01_update = true;     // A01에서 기존 환자 업데이트 허용
+    bool allow_a08_create = false;    // A08에서 환자 생성 허용
+    bool validate_patient_data = true; // 캐싱 전 환자 데이터 검증
+    std::vector<std::string> required_fields = {"patient_id", "patient_name"};
+    bool detailed_ack = true;          // 상세 ACK 메시지 생성
+    bool audit_logging = true;         // 감사 로깅
+    std::string ack_sending_application = "PACS_BRIDGE";
+    std::string ack_sending_facility = "RADIOLOGY";
+};
+
+/**
+ * @brief 환자 병합 작업 정보
+ */
+struct merge_info {
+    std::string primary_patient_id;    // 주(생존) 환자 ID
+    std::string secondary_patient_id;  // 부(병합) 환자 ID
+    std::string primary_issuer;
+    std::string secondary_issuer;
+    std::string merge_datetime;
+};
+
+/**
+ * @brief 환자 인구통계 캐시용 ADT 메시지 핸들러
+ *
+ * ADT(Admission, Discharge, Transfer) 메시지를 처리하여
+ * 캐시에 환자 인구통계 정보를 유지합니다. A01, A04, A08, A40 이벤트를 지원합니다.
+ *
+ * 내부 뮤텍스로 스레드 안전성을 보장합니다.
+ */
+class adt_handler {
+public:
+    using patient_created_callback =
+        std::function<void(const mapping::dicom_patient& patient)>;
+    using patient_updated_callback =
+        std::function<void(const mapping::dicom_patient& old_patient,
+                           const mapping::dicom_patient& new_patient)>;
+    using patient_merged_callback =
+        std::function<void(const merge_info& merge)>;
+
+    /**
+     * @brief 환자 캐시로 핸들러 생성
+     */
+    explicit adt_handler(std::shared_ptr<cache::patient_cache> cache);
+
+    /**
+     * @brief 캐시와 설정으로 핸들러 생성
+     */
+    adt_handler(std::shared_ptr<cache::patient_cache> cache,
+                const adt_handler_config& config);
+
+    /**
+     * @brief ADT 메시지 처리
+     * @param message HL7 ADT 메시지
+     * @return 처리 결과 또는 오류
+     */
+    [[nodiscard]] std::expected<adt_result, adt_error> handle(
+        const hl7_message& message);
+
+    /**
+     * @brief 메시지 처리 가능 여부 확인
+     */
+    [[nodiscard]] bool can_handle(const hl7_message& message) const noexcept;
+
+    /**
+     * @brief 지원하는 트리거 이벤트 조회
+     */
+    [[nodiscard]] std::vector<std::string> supported_triggers() const;
+
+    // 개별 이벤트 핸들러
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_admit(
+        const hl7_message& message);     // A01
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_register(
+        const hl7_message& message);     // A04
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_update(
+        const hl7_message& message);     // A08
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_merge(
+        const hl7_message& message);     // A40
+
+    // 콜백
+    void on_patient_created(patient_created_callback callback);
+    void on_patient_updated(patient_updated_callback callback);
+    void on_patient_merged(patient_merged_callback callback);
+
+    // 설정
+    [[nodiscard]] const adt_handler_config& config() const noexcept;
+    void set_config(const adt_handler_config& config);
+    [[nodiscard]] std::shared_ptr<cache::patient_cache> cache() const noexcept;
+
+    // 통계
+    struct statistics {
+        size_t total_processed = 0;    // 총 처리 수
+        size_t success_count = 0;       // 성공 수
+        size_t failure_count = 0;       // 실패 수
+        size_t a01_count = 0;           // A01 처리 수
+        size_t a04_count = 0;           // A04 처리 수
+        size_t a08_count = 0;           // A08 처리 수
+        size_t a40_count = 0;           // A40 처리 수
+        size_t patients_created = 0;    // 생성된 환자 수
+        size_t patients_updated = 0;    // 업데이트된 환자 수
+        size_t patients_merged = 0;     // 병합된 환자 수
+    };
+
+    [[nodiscard]] statistics get_statistics() const;
+    void reset_statistics();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::hl7
+```
+
 ---
 
 ## 2. MLLP 전송 모듈
