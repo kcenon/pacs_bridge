@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <charconv>
 #include <chrono>
 #include <iomanip>
@@ -49,7 +50,7 @@ public:
     build_orm_message(const pacs_adapter::mpps_dataset& mpps,
                       pacs_adapter::mpps_event event) const {
         // Validate required fields
-        auto validation_errors = validate_mpps_internal(mpps);
+        auto validation_errors = validate_mpps_for_mapping(mpps);
         if (!validation_errors.empty() && config_.validate_before_build) {
             return std::unexpected(dicom_hl7_error::missing_required_attribute);
         }
@@ -283,7 +284,7 @@ private:
      * @brief Validate MPPS dataset
      */
     [[nodiscard]] std::vector<std::string>
-    validate_mpps_internal(const pacs_adapter::mpps_dataset& mpps) const {
+    validate_mpps_for_mapping(const pacs_adapter::mpps_dataset& mpps) const {
         std::vector<std::string> errors;
 
         if (mpps.accession_number.empty()) {
@@ -300,6 +301,17 @@ private:
 
         return errors;
     }
+
+public:
+    /**
+     * @brief Public validation method (called from dicom_hl7_mapper)
+     */
+    [[nodiscard]] std::vector<std::string>
+    validate_mpps(const pacs_adapter::mpps_dataset& mpps) const {
+        return validate_mpps_for_mapping(mpps);
+    }
+
+private:
 
     /**
      * @brief Map MPPS status to HL7 order control code
@@ -642,7 +654,7 @@ void dicom_hl7_mapper::register_transform(std::string_view name,
 
 std::vector<std::string>
 dicom_hl7_mapper::validate_mpps(const pacs_adapter::mpps_dataset& mpps) const {
-    return pimpl_->validate_mpps_internal(mpps);
+    return pimpl_->validate_mpps(mpps);
 }
 
 }  // namespace pacs::bridge::mapping

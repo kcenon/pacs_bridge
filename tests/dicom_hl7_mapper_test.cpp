@@ -505,8 +505,8 @@ bool test_series_info_in_orm() {
 
     // Check for OBX segments with series information
     const auto& msg = result->message;
-    auto segments = msg.get_segments("OBX");
-    TEST_ASSERT(!segments.empty(), "Should have OBX segments");
+    auto obx_segments = msg.segments("OBX");
+    TEST_ASSERT(!obx_segments.empty(), "Should have OBX segments");
 
     return true;
 }
@@ -523,8 +523,8 @@ bool test_no_series_info_when_disabled() {
 
     // Should not have OBX segments for series
     const auto& msg = result->message;
-    auto segments = msg.get_segments("OBX");
-    TEST_ASSERT(segments.empty(), "Should not have OBX segments when disabled");
+    auto obx_segments = msg.segments("OBX");
+    TEST_ASSERT(obx_segments.empty(), "Should not have OBX segments when disabled");
 
     return true;
 }
