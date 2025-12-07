@@ -122,54 +122,54 @@ void print_summary() {
 
 void test_hl7_module_headers() {
     // Test HL7 types can be instantiated
-    pacs::bridge::protocol::hl7::MessageType msg_type =
-        pacs::bridge::protocol::hl7::MessageType::ORM;
+    pacs::bridge::hl7::message_type msg_type =
+        pacs::bridge::hl7::message_type::ORM;
 
     record_test("HL7 Module Headers",
-                msg_type == pacs::bridge::protocol::hl7::MessageType::ORM,
-                "MessageType enum accessible");
+                msg_type == pacs::bridge::hl7::message_type::ORM,
+                "message_type enum accessible");
 }
 
 void test_mllp_module_headers() {
     // Test MLLP types are accessible
-    pacs::bridge::mllp::MLLPConfig config;
+    pacs::bridge::mllp::mllp_client_config config;
     config.host = "localhost";
     config.port = 2575;
 
     record_test("MLLP Module Headers",
                 config.port == 2575,
-                "MLLPConfig instantiation");
+                "mllp_client_config instantiation");
 }
 
 void test_security_module_headers() {
     // Test security types
-    pacs::bridge::security::RateLimitConfig rate_config;
-    rate_config.max_requests_per_second = 100;
+    pacs::bridge::security::rate_limit_config rate_config;
+    rate_config.requests_per_second = 100;
 
     record_test("Security Module Headers",
-                rate_config.max_requests_per_second == 100,
-                "RateLimitConfig instantiation");
+                rate_config.requests_per_second == 100,
+                "rate_limit_config instantiation");
 }
 
 void test_monitoring_module_headers() {
     // Test monitoring types
-    pacs::bridge::monitoring::HealthStatus status =
-        pacs::bridge::monitoring::HealthStatus::Healthy;
+    pacs::bridge::monitoring::health_status status =
+        pacs::bridge::monitoring::health_status::healthy;
 
     record_test("Monitoring Module Headers",
-                status == pacs::bridge::monitoring::HealthStatus::Healthy,
-                "HealthStatus enum accessible");
+                status == pacs::bridge::monitoring::health_status::healthy,
+                "health_status enum accessible");
 }
 
 void test_pacs_adapter_headers() {
     // Test PACS adapter types
-    pacs::bridge::pacs_adapter::MWLClientConfig mwl_config;
+    pacs::bridge::pacs_adapter::mwl_client_config mwl_config;
     mwl_config.scp_host = "localhost";
     mwl_config.scp_port = 11112;
 
     record_test("PACS Adapter Headers",
                 mwl_config.scp_port == 11112,
-                "MWLClientConfig instantiation");
+                "mwl_client_config instantiation");
 }
 
 // =============================================================================
