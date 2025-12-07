@@ -7,7 +7,7 @@
 #   - thread_system (thread pool, concurrency)
 #   - messaging_system (networking, message handling)
 #   - container_system (data structures)
-#   - pacs_system (DICOM components) - optional
+#   - pacs_system (DICOM MWL/MPPS components)
 #
 # Build modes:
 #   - BRIDGE_STANDALONE_BUILD=ON : Build without external kcenon dependencies
@@ -113,6 +113,15 @@ else()
     # Container system (required for data structures)
     fetch_kcenon_component(container_system)
 
+    # PACS system (optional, for DICOM MWL/MPPS integration)
+    option(BRIDGE_BUILD_PACS_INTEGRATION "Enable pacs_system integration for DICOM support" ON)
+    if(BRIDGE_BUILD_PACS_INTEGRATION)
+        fetch_kcenon_component(pacs_system)
+        set(PACS_BRIDGE_HAS_PACS_SYSTEM TRUE CACHE BOOL "pacs_system is available" FORCE)
+    else()
+        set(PACS_BRIDGE_HAS_PACS_SYSTEM FALSE CACHE BOOL "pacs_system is available" FORCE)
+    endif()
+
     set(PACS_BRIDGE_HAS_KCENON_DEPS TRUE CACHE BOOL "kcenon dependencies available" FORCE)
 endif()
 
@@ -171,6 +180,18 @@ else()
         target_link_libraries(pacs_bridge_dependencies INTERFACE container_system)
     elseif(TARGET kcenon::container_system)
         target_link_libraries(pacs_bridge_dependencies INTERFACE kcenon::container_system)
+    endif()
+
+    # Link pacs_system if available
+    if(PACS_BRIDGE_HAS_PACS_SYSTEM)
+        if(TARGET pacs_system)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE pacs_system)
+        elseif(TARGET kcenon::pacs_system)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE kcenon::pacs_system)
+        endif()
+        target_compile_definitions(pacs_bridge_dependencies INTERFACE
+            PACS_BRIDGE_HAS_PACS_SYSTEM
+        )
     endif()
 endif()
 

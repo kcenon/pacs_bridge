@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "pacs-bridge",
+  "version": "0.1.0",
+  "description": "HL7-DICOM Bridge for Healthcare Integration",
+  "homepage": "https://github.com/kcenon/pacs_bridge",
+  "license": "BSD-3-Clause",
+  "supports": "!(uwp | arm | wasm32)",
+  "dependencies": [
+    "fmt",
+    "spdlog",
+    {
+      "name": "openssl",
+      "platform": "!windows"
+    },
+    {
+      "name": "gtest",
+      "version>=": "1.14.0"
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.0"
+    },
+    {
+      "name": "yaml-cpp",
+      "version>=": "0.8.0"
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Build with test dependencies",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "tls": {
+      "description": "Enable TLS support",
+      "dependencies": [
+        "openssl"
+      ]
+    }
+  },
+  "overrides": [],
+  "builtin-baseline": "c4af3593e1f3aa08972a3e3ca9ec30c8aa792c35"
+}
