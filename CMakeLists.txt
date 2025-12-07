@@ -229,6 +229,14 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/testing/load_runner.h
 )
 
+# PACS Adapter (pacs_system Integration)
+list(APPEND PACS_BRIDGE_SOURCES
+    src/pacs_adapter/mwl_client.cpp
+)
+list(APPEND PACS_BRIDGE_HEADERS
+    include/pacs/bridge/pacs_adapter/mwl_client.h
+)
+
 # =============================================================================
 # Create Main Library
 # =============================================================================

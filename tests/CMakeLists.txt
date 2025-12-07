@@ -155,6 +155,15 @@ set_tests_properties(load_test PROPERTIES
 )
 
 # =============================================================================
+# PACS Adapter Tests (Phase 1 - pacs_system Integration)
+# =============================================================================
+
+add_bridge_test(mwl_client_test)
+set_tests_properties(mwl_client_test PROPERTIES
+    LABELS "unit;pacs_adapter;phase1"
+)
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -178,5 +187,6 @@ endif()
 message(STATUS "  - health_check_test")
 message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
+message(STATUS "  - mwl_client_test")
 message(STATUS "==========================")
 message(STATUS "")
