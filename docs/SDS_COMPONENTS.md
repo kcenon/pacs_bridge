@@ -1314,6 +1314,33 @@ private:
 } // namespace pacs::bridge::router
 ```
 
+#### Routing Decision Logging
+
+The `message_router` supports comprehensive logging of routing decisions through two mechanisms:
+
+1. **GlobalLoggerRegistry Integration**: Routes logging through `kcenon::common::interfaces::GlobalLoggerRegistry` with logger name "message_router"
+2. **Custom Callback**: Applications can register a custom logger callback for integration with other logging frameworks
+
+**Log Levels:**
+- `debug`: Detailed routing decisions (message start, handler execution, chain stops)
+- `info`: Route matches and completion with timing information
+- `warning`: No matching route (using default handler or unhandled)
+- `error`: Handler failures and exceptions
+
+**Example Usage:**
+```cpp
+message_router router;
+
+// Set log level to debug for detailed logging
+router.set_log_level(message_router::log_level::debug);
+
+// Optional: Add custom callback for application-specific logging
+router.set_logger([](const message_router::log_entry& entry) {
+    // Custom logging logic
+    audit_logger.log(entry.message_type, entry.message);
+});
+```
+
 ### DES-ROUTE-002: queue_manager
 
 **Traces to:** FR-4.3.1, FR-4.3.2, FR-4.3.3, FR-4.3.4

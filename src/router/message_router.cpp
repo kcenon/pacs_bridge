@@ -5,11 +5,35 @@
 
 #include "pacs/bridge/router/message_router.h"
 
+#include <kcenon/common/interfaces/global_logger_registry.h>
+
 #include <algorithm>
+#include <chrono>
 #include <mutex>
 #include <regex>
+#include <sstream>
 
 namespace pacs::bridge::router {
+
+namespace {
+
+// Map message_router log_level to common log_level
+kcenon::common::interfaces::log_level to_common_level(message_router::log_level level) {
+    switch (level) {
+        case message_router::log_level::debug:
+            return kcenon::common::interfaces::log_level::debug;
+        case message_router::log_level::info:
+            return kcenon::common::interfaces::log_level::info;
+        case message_router::log_level::warning:
+            return kcenon::common::interfaces::log_level::warning;
+        case message_router::log_level::error:
+            return kcenon::common::interfaces::log_level::error;
+        default:
+            return kcenon::common::interfaces::log_level::info;
+    }
+}
+
+}  // namespace
 
 // =============================================================================
 // message_pattern Implementation
@@ -176,12 +200,90 @@ public:
     std::vector<route> routes_;
     message_handler default_handler_;
     mutable statistics stats_;
+    logger_callback logger_;
+    log_level min_log_level_ = log_level::info;
 
     void sort_routes() {
         std::sort(routes_.begin(), routes_.end(),
                   [](const route& a, const route& b) {
                       return a.priority < b.priority;
                   });
+    }
+
+    void log(log_level level, const std::string& message_control_id,
+             const std::string& message_type, const std::string& route_id,
+             const std::string& handler_id, const std::string& message,
+             std::optional<int64_t> processing_time_us = std::nullopt) const {
+        if (level < min_log_level_) {
+            return;
+        }
+
+        // Build structured log message
+        std::ostringstream oss;
+        oss << "[Router] ";
+        if (!message_control_id.empty()) {
+            oss << "msg_id=" << message_control_id << " ";
+        }
+        if (!message_type.empty()) {
+            oss << "type=" << message_type << " ";
+        }
+        if (!route_id.empty()) {
+            oss << "route=" << route_id << " ";
+        }
+        if (!handler_id.empty()) {
+            oss << "handler=" << handler_id << " ";
+        }
+        oss << message;
+        if (processing_time_us.has_value()) {
+            oss << " (duration=" << processing_time_us.value() << "us)";
+        }
+
+        // Log via GlobalLoggerRegistry
+        auto logger = kcenon::common::interfaces::get_logger("message_router");
+        if (logger) {
+            logger->log(to_common_level(level), oss.str());
+        }
+
+        // Also call custom callback if set
+        if (logger_) {
+            log_entry entry;
+            entry.timestamp = std::chrono::system_clock::now();
+            entry.level = level;
+            entry.message_control_id = message_control_id;
+            entry.message_type = message_type;
+            entry.route_id = route_id;
+            entry.handler_id = handler_id;
+            entry.message = message;
+            entry.processing_time_us = processing_time_us;
+            logger_(entry);
+        }
+    }
+
+    void log_debug(const std::string& message_control_id,
+                   const std::string& message_type,
+                   const std::string& message) const {
+        log(log_level::debug, message_control_id, message_type, "", "", message);
+    }
+
+    void log_info(const std::string& message_control_id,
+                  const std::string& message_type,
+                  const std::string& route_id,
+                  const std::string& message) const {
+        log(log_level::info, message_control_id, message_type, route_id, "", message);
+    }
+
+    void log_warning(const std::string& message_control_id,
+                     const std::string& message_type,
+                     const std::string& message) const {
+        log(log_level::warning, message_control_id, message_type, "", "", message);
+    }
+
+    void log_error(const std::string& message_control_id,
+                   const std::string& message_type,
+                   const std::string& route_id,
+                   const std::string& handler_id,
+                   const std::string& message) const {
+        log(log_level::error, message_control_id, message_type, route_id, handler_id, message);
     }
 };
 
@@ -314,7 +416,17 @@ std::expected<handler_result, router_error> message_router::route(
     const hl7::hl7_message& message) const {
     std::lock_guard lock(pimpl_->mutex_);
 
+    auto start_time = std::chrono::steady_clock::now();
+
     ++pimpl_->stats_.total_messages;
+
+    // Extract message info for logging
+    auto header = message.header();
+    std::string control_id(message.control_id());
+    std::string msg_type = header.full_message_type();
+
+    pimpl_->log_debug(control_id, msg_type,
+                      "Routing message started");
 
     handler_result final_result = handler_result::ok();
     bool any_matched = false;
@@ -329,31 +441,57 @@ std::expected<handler_result, router_error> message_router::route(
         ++pimpl_->stats_.matched_messages;
         ++pimpl_->stats_.route_matches[r.id];
 
+        pimpl_->log_info(control_id, msg_type, r.id,
+                         "Route matched: " + r.name);
+
         // Execute handler chain
         for (const auto& handler_id : r.handler_ids) {
             auto it = pimpl_->handlers_.find(handler_id);
             if (it == pimpl_->handlers_.end()) {
+                pimpl_->log_warning(control_id, msg_type,
+                                    "Handler not found: " + handler_id);
                 continue;  // Handler removed since route was added
             }
 
+            pimpl_->log_debug(control_id, msg_type,
+                              "Executing handler: " + handler_id);
+
             try {
+                auto handler_start = std::chrono::steady_clock::now();
                 final_result = it->second(message);
+                auto handler_end = std::chrono::steady_clock::now();
+                auto handler_duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                    handler_end - handler_start).count();
+
+                pimpl_->log(log_level::debug, control_id, msg_type, r.id, handler_id,
+                            "Handler completed successfully",
+                            handler_duration);
             } catch (const std::exception& e) {
                 ++pimpl_->stats_.handler_errors;
+                pimpl_->log_error(control_id, msg_type, r.id, handler_id,
+                                  std::string("Handler threw exception: ") + e.what());
                 return std::unexpected(router_error::handler_error);
             }
 
             if (!final_result.success) {
                 ++pimpl_->stats_.handler_errors;
+                pimpl_->log_error(control_id, msg_type, r.id, handler_id,
+                                  "Handler returned error: " + final_result.error_message);
                 return std::unexpected(router_error::handler_error);
             }
 
             if (!final_result.continue_chain) {
+                pimpl_->log_debug(control_id, msg_type,
+                                  "Handler chain stopped by: " + handler_id);
                 break;  // Handler requested stop
             }
         }
 
         if (r.terminal || !final_result.continue_chain) {
+            if (r.terminal) {
+                pimpl_->log_debug(control_id, msg_type,
+                                  "Terminal route reached: " + r.id);
+            }
             break;  // Terminal route or handler requested stop
         }
     }
@@ -362,17 +500,30 @@ std::expected<handler_result, router_error> message_router::route(
     if (!any_matched) {
         if (pimpl_->default_handler_) {
             ++pimpl_->stats_.default_handled;
+            pimpl_->log_warning(control_id, msg_type,
+                                "No matching route, using default handler");
             try {
                 final_result = pimpl_->default_handler_(message);
-            } catch (const std::exception&) {
+            } catch (const std::exception& e) {
                 ++pimpl_->stats_.handler_errors;
+                pimpl_->log_error(control_id, msg_type, "", "default",
+                                  std::string("Default handler threw exception: ") + e.what());
                 return std::unexpected(router_error::handler_error);
             }
         } else {
             ++pimpl_->stats_.unhandled_messages;
+            pimpl_->log_warning(control_id, msg_type,
+                                "No matching route and no default handler");
             return std::unexpected(router_error::no_matching_route);
         }
     }
+
+    auto end_time = std::chrono::steady_clock::now();
+    auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(
+        end_time - start_time).count();
+
+    pimpl_->log(log_level::info, control_id, msg_type, "", "",
+                "Routing completed successfully", total_duration);
 
     return final_result;
 }
@@ -420,6 +571,26 @@ message_router::statistics message_router::get_statistics() const {
 void message_router::reset_statistics() {
     std::lock_guard lock(pimpl_->mutex_);
     pimpl_->stats_ = statistics{};
+}
+
+void message_router::set_logger(logger_callback callback) {
+    std::lock_guard lock(pimpl_->mutex_);
+    pimpl_->logger_ = std::move(callback);
+}
+
+void message_router::clear_logger() {
+    std::lock_guard lock(pimpl_->mutex_);
+    pimpl_->logger_ = nullptr;
+}
+
+void message_router::set_log_level(log_level level) {
+    std::lock_guard lock(pimpl_->mutex_);
+    pimpl_->min_log_level_ = level;
+}
+
+message_router::log_level message_router::get_log_level() const noexcept {
+    std::lock_guard lock(pimpl_->mutex_);
+    return pimpl_->min_log_level_;
 }
 
 // =============================================================================
