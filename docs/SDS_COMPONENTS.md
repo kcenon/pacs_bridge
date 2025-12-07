@@ -1,6 +1,6 @@
 # SDS - Component Designs
 
-> **Version:** 1.2.0
+> **Version:** 1.3.0
 > **Parent Document:** [SDS.md](SDS.md)
 > **Last Updated:** 2025-12-07
 
@@ -18,6 +18,10 @@
 - [8. Integration Module](#8-integration-module)
 - [9. Monitoring Module](#9-monitoring-module)
 - [10. Security Module](#10-security-module)
+  - [10.1 Module Overview](#101-module-overview)
+  - [10.2 TLS Integration Points](#102-tls-integration-points)
+  - [10.3 Security Hardening Components](#103-security-hardening-components)
+  - [10.4 Security Pipeline Integration](#104-security-pipeline-integration)
 - [11. Testing Module](#11-testing-module)
 
 ---
@@ -2557,6 +2561,569 @@ The security module integrates with:
 
 3. **FHIR Server** (`fhir::fhir_server_config.tls`)
    - HTTPS support for REST API
+
+### 10.3 Security Hardening Components
+
+The security module includes comprehensive hardening components for HIPAA-compliant
+healthcare data protection:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    Security Hardening Components                            │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌───────────────────┐   ┌───────────────────┐   ┌───────────────────┐   │
+│   │  input_validator  │   │  log_sanitizer    │   │  audit_logger     │   │
+│   │                   │   │                   │   │                   │   │
+│   │  - HL7 structure  │   │  - PHI detection  │   │  - Event logging  │   │
+│   │  - SQL injection  │   │  - Pattern mask   │   │  - HIPAA trail    │   │
+│   │  - Cmd injection  │   │  - HL7 segment    │   │  - JSON format    │   │
+│   └───────────────────┘   └───────────────────┘   └───────────────────┘   │
+│            │                       │                       │               │
+│            ▼                       ▼                       ▼               │
+│   ┌────────────────────────────────────────────────────────────────────┐  │
+│   │                    Security Pipeline                                │  │
+│   │  Request → Access → Rate → Validate → Sanitize → Process → Audit  │  │
+│   └────────────────────────────────────────────────────────────────────┘  │
+│            ▲                       ▲                                       │
+│   ┌───────┴───────────┐   ┌───────┴───────────┐                           │
+│   │  access_control   │   │   rate_limiter    │                           │
+│   │                   │   │                   │                           │
+│   │  - IP whitelist   │   │  - Per-IP limits  │                           │
+│   │  - CIDR ranges    │   │  - Per-app limits │                           │
+│   │  - App auth       │   │  - Size-based     │                           │
+│   └───────────────────┘   └───────────────────┘                           │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### DES-SEC-004: input_validator
+
+**Traces to:** FR-4.1.1, FR-4.1.2, NFR-4.1, SR-1, SRS-SEC-002
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief Input validation error codes (-960 to -969)
+ */
+enum class validation_error : int {
+    empty_message = -960,
+    message_too_large = -961,
+    invalid_hl7_structure = -962,
+    missing_msh_segment = -963,
+    invalid_msh_fields = -964,
+    invalid_version = -965,
+    invalid_application_id = -966,
+    prohibited_characters = -967,
+    invalid_encoding = -968,
+    injection_detected = -969
+};
+
+/**
+ * @brief Validation result with extracted metadata
+ */
+struct validation_result {
+    bool valid = false;
+    std::optional<validation_error> error;
+    std::optional<std::string> error_message;
+    std::optional<std::string> error_field;
+
+    // Extracted message metadata
+    std::optional<std::string> message_type;
+    std::optional<std::string> message_control_id;
+    std::optional<std::string> sending_app;
+    std::optional<std::string> sending_facility;
+    std::optional<std::string> receiving_app;
+    std::optional<std::string> receiving_facility;
+
+    size_t message_size = 0;
+    size_t segment_count = 0;
+    std::vector<std::string> warnings;
+
+    static validation_result success();
+    static validation_result failure(validation_error err,
+                                      std::string_view message,
+                                      std::string_view field = "");
+};
+
+/**
+ * @brief HL7 message input validator
+ *
+ * Validates incoming HL7 messages for:
+ * - Basic structure and format
+ * - Required segments (MSH)
+ * - Size limits
+ * - Application ID whitelisting
+ * - Injection attack detection
+ */
+class input_validator {
+public:
+    explicit input_validator(const validation_config& config = {});
+    ~input_validator();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Validation Methods
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] validation_result validate(std::string_view message) const;
+    [[nodiscard]] std::pair<validation_result, std::string>
+        validate_and_sanitize(std::string_view message) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Injection Detection
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] bool detect_sql_injection(std::string_view content) const;
+    [[nodiscard]] bool detect_command_injection(std::string_view content) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Sanitization
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::string sanitize(std::string_view message) const;
+    [[nodiscard]] static std::string strip_nulls(std::string_view message);
+    [[nodiscard]] static std::string normalize_endings(std::string_view message);
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::security
+```
+
+### DES-SEC-005: healthcare_log_sanitizer
+
+**Traces to:** FR-4.2.1, FR-4.2.2, NFR-4.1, SR-2, SRS-SEC-003
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief PHI field types for masking
+ */
+enum class phi_field_type {
+    patient_name,
+    patient_id,
+    date_of_birth,
+    ssn,
+    address,
+    phone_number,
+    email,
+    medical_record_number,
+    insurance_id,
+    account_number,
+    device_serial,
+    biometric_id
+};
+
+/**
+ * @brief Masking style options
+ */
+enum class masking_style {
+    asterisks,    // Replace with ****
+    type_label,   // Replace with [PATIENT_NAME]
+    x_characters, // Replace with XXXX
+    partial,      // Show first/last characters
+    remove        // Remove entirely
+};
+
+/**
+ * @brief Healthcare-specific log sanitizer
+ *
+ * Extends base log_sanitizer with healthcare-specific PHI patterns:
+ * - Patient identifiers (MRN, SSN)
+ * - Personal information (name, DOB, address)
+ * - Contact information (phone, email)
+ * - HL7 segment-aware sanitization
+ */
+class healthcare_log_sanitizer {
+public:
+    explicit healthcare_log_sanitizer(
+        const healthcare_sanitization_config& config = {});
+    ~healthcare_log_sanitizer();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Sanitization Methods
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::string sanitize(std::string_view content) const;
+    [[nodiscard]] std::string sanitize_hl7(std::string_view hl7_message) const;
+    [[nodiscard]] std::pair<std::string, std::vector<phi_detection>>
+        sanitize_with_detections(std::string_view content) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Detection Methods
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] bool contains_phi(std::string_view content) const;
+    [[nodiscard]] std::vector<phi_detection>
+        detect_phi(std::string_view content) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Masking
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::string mask(std::string_view value,
+                                    phi_field_type type) const;
+    void add_custom_pattern(std::string_view pattern,
+                            std::string_view replacement);
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Utility Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+[[nodiscard]] std::string make_safe_hl7_summary(std::string_view hl7_message);
+[[nodiscard]] std::string make_safe_session_desc(std::string_view remote_address,
+                                                   uint16_t remote_port,
+                                                   uint64_t session_id,
+                                                   bool mask_ip = true);
+
+} // namespace pacs::bridge::security
+```
+
+### DES-SEC-006: healthcare_audit_logger
+
+**Traces to:** FR-4.3.1, FR-4.3.2, NFR-4.1, SR-3, SRS-SEC-004
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief Healthcare-specific audit event categories
+ */
+enum class healthcare_audit_category {
+    hl7_transaction,   // Message send/receive
+    phi_access,        // Patient data access
+    security,          // Authentication/authorization
+    system,            // Server start/stop/config
+    network            // Connection events
+};
+
+/**
+ * @brief Specific audit event types
+ */
+enum class healthcare_audit_event {
+    // HL7 Transaction Events
+    message_received,
+    message_sent,
+    message_validated,
+    message_rejected,
+    ack_sent,
+    nack_sent,
+
+    // PHI Access Events
+    patient_data_viewed,
+    patient_data_created,
+    patient_data_modified,
+    patient_data_deleted,
+    phi_exported,
+
+    // Security Events
+    login_attempt,
+    login_success,
+    login_failure,
+    logout,
+    access_granted,
+    access_denied,
+    certificate_validated,
+    certificate_rejected,
+
+    // System Events
+    server_started,
+    server_stopped,
+    config_changed,
+    health_check,
+
+    // Network Events
+    connection_established,
+    connection_closed,
+    connection_rejected,
+    rate_limit_triggered
+};
+
+/**
+ * @brief Healthcare-compliant audit logger
+ *
+ * Provides HIPAA-compliant audit logging with:
+ * - JSON formatted output
+ * - Tamper-evident event IDs
+ * - PHI access tracking
+ * - 7-year retention support
+ */
+class healthcare_audit_logger {
+public:
+    healthcare_audit_logger();
+    ~healthcare_audit_logger();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Singleton Access
+    // ═══════════════════════════════════════════════════════════════════════
+
+    static healthcare_audit_logger& instance();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Event Logging
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void log(const healthcare_audit_entry& entry);
+    void log_hl7_transaction(std::string_view message_type,
+                              std::string_view control_id,
+                              std::string_view peer_ip,
+                              uint16_t peer_port,
+                              bool success);
+    void log_security_event(healthcare_audit_event event,
+                            std::string_view user_id,
+                            bool success,
+                            std::string_view details = "");
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+/**
+ * @brief Fluent event builder
+ */
+class healthcare_audit_event_builder {
+public:
+    static healthcare_audit_event_builder create(
+        healthcare_audit_category category,
+        healthcare_audit_event event_type);
+
+    healthcare_audit_event_builder& with_message_id(std::string_view id);
+    healthcare_audit_event_builder& with_message_type(std::string_view type);
+    healthcare_audit_event_builder& with_peer(std::string_view ip, uint16_t port);
+    healthcare_audit_event_builder& with_user(std::string_view user_id);
+    healthcare_audit_event_builder& with_patient_id(std::string_view patient_id);
+    healthcare_audit_event_builder& with_success();
+    healthcare_audit_event_builder& with_failure();
+    healthcare_audit_event_builder& with_error(std::string_view error);
+    healthcare_audit_event_builder& with_detail(std::string_view key,
+                                                  std::string_view value);
+
+    [[nodiscard]] healthcare_audit_entry build();
+};
+
+} // namespace pacs::bridge::security
+```
+
+### DES-SEC-007: access_controller
+
+**Traces to:** FR-4.1.3, NFR-4.2, SR-1, SRS-SEC-005
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief Access control error codes (-950 to -959)
+ */
+enum class access_error : int {
+    ip_not_whitelisted = -950,
+    ip_blacklisted = -951,
+    temporarily_blocked = -952,
+    connection_limit_exceeded = -953,
+    invalid_ip_format = -954,
+    application_not_allowed = -955,
+    facility_not_allowed = -956,
+    time_restriction = -957,
+    geo_restriction = -958,
+    internal_error = -959
+};
+
+/**
+ * @brief Access control mode
+ */
+enum class access_control_mode {
+    disabled,         // Allow all
+    whitelist_only,   // Only allow whitelisted
+    blacklist_only,   // Block blacklisted
+    whitelist_blacklist // Whitelist with blacklist override
+};
+
+/**
+ * @brief IP range with CIDR support
+ */
+struct ip_range {
+    std::string network;
+    uint32_t prefix_length = 32;
+
+    static std::optional<ip_range> from_cidr(std::string_view cidr);
+    [[nodiscard]] bool matches(std::string_view ip) const;
+};
+
+/**
+ * @brief Access controller for IP and application authorization
+ *
+ * Features:
+ * - IP whitelisting/blacklisting with CIDR support
+ * - Application ID (MSH-3/MSH-4) validation
+ * - Temporary blocking for failed attempts
+ * - Connection rate limiting
+ */
+class access_controller {
+public:
+    explicit access_controller(const access_control_config& config = {});
+    ~access_controller();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Access Checks
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] access_result check_access(std::string_view ip) const;
+    [[nodiscard]] access_result check_application(std::string_view app_id) const;
+    [[nodiscard]] access_result check_facility(std::string_view facility_id) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Dynamic Blocking
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void temporarily_block(std::string_view ip,
+                           std::chrono::seconds duration);
+    void unblock(std::string_view ip);
+    [[nodiscard]] bool is_blocked(std::string_view ip) const;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Utility Functions
+// ═══════════════════════════════════════════════════════════════════════════
+
+[[nodiscard]] bool is_valid_ip(std::string_view ip);
+[[nodiscard]] bool is_private_ip(std::string_view ip);
+[[nodiscard]] bool is_localhost(std::string_view ip);
+
+} // namespace pacs::bridge::security
+```
+
+### DES-SEC-008: rate_limiter
+
+**Traces to:** FR-4.1.4, NFR-4.3, SR-1, SRS-SEC-006
+
+```cpp
+namespace pacs::bridge::security {
+
+/**
+ * @brief Rate limit result
+ */
+struct rate_limit_result {
+    bool allowed = true;
+    size_t remaining = 0;
+    std::chrono::seconds retry_after{0};
+    std::string limit_key;
+};
+
+/**
+ * @brief Rate limiter with multiple tiers
+ *
+ * Supports:
+ * - Per-IP rate limiting
+ * - Per-application rate limiting
+ * - Global rate limiting
+ * - Size-based limiting (bytes/second)
+ * - Sliding window counters
+ */
+class rate_limiter {
+public:
+    explicit rate_limiter(const rate_limit_config& config = {});
+    ~rate_limiter();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Rate Checking
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] rate_limit_result check_limit(
+        std::string_view client_ip,
+        std::optional<std::string_view> application_id = std::nullopt,
+        size_t message_size = 0);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Configuration
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void set_application_limit(std::string_view app_id,
+                                size_t requests_per_second,
+                                size_t requests_per_minute);
+    void reset(std::string_view client_ip);
+    void reset_all();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Statistics
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] rate_limit_statistics statistics() const;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+/**
+ * @brief Generate HTTP rate limit headers (RFC 6585)
+ */
+[[nodiscard]] std::unordered_map<std::string, std::string>
+make_rate_limit_headers(const rate_limit_result& result);
+
+} // namespace pacs::bridge::security
+```
+
+### 10.4 Security Pipeline Integration
+
+The security hardening components integrate into the MLLP/FHIR request processing
+pipeline as follows:
+
+```
+Incoming Request
+      │
+      ▼
+┌─────────────────┐
+│ Access Control  │ ──▶ Reject if IP/App not authorized
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Rate Limiter   │ ──▶ Reject if rate exceeded (429 Too Many Requests)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│Input Validation │ ──▶ Reject if structure invalid or injection detected
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Business Logic │ ──▶ Process HL7/FHIR message
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Log Sanitizer   │ ──▶ Remove PHI before logging
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Audit Logger   │ ──▶ Record transaction for compliance
+└─────────────────┘
+```
+
+**Error Code Allocation:**
+
+| Component        | Error Code Range |
+|------------------|-----------------|
+| Access Control   | -950 to -959    |
+| Input Validation | -960 to -969    |
+| MLLP Protocol    | -970 to -979    |
+| Rate Limiting    | -980 to -989    |
+| TLS/Security     | -990 to -999    |
 
 ---
 
