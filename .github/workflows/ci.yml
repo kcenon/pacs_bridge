@@ -291,9 +291,14 @@ jobs:
     - name: Generate coverage report
       working-directory: pacs_bridge
       run: |
-        lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch
-        lcov --remove coverage.info '/usr/*' '*/tests/*' '*/examples/*' '*/build/_deps/*' --output-file coverage.info --ignore-errors unused
-        lcov --list coverage.info
+        # Note: --ignore-errors empty handles case when no tests run (tests disabled)
+        lcov --capture --directory build --output-file coverage.info --ignore-errors mismatch,empty || true
+        if [ -f coverage.info ]; then
+          lcov --remove coverage.info '/usr/*' '*/tests/*' '*/examples/*' '*/build/_deps/*' --output-file coverage.info --ignore-errors unused,empty || true
+          lcov --list coverage.info || echo "No coverage data available (tests disabled)"
+        else
+          echo "No coverage data generated (tests disabled - pending Issue #6)"
+        fi
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
