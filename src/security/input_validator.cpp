@@ -35,13 +35,16 @@ const std::array<std::regex, 8> sql_injection_patterns = {
 };
 
 // Command injection patterns to detect
+// Note: HL7 uses | as field delimiter, ^ as component delimiter, ~ as repetition
+// separator, \ as escape character, and & as subcomponent delimiter (MSH-2).
+// We must exclude these HL7 encoding characters from the command injection check.
 const std::array<std::regex, 6> command_injection_patterns = {
-    std::regex(R"([;&|`$])", std::regex::icase),
+    std::regex(R"([;`$])", std::regex::icase),  // Exclude | & (HL7 delimiters)
     std::regex(R"(\$\(|\$\{)", std::regex::icase),
     std::regex(R"(\b(cat|ls|rm|mv|cp|chmod|chown|wget|curl)\b)", std::regex::icase),
     std::regex(R"(\.\.\/)", std::regex::icase),
     std::regex(R"(\/etc\/|\/bin\/|\/usr\/)", std::regex::icase),
-    std::regex(R"(\n|\r)", std::regex::icase)
+    std::regex(R"(\n)", std::regex::icase)  // Only newline, not CR (HL7 uses CR)
 };
 
 // HL7 segment delimiter
