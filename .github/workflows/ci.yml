@@ -180,6 +180,9 @@ jobs:
       working-directory: pacs_bridge
       shell: pwsh
       run: |
+        # Refresh PATH to include Ninja from chocolatey
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
         cmake -B build `
           -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
@@ -188,7 +191,8 @@ jobs:
           -DBRIDGE_BUILD_EXAMPLES=OFF `
           -DBRIDGE_BUILD_HL7=ON `
           -DBRIDGE_BUILD_FHIR=OFF `
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+          -DVCPKG_MANIFEST_MODE=OFF
 
     - name: Build
       working-directory: pacs_bridge
