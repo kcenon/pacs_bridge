@@ -19,12 +19,14 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
+#include <chrono>
 #include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <regex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace pacs::bridge::router {
@@ -482,6 +484,96 @@ public:
      * @brief Reset statistics
      */
     void reset_statistics();
+
+    // =========================================================================
+    // Logging
+    // =========================================================================
+
+    /**
+     * @brief Log levels for routing decisions
+     */
+    enum class log_level {
+        /** Debug level - detailed routing decisions */
+        debug,
+        /** Info level - route matches and handler execution */
+        info,
+        /** Warning level - no matching route, using default */
+        warning,
+        /** Error level - handler failures */
+        error
+    };
+
+    /**
+     * @brief Log entry for routing decisions
+     */
+    struct log_entry {
+        /** Timestamp of the log entry */
+        std::chrono::system_clock::time_point timestamp;
+
+        /** Log level */
+        log_level level = log_level::info;
+
+        /** Message control ID (from MSH-10) */
+        std::string message_control_id;
+
+        /** Message type (e.g., "ADT^A01") */
+        std::string message_type;
+
+        /** Route ID that matched (empty if no match) */
+        std::string route_id;
+
+        /** Handler ID being executed (empty if not applicable) */
+        std::string handler_id;
+
+        /** Log message */
+        std::string message;
+
+        /** Processing time in microseconds (optional) */
+        std::optional<int64_t> processing_time_us;
+    };
+
+    /**
+     * @brief Logger callback function type
+     *
+     * Applications can set a callback to receive routing decision logs.
+     * This enables integration with various logging frameworks.
+     */
+    using logger_callback = std::function<void(const log_entry& entry)>;
+
+    /**
+     * @brief Set logger callback for routing decisions
+     *
+     * @param callback Function to receive log entries
+     *
+     * @example
+     * ```cpp
+     * router.set_logger([](const message_router::log_entry& entry) {
+     *     std::cout << "[" << entry.message_type << "] "
+     *               << entry.message << std::endl;
+     * });
+     * ```
+     */
+    void set_logger(logger_callback callback);
+
+    /**
+     * @brief Clear the logger callback
+     */
+    void clear_logger();
+
+    /**
+     * @brief Set minimum log level
+     *
+     * Only log entries at or above this level will be passed to the callback.
+     * Default: log_level::info
+     *
+     * @param level Minimum log level
+     */
+    void set_log_level(log_level level);
+
+    /**
+     * @brief Get current minimum log level
+     */
+    [[nodiscard]] log_level get_log_level() const noexcept;
 
 private:
     class impl;
