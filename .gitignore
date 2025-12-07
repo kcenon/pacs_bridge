@@ -31,8 +31,8 @@ compile_commands.json
 vcpkg_installed/
 _deps/
 
-# Testing
-Testing/
+# Testing (CMake output)
+/Testing/
 CTestTestfile.cmake
 
 # Documentation build

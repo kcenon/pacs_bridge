@@ -18,6 +18,7 @@
 - [8. Integration Module](#8-integration-module)
 - [9. Monitoring Module](#9-monitoring-module)
 - [10. Security Module](#10-security-module)
+- [11. Testing Module](#11-testing-module)
 
 ---
 
@@ -2559,7 +2560,433 @@ The security module integrates with:
 
 ---
 
-*Document Version: 1.2.0*
+## 11. Testing Module
+
+### 11.1 Module Overview
+
+**Namespace:** `pacs::bridge::testing`
+**Purpose:** Provide comprehensive load and stress testing capabilities for PACS Bridge validation
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                           Testing Module                                    │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                       load_runner                                    │  │
+│   │                                                                      │  │
+│   │  run_sustained()   run_peak()   run_endurance()   run_concurrent()  │  │
+│   │         │              │              │                  │           │  │
+│   │         ▼              ▼              ▼                  ▼           │  │
+│   │    ┌─────────────────────────────────────────────────────────┐      │  │
+│   │    │                    test_metrics                          │      │  │
+│   │    │  - messages_sent/acked/failed    - latency histogram    │      │  │
+│   │    │  - throughput                    - error tracking       │      │  │
+│   │    └─────────────────────────────────────────────────────────┘      │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+│                                      │                                      │
+│         ┌────────────────────────────┼────────────────────────────┐        │
+│         │                            │                            │        │
+│   ┌─────┴─────────┐           ┌──────┴──────┐           ┌─────────┴─────┐  │
+│   │load_generator │           │test_result  │           │load_reporter  │  │
+│   │               │           │             │           │               │  │
+│   │ generate_orm()│           │ summary()   │           │ to_json()     │  │
+│   │ generate_adt()│           │ passed()    │           │ to_csv()      │  │
+│   │ generate_siu()│           │             │           │ to_markdown() │  │
+│   └───────────────┘           └─────────────┘           └───────────────┘  │
+│                                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### DES-TEST-001: load_types
+
+**Traces to:** NFR-1.1 to NFR-1.6, NFR-2.1, NFR-3.2
+
+```cpp
+namespace pacs::bridge::testing {
+
+/**
+ * @brief Load testing error codes (-960 to -969)
+ */
+enum class load_error : int {
+    invalid_configuration = -960,
+    not_initialized = -961,
+    already_running = -962,
+    cancelled = -963,
+    connection_failed = -964,
+    generation_failed = -965,
+    timeout = -966,
+    resource_exhausted = -967,
+    target_error = -968,
+    report_failed = -969
+};
+
+/**
+ * @brief Type of load test to execute
+ */
+enum class test_type {
+    sustained,     // Constant rate for extended duration
+    peak,          // Find system limits
+    endurance,     // Long-duration memory leak detection
+    concurrent,    // Connection stress test
+    queue_stress,  // Queue accumulation under failure
+    failover       // Failover behavior verification
+};
+
+/**
+ * @brief Current test state
+ */
+enum class test_state {
+    idle, initializing, running, stopping,
+    completed, failed, cancelled
+};
+
+/**
+ * @brief HL7 message type for load generation
+ */
+enum class hl7_message_type {
+    ORM, ADT, SIU, ORU, MDM
+};
+
+/**
+ * @brief Message type distribution for mixed workloads
+ */
+struct message_distribution {
+    uint8_t orm_percent = 70;
+    uint8_t adt_percent = 20;
+    uint8_t siu_percent = 10;
+    uint8_t oru_percent = 0;
+    uint8_t mdm_percent = 0;
+
+    [[nodiscard]] constexpr bool is_valid() const noexcept;
+    [[nodiscard]] static constexpr message_distribution default_mix() noexcept;
+};
+
+/**
+ * @brief Load test configuration parameters
+ */
+struct load_config {
+    test_type type = test_type::sustained;
+    std::string target_host = "localhost";
+    uint16_t target_port = 2575;
+    std::chrono::seconds duration{3600};
+    uint32_t messages_per_second = 500;
+    size_t concurrent_connections = 10;
+    message_distribution distribution;
+    bool use_tls = false;
+    std::chrono::seconds ramp_up{30};
+    std::chrono::milliseconds message_timeout{5000};
+
+    [[nodiscard]] bool is_valid() const noexcept;
+
+    // Factory methods
+    [[nodiscard]] static load_config sustained(/*...*/);
+    [[nodiscard]] static load_config peak(/*...*/);
+    [[nodiscard]] static load_config endurance(/*...*/);
+    [[nodiscard]] static load_config concurrent(/*...*/);
+};
+
+/**
+ * @brief Latency histogram for percentile calculations
+ */
+struct latency_histogram {
+    void record(uint64_t latency_us) noexcept;
+    [[nodiscard]] double mean_us() const noexcept;
+    [[nodiscard]] uint64_t percentile_us(double percentile) const noexcept;
+    void reset() noexcept;
+};
+
+/**
+ * @brief Real-time test metrics (thread-safe)
+ */
+struct test_metrics {
+    std::atomic<uint64_t> messages_sent{0};
+    std::atomic<uint64_t> messages_acked{0};
+    std::atomic<uint64_t> messages_failed{0};
+    std::atomic<uint64_t> connection_errors{0};
+    std::atomic<uint64_t> timeout_errors{0};
+    std::atomic<uint64_t> bytes_sent{0};
+    std::atomic<uint64_t> bytes_received{0};
+    latency_histogram latency;
+
+    [[nodiscard]] double success_rate() const noexcept;
+    [[nodiscard]] double overall_throughput() const noexcept;
+    void reset() noexcept;
+};
+
+/**
+ * @brief Test result summary
+ */
+struct test_result {
+    test_type type;
+    test_state state;
+    std::chrono::seconds duration;
+    uint64_t messages_sent;
+    uint64_t messages_acked;
+    double success_rate_percent;
+    double throughput;
+    double latency_p50_ms;
+    double latency_p95_ms;
+    double latency_p99_ms;
+
+    [[nodiscard]] bool passed(double min_success_rate = 100.0,
+                               double max_p95_latency_ms = 50.0) const noexcept;
+    [[nodiscard]] std::string summary() const;
+};
+
+} // namespace pacs::bridge::testing
+```
+
+### DES-TEST-002: load_generator
+
+**Traces to:** NFR-1.1, NFR-1.2
+
+```cpp
+namespace pacs::bridge::testing {
+
+/**
+ * @brief HL7 message generator for load testing
+ *
+ * Thread-safe message generator that creates realistic HL7 messages
+ * for various message types (ORM, ADT, SIU, ORU, MDM).
+ */
+class load_generator {
+public:
+    struct config {
+        std::string sending_application = "PACS_BRIDGE_TEST";
+        std::string sending_facility = "LOAD_TEST";
+        std::string receiving_application = "RIS";
+        std::string receiving_facility = "HOSPITAL";
+        bool include_optional_fields = true;
+        uint64_t seed = 0;  // 0 = random seed
+    };
+
+    load_generator();
+    explicit load_generator(const config& cfg);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Message Generation
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    generate(hl7_message_type type);
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    generate_random(const message_distribution& dist);
+
+    [[nodiscard]] std::expected<std::string, load_error> generate_orm();
+    [[nodiscard]] std::expected<std::string, load_error> generate_adt();
+    [[nodiscard]] std::expected<std::string, load_error> generate_siu();
+    [[nodiscard]] std::expected<std::string, load_error> generate_oru();
+    [[nodiscard]] std::expected<std::string, load_error> generate_mdm();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Utilities
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::string generate_message_id();
+    [[nodiscard]] std::string generate_patient_id();
+    [[nodiscard]] std::string generate_accession_number();
+    [[nodiscard]] static std::string current_timestamp();
+
+    [[nodiscard]] uint64_t messages_generated() const noexcept;
+    [[nodiscard]] uint64_t messages_generated(hl7_message_type type) const noexcept;
+    void reset();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::testing
+```
+
+### DES-TEST-003: load_runner
+
+**Traces to:** NFR-1.1 to NFR-1.6, NFR-2.1
+
+```cpp
+namespace pacs::bridge::testing {
+
+/**
+ * @brief Load test executor
+ *
+ * Orchestrates load testing including connection management, message
+ * generation, rate limiting, and metrics collection.
+ */
+class load_runner {
+public:
+    load_runner();
+    ~load_runner();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Test Execution
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<test_result, load_error>
+    run(const load_config& config);
+
+    [[nodiscard]] std::expected<test_result, load_error>
+    run_sustained(std::string_view host, uint16_t port,
+                  std::chrono::seconds duration, uint32_t rate);
+
+    [[nodiscard]] std::expected<test_result, load_error>
+    run_peak(std::string_view host, uint16_t port, uint32_t max_rate);
+
+    [[nodiscard]] std::expected<test_result, load_error>
+    run_endurance(std::string_view host, uint16_t port,
+                  std::chrono::seconds duration = std::chrono::hours(24));
+
+    [[nodiscard]] std::expected<test_result, load_error>
+    run_concurrent(std::string_view host, uint16_t port,
+                   size_t connections, size_t messages_per_connection);
+
+    [[nodiscard]] std::expected<test_result, load_error>
+    run_queue_stress(std::string_view host, uint16_t port,
+                     std::chrono::minutes accumulation_time);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Control
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void cancel();
+    [[nodiscard]] bool is_running() const noexcept;
+    [[nodiscard]] test_state state() const noexcept;
+    [[nodiscard]] std::optional<test_metrics> current_metrics() const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Configuration
+    // ═══════════════════════════════════════════════════════════════════════
+
+    void on_progress(progress_callback callback);
+    void set_progress_interval(std::chrono::milliseconds interval);
+    void set_generator(std::shared_ptr<load_generator> generator);
+
+    [[nodiscard]] std::optional<test_result> last_result() const;
+    [[nodiscard]] bool validate_target(std::string_view host, uint16_t port,
+                                        std::chrono::milliseconds timeout);
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+/**
+ * @brief Run multiple test configurations in sequence
+ */
+[[nodiscard]] std::vector<test_result> run_test_suite(
+    load_runner& runner,
+    std::span<const load_config> configs);
+
+} // namespace pacs::bridge::testing
+```
+
+### DES-TEST-004: load_reporter
+
+**Traces to:** NFR-1.1, NFR-3.2
+
+```cpp
+namespace pacs::bridge::testing {
+
+/**
+ * @brief Report output format
+ */
+enum class report_format {
+    text, json, markdown, csv, html
+};
+
+/**
+ * @brief Report configuration
+ */
+struct report_config {
+    report_format format = report_format::markdown;
+    bool include_timing_details = true;
+    bool include_resource_usage = true;
+    bool include_comparison = false;
+    std::filesystem::path baseline_path;
+    std::string title = "PACS Bridge Load Test Report";
+};
+
+/**
+ * @brief Load test report generator
+ */
+class load_reporter {
+public:
+    load_reporter();
+    explicit load_reporter(const report_config& config);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Report Generation
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    generate(const test_result& result, report_format format) const;
+
+    [[nodiscard]] std::expected<void, load_error>
+    save(const test_result& result, const std::filesystem::path& path,
+         std::optional<report_format> format = std::nullopt) const;
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    generate_suite_summary(std::span<const test_result> results,
+                           report_format format = report_format::markdown) const;
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    generate_comparison(const test_result& current, const test_result& baseline,
+                        report_format format = report_format::markdown) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Format Conversion
+    // ═══════════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    to_json(const test_result& result) const;
+
+    [[nodiscard]] static std::expected<test_result, load_error>
+    from_json(std::string_view json);
+
+    [[nodiscard]] std::expected<std::string, load_error>
+    to_csv(const test_result& result) const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Console Output
+    // ═══════════════════════════════════════════════════════════════════════
+
+    static void print_summary(const test_result& result);
+    static void print_progress(const progress_info& info);
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::testing
+```
+
+### 11.2 Test Scenarios
+
+The testing module supports the following test scenarios as specified in Issue #45:
+
+| Scenario | Duration | Rate | Success Criteria |
+|----------|----------|------|------------------|
+| Sustained Load | 1 hour | 500 msg/s | <50ms P95, 0 errors |
+| Peak Load | 15 minutes | 1000 msg/s | Graceful degradation |
+| Endurance | 24 hours | 200 msg/s | No memory leaks |
+| Concurrent | N/A | 100 connections | All connections handled |
+| Queue Stress | 1 hour accumulation | 500 msg/s | All messages delivered |
+| Failover | During peak | Auto | No message loss |
+
+### 11.3 Error Code Allocation
+
+| Range | Module |
+|-------|--------|
+| -960 to -969 | Testing |
+| -970 to -979 | MLLP |
+| -980 to -989 | Health Check |
+| -990 to -999 | TLS/Security |
+
+---
+
+*Document Version: 1.3.0*
 *Created: 2025-12-07*
-*Updated: 2025-12-07 - Added Security Module (Section 10)*
+*Updated: 2025-12-07 - Added Testing Module (Section 11)*
 *Author: kcenon@naver.com*
