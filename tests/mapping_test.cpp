@@ -161,7 +161,7 @@ bool test_mapping_error_codes() {
     TEST_ASSERT(to_error_code(mapping_error::invalid_field_format) == -942,
                 "invalid_field_format should be -942");
 
-    TEST_ASSERT(std::string(to_string(mapping_error::missing_required_field)).find("Missing") != std::string::npos,
+    TEST_ASSERT(std::string(to_string(mapping_error::missing_required_field)).find("missing") != std::string::npos,
                 "Error message should mention missing");
 
     return true;
