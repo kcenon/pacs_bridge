@@ -148,17 +148,14 @@ jobs:
         choco install ninja -y
         ninja --version
 
-    - name: Setup vcpkg (Windows)
-      if: runner.os == 'Windows'
-      uses: lukka/run-vcpkg@v11
-      with:
-        # Use a stable, recent vcpkg commit (2024-11)
-        vcpkgGitCommitId: 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6'
-
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
+        # Use pre-installed vcpkg on GitHub Actions runner
+        # Note: VCPKG_ROOT is already set to C:\vcpkg on windows-2022 runners
+        Write-Host "Using vcpkg from: $env:VCPKG_ROOT"
+        vcpkg integrate install
         vcpkg install sqlite3:x64-windows openssl:x64-windows fmt:x64-windows gtest:x64-windows
 
     # Note: BRIDGE_BUILD_TESTS=OFF until test/API sync is completed (Issue #6)
