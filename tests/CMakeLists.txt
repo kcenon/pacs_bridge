@@ -167,12 +167,19 @@ set_tests_properties(load_test PROPERTIES
 )
 
 # =============================================================================
-# PACS Adapter Tests (Phase 1 - pacs_system Integration)
+# PACS Adapter Tests (pacs_system Integration)
 # =============================================================================
 
+# MWL Client Tests (Phase 1 - Issue #17)
 add_bridge_test(mwl_client_test)
 set_tests_properties(mwl_client_test PROPERTIES
     LABELS "unit;pacs_adapter;phase1"
+)
+
+# MPPS Handler Tests (Phase 2 - Issue #23)
+add_bridge_test(mpps_handler_test)
+set_tests_properties(mpps_handler_test PROPERTIES
+    LABELS "unit;pacs_adapter;mpps;phase2"
 )
 
 # =============================================================================
@@ -273,6 +280,7 @@ message(STATUS "  - health_check_test")
 message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
 message(STATUS "  - mwl_client_test")
+message(STATUS "  - mpps_handler_test")
 message(STATUS "  - ecosystem_integration_test")
 message(STATUS "")
 message(STATUS "Phase 2 Integration Tests:")
