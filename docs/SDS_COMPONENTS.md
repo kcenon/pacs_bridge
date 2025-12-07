@@ -615,6 +615,222 @@ private:
 } // namespace pacs::bridge::hl7
 ```
 
+### DES-HL7-006: orm_handler
+
+**Traces to:** FR-1.2.2, FR-3.1.1 - FR-3.1.6
+
+```cpp
+namespace pacs::bridge::hl7 {
+
+/**
+ * @brief ORM handler specific error codes
+ *
+ * Allocated range: -860 to -869
+ */
+enum class orm_error : int {
+    not_orm_message = -860,
+    unsupported_order_control = -861,
+    missing_required_field = -862,
+    order_not_found = -863,
+    mwl_create_failed = -864,
+    mwl_update_failed = -865,
+    mwl_cancel_failed = -866,
+    duplicate_order = -867,
+    invalid_order_data = -868,
+    processing_failed = -869
+};
+
+/**
+ * @brief Supported ORM order control codes (ORC-1)
+ */
+enum class order_control {
+    new_order,        // NW - Create new MWL entry
+    change_order,     // XO - Update existing MWL entry
+    cancel_order,     // CA - Remove MWL entry
+    discontinue_order,// DC - Mark as discontinued
+    status_change,    // SC - Update status only
+    unknown
+};
+
+/**
+ * @brief Order status codes (ORC-5)
+ */
+enum class order_status {
+    scheduled,        // SC - Scheduled
+    in_progress,      // IP - In Progress
+    completed,        // CM - Completed
+    cancelled,        // CA - Cancelled
+    discontinued,     // DC - Discontinued
+    hold,             // HD - Hold
+    unknown
+};
+
+/**
+ * @brief Result of ORM message processing
+ */
+struct orm_result {
+    bool success = false;
+    order_control control = order_control::unknown;
+    order_status status = order_status::unknown;
+    std::string accession_number;
+    std::string patient_id;
+    std::string placer_order_number;
+    std::string filler_order_number;
+    std::string study_instance_uid;
+    std::string description;
+    hl7_message ack_message;
+    std::vector<std::string> warnings;
+};
+
+/**
+ * @brief ORM handler configuration
+ */
+struct orm_handler_config {
+    bool allow_nw_update = false;
+    bool allow_xo_create = false;
+    bool auto_generate_study_uid = true;
+    bool auto_generate_accession = false;
+    bool validate_order_data = true;
+    std::vector<std::string> required_fields = {
+        "patient_id", "patient_name", "accession_number"};
+    bool detailed_ack = true;
+    bool audit_logging = true;
+    std::string ack_sending_application = "PACS_BRIDGE";
+    std::string ack_sending_facility = "RADIOLOGY";
+    std::string study_uid_root = "1.2.840.10008.5.1.4";
+};
+
+/**
+ * @brief Extracted order information from ORM message
+ */
+struct order_info {
+    order_control control = order_control::unknown;
+    order_status status = order_status::unknown;
+    std::string placer_order_number;
+    std::string filler_order_number;
+    std::string patient_id;
+    std::string patient_name;
+    std::string scheduled_datetime;
+    std::string modality;
+    std::string procedure_code;
+    std::string procedure_description;
+    std::string ordering_provider;
+    std::string study_instance_uid;
+    std::string message_control_id;
+};
+
+/**
+ * @brief ORM message handler for Modality Worklist management
+ *
+ * Processes ORM^O01 (Order Management) messages to create, update, and cancel
+ * Modality Worklist entries in pacs_system. Supports NW, XO, CA, DC, SC controls.
+ *
+ * Thread-safe with internal mutex protection.
+ */
+class orm_handler {
+public:
+    using order_created_callback =
+        std::function<void(const order_info& order,
+                           const mapping::mwl_item& mwl)>;
+    using order_updated_callback =
+        std::function<void(const order_info& order,
+                           const mapping::mwl_item& old_mwl,
+                           const mapping::mwl_item& new_mwl)>;
+    using order_cancelled_callback =
+        std::function<void(const std::string& accession_number,
+                           const std::string& reason)>;
+    using status_changed_callback =
+        std::function<void(const std::string& accession_number,
+                           order_status old_status, order_status new_status)>;
+
+    /**
+     * @brief Construct handler with MWL client
+     */
+    explicit orm_handler(std::shared_ptr<pacs_adapter::mwl_client> mwl_client);
+
+    /**
+     * @brief Construct handler with MWL client and configuration
+     */
+    orm_handler(std::shared_ptr<pacs_adapter::mwl_client> mwl_client,
+                const orm_handler_config& config);
+
+    /**
+     * @brief Handle ORM message
+     * @param message HL7 ORM message
+     * @return Processing result or error
+     */
+    [[nodiscard]] std::expected<orm_result, orm_error> handle(
+        const hl7_message& message);
+
+    /**
+     * @brief Check if message can be handled
+     */
+    [[nodiscard]] bool can_handle(const hl7_message& message) const noexcept;
+
+    /**
+     * @brief Get supported order control codes
+     */
+    [[nodiscard]] std::vector<std::string> supported_controls() const;
+
+    // Individual control handlers
+    [[nodiscard]] std::expected<orm_result, orm_error> handle_new_order(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<orm_result, orm_error> handle_change_order(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<orm_result, orm_error> handle_cancel_order(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<orm_result, orm_error> handle_discontinue_order(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<orm_result, orm_error> handle_status_change(
+        const hl7_message& message);
+
+    // Utility methods
+    [[nodiscard]] std::expected<order_info, orm_error> extract_order_info(
+        const hl7_message& message) const;
+    [[nodiscard]] hl7_message generate_ack(
+        const hl7_message& original, bool success,
+        std::string_view error_code = "",
+        std::string_view error_message = "") const;
+
+    // Callbacks
+    void on_order_created(order_created_callback callback);
+    void on_order_updated(order_updated_callback callback);
+    void on_order_cancelled(order_cancelled_callback callback);
+    void on_status_changed(status_changed_callback callback);
+
+    // Configuration
+    [[nodiscard]] const orm_handler_config& config() const noexcept;
+    void set_config(const orm_handler_config& config);
+    [[nodiscard]] std::shared_ptr<pacs_adapter::mwl_client> mwl_client() const noexcept;
+    [[nodiscard]] std::shared_ptr<mapping::hl7_dicom_mapper> mapper() const noexcept;
+
+    // Statistics
+    struct statistics {
+        size_t total_processed = 0;
+        size_t success_count = 0;
+        size_t failure_count = 0;
+        size_t nw_count = 0;
+        size_t xo_count = 0;
+        size_t ca_count = 0;
+        size_t dc_count = 0;
+        size_t sc_count = 0;
+        size_t entries_created = 0;
+        size_t entries_updated = 0;
+        size_t entries_cancelled = 0;
+        double avg_processing_ms = 0.0;
+    };
+
+    [[nodiscard]] statistics get_statistics() const;
+    void reset_statistics();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::hl7
+```
+
 ---
 
 ## 2. MLLP Transport Module

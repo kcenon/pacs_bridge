@@ -74,6 +74,12 @@ if(BRIDGE_BUILD_HL7)
         LABELS "unit;hl7;adt;phase1"
     )
 
+    # ORM Message Handler Tests (Issue #15)
+    add_bridge_test(orm_handler_test)
+    set_tests_properties(orm_handler_test PROPERTIES
+        LABELS "unit;hl7;orm;phase1"
+    )
+
     # HL7-DICOM Mapping Tests
     add_bridge_test(mapping_test)
     set_tests_properties(mapping_test PROPERTIES
@@ -252,6 +258,7 @@ message(STATUS "Tests enabled:")
 if(BRIDGE_BUILD_HL7)
     message(STATUS "  - hl7_test")
     message(STATUS "  - adt_handler_test")
+    message(STATUS "  - orm_handler_test")
     message(STATUS "  - mapping_test")
     message(STATUS "  - router_test")
     message(STATUS "  - cache_test")
