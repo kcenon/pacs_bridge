@@ -144,10 +144,10 @@ void test_mllp_module_headers() {
 void test_security_module_headers() {
     // Test security types
     pacs::bridge::security::rate_limit_config rate_config;
-    rate_config.requests_per_second = 100;
+    rate_config.enabled = true;  // Using actual API fields
 
     record_test("Security Module Headers",
-                rate_config.requests_per_second == 100,
+                rate_config.enabled == true,
                 "rate_limit_config instantiation");
 }
 
@@ -164,11 +164,11 @@ void test_monitoring_module_headers() {
 void test_pacs_adapter_headers() {
     // Test PACS adapter types
     pacs::bridge::pacs_adapter::mwl_client_config mwl_config;
-    mwl_config.scp_host = "localhost";
-    mwl_config.scp_port = 11112;
+    mwl_config.pacs_host = "localhost";
+    mwl_config.pacs_port = 11112;
 
     record_test("PACS Adapter Headers",
-                mwl_config.scp_port == 11112,
+                mwl_config.pacs_port == 11112,
                 "mwl_client_config instantiation");
 }
 

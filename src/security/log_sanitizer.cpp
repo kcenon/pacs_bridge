@@ -300,8 +300,7 @@ void healthcare_log_sanitizer::add_custom_pattern(std::string_view pattern,
 // Private Helper Methods
 // =============================================================================
 
-namespace {
-
+// Note: This function is in pacs::bridge::security namespace to match forward declaration
 std::string sanitize_hl7_segment(std::string_view segment, const std::string& segment_type) {
     std::string result;
     result.reserve(segment.size());
@@ -345,8 +344,6 @@ std::string sanitize_hl7_segment(std::string_view segment, const std::string& se
 
     return result;
 }
-
-}  // namespace
 
 // =============================================================================
 // Utility Functions
