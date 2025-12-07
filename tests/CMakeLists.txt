@@ -68,6 +68,12 @@ if(BRIDGE_BUILD_HL7)
         LABELS "unit;hl7;phase1"
     )
 
+    # ADT Message Handler Tests (Issue #14)
+    add_bridge_test(adt_handler_test)
+    set_tests_properties(adt_handler_test PROPERTIES
+        LABELS "unit;hl7;adt;phase1"
+    )
+
     # HL7-DICOM Mapping Tests
     add_bridge_test(mapping_test)
     set_tests_properties(mapping_test PROPERTIES
@@ -245,6 +251,7 @@ message(STATUS "")
 message(STATUS "Tests enabled:")
 if(BRIDGE_BUILD_HL7)
     message(STATUS "  - hl7_test")
+    message(STATUS "  - adt_handler_test")
     message(STATUS "  - mapping_test")
     message(STATUS "  - router_test")
     message(STATUS "  - cache_test")

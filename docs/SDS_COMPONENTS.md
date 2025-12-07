@@ -449,6 +449,172 @@ struct validation_rules {
 } // namespace pacs::bridge::hl7
 ```
 
+### DES-HL7-005: adt_handler
+
+**Traces to:** FR-1.1.2, FR-1.1.3, FR-2.1
+
+```cpp
+namespace pacs::bridge::hl7 {
+
+/**
+ * @brief ADT handler specific error codes
+ *
+ * Allocated range: -850 to -859
+ */
+enum class adt_error : int {
+    not_adt_message = -850,
+    unsupported_trigger_event = -851,
+    missing_patient_id = -852,
+    patient_not_found = -853,
+    merge_failed = -854,
+    cache_operation_failed = -855,
+    invalid_patient_data = -856,
+    duplicate_patient = -857,
+    handler_not_registered = -858,
+    processing_failed = -859
+};
+
+/**
+ * @brief Supported ADT trigger events
+ */
+enum class adt_trigger_event {
+    A01,  // Admit/Visit Notification
+    A04,  // Register a Patient
+    A08,  // Update Patient Information
+    A40,  // Merge Patient - Patient Identifier List
+    unknown
+};
+
+/**
+ * @brief Result of ADT message processing
+ */
+struct adt_result {
+    bool success = false;
+    adt_trigger_event trigger = adt_trigger_event::unknown;
+    std::string patient_id;
+    std::string merged_patient_id;
+    std::string description;
+    hl7_message ack_message;
+    std::vector<std::string> warnings;
+};
+
+/**
+ * @brief ADT handler configuration
+ */
+struct adt_handler_config {
+    bool allow_a01_update = true;
+    bool allow_a08_create = false;
+    bool validate_patient_data = true;
+    std::vector<std::string> required_fields = {"patient_id", "patient_name"};
+    bool detailed_ack = true;
+    bool audit_logging = true;
+    std::string ack_sending_application = "PACS_BRIDGE";
+    std::string ack_sending_facility = "RADIOLOGY";
+};
+
+/**
+ * @brief Information about patient merge operation
+ */
+struct merge_info {
+    std::string primary_patient_id;
+    std::string secondary_patient_id;
+    std::string primary_issuer;
+    std::string secondary_issuer;
+    std::string merge_datetime;
+};
+
+/**
+ * @brief ADT message handler for patient demographics cache
+ *
+ * Processes ADT (Admission, Discharge, Transfer) messages to maintain
+ * patient demographics in the cache. Supports A01, A04, A08, A40 events.
+ *
+ * Thread-safe with internal mutex protection.
+ */
+class adt_handler {
+public:
+    using patient_created_callback =
+        std::function<void(const mapping::dicom_patient& patient)>;
+    using patient_updated_callback =
+        std::function<void(const mapping::dicom_patient& old_patient,
+                           const mapping::dicom_patient& new_patient)>;
+    using patient_merged_callback =
+        std::function<void(const merge_info& merge)>;
+
+    /**
+     * @brief Construct handler with patient cache
+     */
+    explicit adt_handler(std::shared_ptr<cache::patient_cache> cache);
+
+    /**
+     * @brief Construct handler with cache and configuration
+     */
+    adt_handler(std::shared_ptr<cache::patient_cache> cache,
+                const adt_handler_config& config);
+
+    /**
+     * @brief Handle ADT message
+     * @param message HL7 ADT message
+     * @return Processing result or error
+     */
+    [[nodiscard]] std::expected<adt_result, adt_error> handle(
+        const hl7_message& message);
+
+    /**
+     * @brief Check if message can be handled
+     */
+    [[nodiscard]] bool can_handle(const hl7_message& message) const noexcept;
+
+    /**
+     * @brief Get supported trigger events
+     */
+    [[nodiscard]] std::vector<std::string> supported_triggers() const;
+
+    // Individual event handlers
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_admit(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_register(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_update(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<adt_result, adt_error> handle_merge(
+        const hl7_message& message);
+
+    // Callbacks
+    void on_patient_created(patient_created_callback callback);
+    void on_patient_updated(patient_updated_callback callback);
+    void on_patient_merged(patient_merged_callback callback);
+
+    // Configuration
+    [[nodiscard]] const adt_handler_config& config() const noexcept;
+    void set_config(const adt_handler_config& config);
+    [[nodiscard]] std::shared_ptr<cache::patient_cache> cache() const noexcept;
+
+    // Statistics
+    struct statistics {
+        size_t total_processed = 0;
+        size_t success_count = 0;
+        size_t failure_count = 0;
+        size_t a01_count = 0;
+        size_t a04_count = 0;
+        size_t a08_count = 0;
+        size_t a40_count = 0;
+        size_t patients_created = 0;
+        size_t patients_updated = 0;
+        size_t patients_merged = 0;
+    };
+
+    [[nodiscard]] statistics get_statistics() const;
+    void reset_statistics();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::hl7
+```
+
 ---
 
 ## 2. MLLP Transport Module

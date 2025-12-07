@@ -198,13 +198,14 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Module | Component | Status |
 |--------|-----------|--------|
 | HL7 Protocol | Message types, parser, builder | Implemented |
+| HL7 ADT Handler | A01/A04/A08/A40 event processing | Implemented |
 | HL7-DICOM Mapping | ORM to MWL mapper | Implemented |
 | Message Routing | Pattern matching, handler chains | Implemented |
 | Patient Cache | TTL/LRU cache with aliases | Implemented |
 | Configuration | YAML config loader | Implemented |
 | MLLP Transport | Client/Server with TLS | Implemented |
 | PACS Adapter | MWL Client (pacs_system integration) | Implemented |
-| Unit Tests | HL7, mapping, router, cache, MWL | Implemented |
+| Unit Tests | HL7, ADT, mapping, router, cache, MWL | Implemented |
 
 ### Phase 2 Implementation Status
 
@@ -229,6 +230,7 @@ cmake --build build
 
 # Run Phase 1 unit tests
 ./build/bin/hl7_test
+./build/bin/adt_handler_test           # ADT message processing
 ./build/bin/mapping_test
 ./build/bin/router_test
 ./build/bin/cache_test
