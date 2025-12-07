@@ -4,6 +4,7 @@
  */
 
 #include "pacs/bridge/mapping/hl7_dicom_mapper.h"
+#include "pacs/bridge/protocol/hl7/hl7_builder.h"
 
 #include <algorithm>
 #include <chrono>

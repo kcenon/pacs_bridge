@@ -141,11 +141,17 @@ public:
     };
 
     /**
+     * @brief Constructor with default configuration
+     * @param checker Reference to health checker (must outlive server)
+     */
+    explicit health_server(health_checker& checker);
+
+    /**
      * @brief Constructor
      * @param checker Reference to health checker (must outlive server)
      * @param cfg Server configuration
      */
-    health_server(health_checker& checker, const config& cfg = {});
+    health_server(health_checker& checker, const config& cfg);
 
     /**
      * @brief Destructor - stops server if running

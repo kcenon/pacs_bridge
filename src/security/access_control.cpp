@@ -15,6 +15,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace pacs::bridge::security {
 

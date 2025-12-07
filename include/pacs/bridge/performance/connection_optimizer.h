@@ -28,6 +28,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -56,6 +57,9 @@ enum class connection_health : uint8_t {
 
 /**
  * @brief Connection statistics
+ *
+ * Contains atomic counters for thread-safe statistics tracking.
+ * Custom copy/move operations are provided since std::atomic is non-copyable.
  */
 struct connection_stats {
     /** Total bytes sent */
@@ -81,6 +85,75 @@ struct connection_stats {
 
     /** Connection creation timestamp */
     uint64_t created_ms = 0;
+
+    /** Default constructor */
+    connection_stats() = default;
+
+    /** Copy constructor - loads atomic values with relaxed ordering */
+    connection_stats(const connection_stats& other)
+        : bytes_sent(other.bytes_sent.load(std::memory_order_relaxed))
+        , bytes_received(other.bytes_received.load(std::memory_order_relaxed))
+        , messages_sent(other.messages_sent.load(std::memory_order_relaxed))
+        , messages_received(other.messages_received.load(std::memory_order_relaxed))
+        , errors(other.errors.load(std::memory_order_relaxed))
+        , avg_rtt_us(other.avg_rtt_us.load(std::memory_order_relaxed))
+        , last_activity_ms(other.last_activity_ms.load(std::memory_order_relaxed))
+        , created_ms(other.created_ms) {}
+
+    /** Move constructor - loads atomic values with relaxed ordering */
+    connection_stats(connection_stats&& other) noexcept
+        : bytes_sent(other.bytes_sent.load(std::memory_order_relaxed))
+        , bytes_received(other.bytes_received.load(std::memory_order_relaxed))
+        , messages_sent(other.messages_sent.load(std::memory_order_relaxed))
+        , messages_received(other.messages_received.load(std::memory_order_relaxed))
+        , errors(other.errors.load(std::memory_order_relaxed))
+        , avg_rtt_us(other.avg_rtt_us.load(std::memory_order_relaxed))
+        , last_activity_ms(other.last_activity_ms.load(std::memory_order_relaxed))
+        , created_ms(other.created_ms) {}
+
+    /** Copy assignment operator */
+    connection_stats& operator=(const connection_stats& other) {
+        if (this != &other) {
+            bytes_sent.store(other.bytes_sent.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            bytes_received.store(other.bytes_received.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            messages_sent.store(other.messages_sent.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            messages_received.store(other.messages_received.load(std::memory_order_relaxed),
+                                  std::memory_order_relaxed);
+            errors.store(other.errors.load(std::memory_order_relaxed),
+                       std::memory_order_relaxed);
+            avg_rtt_us.store(other.avg_rtt_us.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            last_activity_ms.store(other.last_activity_ms.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+            created_ms = other.created_ms;
+        }
+        return *this;
+    }
+
+    /** Move assignment operator */
+    connection_stats& operator=(connection_stats&& other) noexcept {
+        if (this != &other) {
+            bytes_sent.store(other.bytes_sent.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            bytes_received.store(other.bytes_received.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            messages_sent.store(other.messages_sent.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            messages_received.store(other.messages_received.load(std::memory_order_relaxed),
+                                  std::memory_order_relaxed);
+            errors.store(other.errors.load(std::memory_order_relaxed),
+                       std::memory_order_relaxed);
+            avg_rtt_us.store(other.avg_rtt_us.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            last_activity_ms.store(other.last_activity_ms.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+            created_ms = other.created_ms;
+        }
+        return *this;
+    }
 
     /**
      * @brief Get connection age
@@ -137,6 +210,9 @@ struct pooled_connection_info {
 
 /**
  * @brief Statistics for connection pool
+ *
+ * Contains atomic counters for thread-safe statistics tracking.
+ * Custom copy/move operations are provided since std::atomic is non-copyable.
  */
 struct connection_pool_stats {
     /** Total connections created */
@@ -177,6 +253,107 @@ struct connection_pool_stats {
 
     /** Health check failures */
     std::atomic<uint64_t> health_checks_failed{0};
+
+    /** Default constructor */
+    connection_pool_stats() = default;
+
+    /** Copy constructor - loads atomic values with relaxed ordering */
+    connection_pool_stats(const connection_pool_stats& other)
+        : total_created(other.total_created.load(std::memory_order_relaxed))
+        , total_destroyed(other.total_destroyed.load(std::memory_order_relaxed))
+        , total_acquires(other.total_acquires.load(std::memory_order_relaxed))
+        , total_releases(other.total_releases.load(std::memory_order_relaxed))
+        , reuse_count(other.reuse_count.load(std::memory_order_relaxed))
+        , creation_count(other.creation_count.load(std::memory_order_relaxed))
+        , wait_count(other.wait_count.load(std::memory_order_relaxed))
+        , timeout_count(other.timeout_count.load(std::memory_order_relaxed))
+        , idle_connections(other.idle_connections.load(std::memory_order_relaxed))
+        , active_connections(other.active_connections.load(std::memory_order_relaxed))
+        , peak_active(other.peak_active.load(std::memory_order_relaxed))
+        , health_checks_passed(other.health_checks_passed.load(std::memory_order_relaxed))
+        , health_checks_failed(other.health_checks_failed.load(std::memory_order_relaxed)) {}
+
+    /** Move constructor - loads atomic values with relaxed ordering */
+    connection_pool_stats(connection_pool_stats&& other) noexcept
+        : total_created(other.total_created.load(std::memory_order_relaxed))
+        , total_destroyed(other.total_destroyed.load(std::memory_order_relaxed))
+        , total_acquires(other.total_acquires.load(std::memory_order_relaxed))
+        , total_releases(other.total_releases.load(std::memory_order_relaxed))
+        , reuse_count(other.reuse_count.load(std::memory_order_relaxed))
+        , creation_count(other.creation_count.load(std::memory_order_relaxed))
+        , wait_count(other.wait_count.load(std::memory_order_relaxed))
+        , timeout_count(other.timeout_count.load(std::memory_order_relaxed))
+        , idle_connections(other.idle_connections.load(std::memory_order_relaxed))
+        , active_connections(other.active_connections.load(std::memory_order_relaxed))
+        , peak_active(other.peak_active.load(std::memory_order_relaxed))
+        , health_checks_passed(other.health_checks_passed.load(std::memory_order_relaxed))
+        , health_checks_failed(other.health_checks_failed.load(std::memory_order_relaxed)) {}
+
+    /** Copy assignment operator */
+    connection_pool_stats& operator=(const connection_pool_stats& other) {
+        if (this != &other) {
+            total_created.store(other.total_created.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            total_destroyed.store(other.total_destroyed.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            total_acquires.store(other.total_acquires.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            total_releases.store(other.total_releases.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            reuse_count.store(other.reuse_count.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            creation_count.store(other.creation_count.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            wait_count.store(other.wait_count.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            timeout_count.store(other.timeout_count.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            idle_connections.store(other.idle_connections.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+            active_connections.store(other.active_connections.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+            peak_active.store(other.peak_active.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            health_checks_passed.store(other.health_checks_passed.load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+            health_checks_failed.store(other.health_checks_failed.load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
+    /** Move assignment operator */
+    connection_pool_stats& operator=(connection_pool_stats&& other) noexcept {
+        if (this != &other) {
+            total_created.store(other.total_created.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            total_destroyed.store(other.total_destroyed.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            total_acquires.store(other.total_acquires.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            total_releases.store(other.total_releases.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            reuse_count.store(other.reuse_count.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            creation_count.store(other.creation_count.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            wait_count.store(other.wait_count.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            timeout_count.store(other.timeout_count.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            idle_connections.store(other.idle_connections.load(std::memory_order_relaxed),
+                                 std::memory_order_relaxed);
+            active_connections.store(other.active_connections.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+            peak_active.store(other.peak_active.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            health_checks_passed.store(other.health_checks_passed.load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+            health_checks_failed.store(other.health_checks_failed.load(std::memory_order_relaxed),
+                                     std::memory_order_relaxed);
+        }
+        return *this;
+    }
 
     /**
      * @brief Get reuse rate

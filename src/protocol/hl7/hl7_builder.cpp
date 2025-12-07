@@ -605,47 +605,69 @@ void hl7_builder::reset() {
 // =============================================================================
 
 hl7_builder adt_builder::admit() {
-    return hl7_builder::create().message_type("ADT", "A01");
+    auto builder = hl7_builder::create();
+    builder.message_type("ADT", "A01");
+    return builder;
 }
 
 hl7_builder adt_builder::transfer() {
-    return hl7_builder::create().message_type("ADT", "A02");
+    auto builder = hl7_builder::create();
+    builder.message_type("ADT", "A02");
+    return builder;
 }
 
 hl7_builder adt_builder::discharge() {
-    return hl7_builder::create().message_type("ADT", "A03");
+    auto builder = hl7_builder::create();
+    builder.message_type("ADT", "A03");
+    return builder;
 }
 
 hl7_builder adt_builder::register_patient() {
-    return hl7_builder::create().message_type("ADT", "A04");
+    auto builder = hl7_builder::create();
+    builder.message_type("ADT", "A04");
+    return builder;
 }
 
 hl7_builder adt_builder::update() {
-    return hl7_builder::create().message_type("ADT", "A08");
+    auto builder = hl7_builder::create();
+    builder.message_type("ADT", "A08");
+    return builder;
 }
 
 hl7_builder adt_builder::merge() {
-    return hl7_builder::create().message_type("ADT", "A40");
+    auto builder = hl7_builder::create();
+    builder.message_type("ADT", "A40");
+    return builder;
 }
 
 hl7_builder orm_builder::new_order() {
-    return hl7_builder::create().message_type("ORM", "O01").order_control("NW");
+    auto builder = hl7_builder::create();
+    builder.message_type("ORM", "O01").order_control("NW");
+    return builder;
 }
 
 hl7_builder orm_builder::cancel_order() {
-    return hl7_builder::create().message_type("ORM", "O01").order_control("CA");
+    auto builder = hl7_builder::create();
+    builder.message_type("ORM", "O01").order_control("CA");
+    return builder;
 }
 
 hl7_builder orm_builder::modify_order() {
-    return hl7_builder::create().message_type("ORM", "O01").order_control("XO");
+    auto builder = hl7_builder::create();
+    builder.message_type("ORM", "O01").order_control("XO");
+    return builder;
 }
 
 hl7_builder orm_builder::status_request() {
-    return hl7_builder::create().message_type("ORM", "O01").order_control("SC");
+    auto builder = hl7_builder::create();
+    builder.message_type("ORM", "O01").order_control("SC");
+    return builder;
 }
 
 hl7_builder oru_builder::result() {
-    return hl7_builder::create().message_type("ORU", "R01");
+    auto builder = hl7_builder::create();
+    builder.message_type("ORU", "R01");
+    return builder;
 }
 
 // =============================================================================

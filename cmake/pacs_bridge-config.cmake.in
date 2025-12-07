@@ -1,0 +1,41 @@
+# =============================================================================
+# pacs_bridge-config.cmake.in
+# CMake package configuration file for PACS Bridge
+# =============================================================================
+#
+# This file is used by find_package(pacs_bridge) to locate the installed
+# PACS Bridge library and its dependencies.
+#
+# Usage in downstream projects:
+#   find_package(pacs_bridge REQUIRED)
+#   target_link_libraries(my_target PRIVATE pacs::bridge)
+#
+# =============================================================================
+
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies
+find_dependency(Threads)
+
+# OpenSSL is optional
+if(@PACS_BRIDGE_HAS_OPENSSL@)
+    find_dependency(OpenSSL)
+endif()
+
+# Include the targets file
+include("${CMAKE_CURRENT_LIST_DIR}/pacs_bridge-targets.cmake")
+
+# Provide version information
+set(PACS_BRIDGE_VERSION "@PROJECT_VERSION@")
+set(PACS_BRIDGE_VERSION_MAJOR "@PROJECT_VERSION_MAJOR@")
+set(PACS_BRIDGE_VERSION_MINOR "@PROJECT_VERSION_MINOR@")
+set(PACS_BRIDGE_VERSION_PATCH "@PROJECT_VERSION_PATCH@")
+
+# Feature flags
+set(PACS_BRIDGE_HAS_HL7 @BRIDGE_BUILD_HL7@)
+set(PACS_BRIDGE_HAS_FHIR @BRIDGE_BUILD_FHIR@)
+set(PACS_BRIDGE_HAS_TLS @PACS_BRIDGE_HAS_OPENSSL@)
+
+check_required_components(pacs_bridge)

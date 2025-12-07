@@ -906,7 +906,9 @@ public:
 
         // Close all connections
         std::lock_guard lock(mutex_);
-        idle_connections_.clear();
+        // std::queue doesn't have clear(), swap with empty queue
+        std::queue<std::unique_ptr<mllp_client>> empty_queue;
+        idle_connections_.swap(empty_queue);
         active_connections_.clear();
     }
 

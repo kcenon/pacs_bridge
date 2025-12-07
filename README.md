@@ -33,19 +33,33 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 
 ## Requirements
 
-- C++20 compatible compiler (GCC 11+, Clang 14+, MSVC 2022+)
+- **C++23 compatible compiler**:
+  - GCC 11+ (Linux)
+  - Clang 14+ (macOS)
+  - MSVC 2022+ (Windows)
 - CMake 3.20+
-- [pacs_system](https://github.com/kcenon/pacs_system) v0.2.0+
-- [kcenon ecosystem](https://github.com/kcenon) dependencies:
-  - common_system
-  - thread_system
-  - logger_system
-  - container_system
-  - network_system
-  - monitoring_system
-- Optional: OpenSSL (for TLS support)
+- Optional: OpenSSL 1.1+ (for TLS support)
+- Optional: [kcenon ecosystem](https://github.com/kcenon) dependencies (for full integration)
 
 ## Building
+
+### Quick Start (Standalone Mode)
+
+Build without external dependencies using internal stubs:
+
+```bash
+# Clone the repository
+git clone https://github.com/kcenon/pacs_bridge.git
+cd pacs_bridge
+
+# Build in standalone mode (default)
+cmake -B build -DBRIDGE_STANDALONE_BUILD=ON
+cmake --build build
+```
+
+### Full Build (With kcenon Dependencies)
+
+For production use with full kcenon ecosystem integration:
 
 ```bash
 # Clone the repository
@@ -62,11 +76,30 @@ git clone https://github.com/kcenon/network_system.git
 git clone https://github.com/kcenon/monitoring_system.git
 git clone https://github.com/kcenon/pacs_system.git
 
-# Build
+# Build with full integration
 cd pacs_bridge
-mkdir build && cd build
-cmake .. -DBRIDGE_BUILD_HL7=ON -DBRIDGE_BUILD_FHIR=OFF
-cmake --build .
+cmake -B build -DBRIDGE_STANDALONE_BUILD=OFF
+cmake --build build
+```
+
+### Build Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `BRIDGE_STANDALONE_BUILD` | `ON` | Build without external kcenon dependencies |
+| `BRIDGE_BUILD_HL7` | `ON` | Build HL7 gateway module |
+| `BRIDGE_BUILD_FHIR` | `OFF` | Build FHIR gateway module (future) |
+| `BRIDGE_BUILD_TESTS` | `OFF` | Build unit tests |
+| `BRIDGE_BUILD_EXAMPLES` | `ON` | Build example applications |
+| `BRIDGE_BUILD_BENCHMARKS` | `OFF` | Build performance benchmarks |
+
+### vcpkg Integration
+
+For cross-platform dependency management:
+
+```bash
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build
 ```
 
 ## Configuration
@@ -143,16 +176,19 @@ Source code implementation follows the phased approach outlined in the PRD:
 
 ```bash
 # Build with tests enabled
-cmake .. -DBRIDGE_BUILD_TESTS=ON
-cmake --build .
+cmake -B build -DBRIDGE_BUILD_TESTS=ON
+cmake --build build
 
 # Run individual test suites
-./bin/hl7_test
-./bin/mapping_test
-./bin/router_test
-./bin/cache_test
-./bin/mllp_test
-./bin/config_test
+./build/bin/hl7_test
+./build/bin/mapping_test
+./build/bin/router_test
+./build/bin/cache_test
+./build/bin/mllp_test
+./build/bin/config_test
+
+# Or run all tests with CTest
+cd build && ctest --output-on-failure
 ```
 
 ## License

@@ -97,6 +97,9 @@ public:
     std::vector<std::pair<std::regex, std::string>> custom_patterns_;
 };
 
+// Forward declaration
+std::string sanitize_hl7_segment(std::string_view segment, const std::string& segment_type);
+
 // =============================================================================
 // Constructor / Destructor
 // =============================================================================
