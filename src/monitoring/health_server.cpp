@@ -182,6 +182,9 @@ private:
 };
 
 // Health Server public methods
+health_server::health_server(health_checker& checker)
+    : pimpl_(std::make_unique<impl>(checker, config{})) {}
+
 health_server::health_server(health_checker& checker, const config& cfg)
     : pimpl_(std::make_unique<impl>(checker, cfg)) {}
 

@@ -197,7 +197,7 @@ class message_router::impl {
 public:
     mutable std::mutex mutex_;
     std::unordered_map<std::string, message_handler> handlers_;
-    std::vector<route> routes_;
+    std::vector<struct route> routes_;
     message_handler default_handler_;
     mutable statistics stats_;
     logger_callback logger_;
@@ -205,7 +205,7 @@ public:
 
     void sort_routes() {
         std::sort(routes_.begin(), routes_.end(),
-                  [](const route& a, const route& b) {
+                  [](const struct route& a, const struct route& b) {
                       return a.priority < b.priority;
                   });
     }
@@ -326,7 +326,7 @@ std::vector<std::string> message_router::handler_ids() const {
     return ids;
 }
 
-std::expected<void, router_error> message_router::add_route(const route& r) {
+std::expected<void, router_error> message_router::add_route(const struct route& r) {
     if (r.id.empty()) {
         return std::unexpected(router_error::invalid_route);
     }
@@ -371,7 +371,7 @@ bool message_router::remove_route(std::string_view route_id) {
     std::lock_guard lock(pimpl_->mutex_);
 
     auto it = std::find_if(pimpl_->routes_.begin(), pimpl_->routes_.end(),
-                           [route_id](const route& r) { return r.id == route_id; });
+                           [route_id](const struct route& r) { return r.id == route_id; });
 
     if (it != pimpl_->routes_.end()) {
         pimpl_->routes_.erase(it);

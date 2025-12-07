@@ -319,7 +319,7 @@ public:
         bool in_array = false;
         std::string array_prefix;
 
-        std::istringstream stream(std::string(content));
+        std::istringstream stream{std::string{content}};
         std::string line;
 
         while (std::getline(stream, line)) {

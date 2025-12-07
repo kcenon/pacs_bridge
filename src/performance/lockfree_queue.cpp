@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -88,8 +89,9 @@ struct work_stealing_queue<T>::impl {
 
     ~impl() {
         // Clean up any remaining items
-        while (auto item = try_pop()) {
-            delete *item;
+        // try_pop() already handles pointer deletion internally
+        while (try_pop()) {
+            // Just discard the returned value
         }
     }
 

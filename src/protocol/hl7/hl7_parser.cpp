@@ -257,7 +257,7 @@ std::string hl7_parser::unescape(std::string_view data,
                     i = end_escape;
                     continue;
                 } else if (escape_seq.length() >= 2 && escape_seq[0] == 'X') {
-                    // Hex encoding \Xhh\
+                    // Hex encoding: \Xhh\ format (e.g., \X0D\ for CR)
                     std::string hex_str(escape_seq.substr(1));
                     try {
                         int value = std::stoi(hex_str, nullptr, 16);

@@ -530,6 +530,71 @@ struct latency_histogram {
         return max_latency.load(std::memory_order_relaxed);
     }
 
+    /** Default constructor */
+    latency_histogram() = default;
+
+    /** Copy constructor - loads atomic values with relaxed ordering */
+    latency_histogram(const latency_histogram& other)
+        : min_latency(other.min_latency.load(std::memory_order_relaxed))
+        , max_latency(other.max_latency.load(std::memory_order_relaxed))
+        , total_latency(other.total_latency.load(std::memory_order_relaxed))
+        , count(other.count.load(std::memory_order_relaxed)) {
+        for (size_t i = 0; i < buckets.size(); ++i) {
+            buckets[i].store(other.buckets[i].load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+        }
+    }
+
+    /** Move constructor - loads atomic values with relaxed ordering */
+    latency_histogram(latency_histogram&& other) noexcept
+        : min_latency(other.min_latency.load(std::memory_order_relaxed))
+        , max_latency(other.max_latency.load(std::memory_order_relaxed))
+        , total_latency(other.total_latency.load(std::memory_order_relaxed))
+        , count(other.count.load(std::memory_order_relaxed)) {
+        for (size_t i = 0; i < buckets.size(); ++i) {
+            buckets[i].store(other.buckets[i].load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+        }
+    }
+
+    /** Copy assignment operator */
+    latency_histogram& operator=(const latency_histogram& other) {
+        if (this != &other) {
+            for (size_t i = 0; i < buckets.size(); ++i) {
+                buckets[i].store(other.buckets[i].load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            }
+            min_latency.store(other.min_latency.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            max_latency.store(other.max_latency.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            total_latency.store(other.total_latency.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            count.store(other.count.load(std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
+    /** Move assignment operator */
+    latency_histogram& operator=(latency_histogram&& other) noexcept {
+        if (this != &other) {
+            for (size_t i = 0; i < buckets.size(); ++i) {
+                buckets[i].store(other.buckets[i].load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            }
+            min_latency.store(other.min_latency.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            max_latency.store(other.max_latency.load(std::memory_order_relaxed),
+                            std::memory_order_relaxed);
+            total_latency.store(other.total_latency.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            count.store(other.count.load(std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
     /**
      * @brief Reset histogram
      */
@@ -622,6 +687,97 @@ struct test_metrics {
         if (secs == 0) return 0.0;
         return static_cast<double>(messages_sent.load()) /
                static_cast<double>(secs);
+    }
+
+    /** Default constructor */
+    test_metrics() = default;
+
+    /** Copy constructor - loads atomic values with relaxed ordering */
+    test_metrics(const test_metrics& other)
+        : messages_sent(other.messages_sent.load(std::memory_order_relaxed))
+        , messages_acked(other.messages_acked.load(std::memory_order_relaxed))
+        , messages_failed(other.messages_failed.load(std::memory_order_relaxed))
+        , connection_errors(other.connection_errors.load(std::memory_order_relaxed))
+        , timeout_errors(other.timeout_errors.load(std::memory_order_relaxed))
+        , protocol_errors(other.protocol_errors.load(std::memory_order_relaxed))
+        , bytes_sent(other.bytes_sent.load(std::memory_order_relaxed))
+        , bytes_received(other.bytes_received.load(std::memory_order_relaxed))
+        , active_connections(other.active_connections.load(std::memory_order_relaxed))
+        , latency(other.latency)
+        , current_throughput(other.current_throughput.load(std::memory_order_relaxed))
+        , start_time(other.start_time) {}
+
+    /** Move constructor - loads atomic values with relaxed ordering */
+    test_metrics(test_metrics&& other) noexcept
+        : messages_sent(other.messages_sent.load(std::memory_order_relaxed))
+        , messages_acked(other.messages_acked.load(std::memory_order_relaxed))
+        , messages_failed(other.messages_failed.load(std::memory_order_relaxed))
+        , connection_errors(other.connection_errors.load(std::memory_order_relaxed))
+        , timeout_errors(other.timeout_errors.load(std::memory_order_relaxed))
+        , protocol_errors(other.protocol_errors.load(std::memory_order_relaxed))
+        , bytes_sent(other.bytes_sent.load(std::memory_order_relaxed))
+        , bytes_received(other.bytes_received.load(std::memory_order_relaxed))
+        , active_connections(other.active_connections.load(std::memory_order_relaxed))
+        , latency(std::move(other.latency))
+        , current_throughput(other.current_throughput.load(std::memory_order_relaxed))
+        , start_time(other.start_time) {}
+
+    /** Copy assignment operator */
+    test_metrics& operator=(const test_metrics& other) {
+        if (this != &other) {
+            messages_sent.store(other.messages_sent.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            messages_acked.store(other.messages_acked.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            messages_failed.store(other.messages_failed.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            connection_errors.store(other.connection_errors.load(std::memory_order_relaxed),
+                                  std::memory_order_relaxed);
+            timeout_errors.store(other.timeout_errors.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            protocol_errors.store(other.protocol_errors.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            bytes_sent.store(other.bytes_sent.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            bytes_received.store(other.bytes_received.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            active_connections.store(other.active_connections.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+            latency = other.latency;
+            current_throughput.store(other.current_throughput.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+            start_time = other.start_time;
+        }
+        return *this;
+    }
+
+    /** Move assignment operator */
+    test_metrics& operator=(test_metrics&& other) noexcept {
+        if (this != &other) {
+            messages_sent.store(other.messages_sent.load(std::memory_order_relaxed),
+                              std::memory_order_relaxed);
+            messages_acked.store(other.messages_acked.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            messages_failed.store(other.messages_failed.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            connection_errors.store(other.connection_errors.load(std::memory_order_relaxed),
+                                  std::memory_order_relaxed);
+            timeout_errors.store(other.timeout_errors.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            protocol_errors.store(other.protocol_errors.load(std::memory_order_relaxed),
+                                std::memory_order_relaxed);
+            bytes_sent.store(other.bytes_sent.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
+            bytes_received.store(other.bytes_received.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
+            active_connections.store(other.active_connections.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+            latency = std::move(other.latency);
+            current_throughput.store(other.current_throughput.load(std::memory_order_relaxed),
+                                   std::memory_order_relaxed);
+            start_time = other.start_time;
+        }
+        return *this;
     }
 
     /**
