@@ -21,13 +21,52 @@
 #   cmake --build build
 #   ctest --test-dir build
 #
+# Test Frameworks:
+#   - Google Test (gtest) for unit tests
+#   - Google Mock (gmock) for mocking dependencies
+#
+# Code Coverage:
+#   cmake -B build -DBRIDGE_BUILD_TESTS=ON -DBRIDGE_ENABLE_COVERAGE=ON
+#   cmake --build build
+#   ctest --test-dir build
+#   # Generate coverage report with lcov/gcovr
+#
 # =============================================================================
+
+# =============================================================================
+# Google Test Setup
+# =============================================================================
+
+if(NOT PACS_BRIDGE_HAS_GTEST)
+    message(WARNING "Google Test not available. Tests will be built without gtest integration.")
+endif()
 
 # Test data directory
 set(PACS_BRIDGE_TEST_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data")
 
+# Test utilities include directory
+set(PACS_BRIDGE_TEST_UTILS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/utils")
+
 # =============================================================================
-# Test Executable Macro
+# Code Coverage Support
+# =============================================================================
+
+option(BRIDGE_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+
+if(BRIDGE_ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(STATUS "Code coverage enabled")
+        set(COVERAGE_FLAGS "--coverage -fprofile-arcs -ftest-coverage")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COVERAGE_FLAGS}")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COVERAGE_FLAGS}")
+        set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${COVERAGE_FLAGS}")
+    else()
+        message(WARNING "Code coverage is only supported with GCC or Clang")
+    endif()
+endif()
+
+# =============================================================================
+# Test Executable Macro (with Google Test)
 # =============================================================================
 
 macro(add_bridge_test TEST_NAME)
@@ -39,22 +78,48 @@ macro(add_bridge_test TEST_NAME)
             pacs_bridge_compile_options
     )
 
+    # Link Google Test if available
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(${TEST_NAME} PRIVATE gtest_main gmock)
+        endif()
+    endif()
+
+    target_include_directories(${TEST_NAME}
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+
     target_compile_definitions(${TEST_NAME}
         PRIVATE
             PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
     )
 
-    add_test(
-        NAME ${TEST_NAME}
-        COMMAND ${TEST_NAME}
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        # Use gtest_discover_tests for better CTest integration
+        include(GoogleTest)
+        gtest_discover_tests(${TEST_NAME}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 60
+                LABELS "unit"
+        )
+    else()
+        # Fallback to manual test registration
+        add_test(
+            NAME ${TEST_NAME}
+            COMMAND ${TEST_NAME}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
 
-    # Set test properties
-    set_tests_properties(${TEST_NAME} PROPERTIES
-        TIMEOUT 60
-        LABELS "unit"
-    )
+        # Set test properties
+        set_tests_properties(${TEST_NAME} PROPERTIES
+            TIMEOUT 60
+            LABELS "unit"
+        )
+    endif()
 endmacro()
 
 # =============================================================================
