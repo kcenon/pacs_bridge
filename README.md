@@ -31,6 +31,35 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
+## Project Structure
+
+```
+pacs_bridge/
+├── include/pacs/bridge/
+│   ├── hl7/              # HL7 Gateway (convenience header)
+│   ├── protocol/hl7/     # HL7 v2.x message handling
+│   ├── mllp/             # MLLP transport layer
+│   ├── fhir/             # FHIR R4 Gateway (Phase 3)
+│   ├── mapping/          # HL7-DICOM translation
+│   ├── router/           # Message routing
+│   ├── pacs_adapter/     # PACS system integration
+│   ├── config/           # Configuration management
+│   ├── cache/            # Patient demographics cache
+│   ├── security/         # TLS, audit, access control
+│   ├── monitoring/       # Health checks, metrics
+│   ├── performance/      # Performance utilities
+│   ├── testing/          # Test utilities
+│   └── integration/      # System adapters
+├── src/                  # Implementation files
+├── tests/
+│   ├── unit/             # Unit tests
+│   └── integration/      # Integration tests
+├── examples/             # Configuration examples
+├── docs/                 # Documentation
+├── cmake/                # CMake modules
+└── benchmarks/           # Performance benchmarks
+```
+
 ## CI/CD Pipeline
 
 The project uses GitHub Actions for continuous integration with multi-platform support:
