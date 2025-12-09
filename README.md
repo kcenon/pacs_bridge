@@ -44,8 +44,30 @@ The project uses GitHub Actions for continuous integration with multi-platform s
 
 ### Code Coverage
 
-Code coverage reports are generated on Ubuntu GCC builds and uploaded to Codecov.
+Code coverage reports are generated on Ubuntu GCC builds using lcov and uploaded to Codecov.
 Target coverage: 80% by Phase 5.
+
+```bash
+# Build with coverage enabled
+cmake -B build -DBRIDGE_BUILD_TESTS=ON -DBRIDGE_ENABLE_COVERAGE=ON
+cmake --build build
+
+# Run tests to generate coverage data
+ctest --test-dir build
+
+# Generate coverage report
+lcov --capture --directory build --output-file coverage.info
+lcov --remove coverage.info '/usr/*' '*/tests/*' '*/build/_deps/*' --output-file coverage.info
+lcov --list coverage.info
+```
+
+### Test Framework
+
+Unit tests use [Google Test](https://github.com/google/googletest) (gtest/gmock):
+- Automatic test discovery via `gtest_discover_tests()`
+- Rich assertion macros and matchers
+- Mock support for dependency injection
+- Parallel test execution support
 
 ### CI Features
 
@@ -113,10 +135,11 @@ cmake --build build
 | `BRIDGE_BUILD_PACS_INTEGRATION` | `ON` | Enable pacs_system for DICOM MWL/MPPS (requires full build) |
 | `BRIDGE_BUILD_HL7` | `ON` | Build HL7 gateway module |
 | `BRIDGE_BUILD_FHIR` | `OFF` | Build FHIR gateway module (future) |
-| `BRIDGE_BUILD_TESTS` | `ON` | Build unit tests |
+| `BRIDGE_BUILD_TESTS` | `ON` | Build unit tests (uses Google Test) |
 | `BRIDGE_BUILD_EXAMPLES` | `ON` | Build example applications |
 | `BRIDGE_BUILD_BENCHMARKS` | `OFF` | Build performance benchmarks |
 | `BRIDGE_ENABLE_TLS` | `ON` | Enable TLS support with OpenSSL |
+| `BRIDGE_ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation (GCC/Clang only) |
 
 ### vcpkg Integration
 
@@ -223,20 +246,28 @@ Source code implementation follows the phased approach outlined in the PRD:
 
 ## Running Tests
 
+Tests use Google Test framework with automatic test discovery.
+
 ```bash
 # Build with tests enabled
 cmake -B build -DBRIDGE_BUILD_TESTS=ON
 cmake --build build
 
-# Run Phase 1 unit tests
-./build/bin/hl7_test
-./build/bin/adt_handler_test           # ADT message processing
-./build/bin/mapping_test
-./build/bin/router_test
-./build/bin/cache_test
-./build/bin/mllp_test
-./build/bin/config_test
-./build/bin/mwl_client_test
+# Run all tests with CTest (recommended)
+ctest --test-dir build --output-on-failure
+
+# Run tests in parallel
+ctest --test-dir build -j $(nproc) --output-on-failure
+
+# Run specific test executables directly
+./build/bin/hl7_test                    # HL7 protocol tests
+./build/bin/adt_handler_test            # ADT message processing
+./build/bin/mapping_test                # HL7-DICOM mapping
+./build/bin/router_test                 # Message routing
+./build/bin/cache_test                  # Patient cache
+./build/bin/mllp_test                   # MLLP transport
+./build/bin/config_test                 # Configuration
+./build/bin/mwl_client_test             # MWL client
 ./build/bin/ecosystem_integration_test  # Verify dependency setup
 
 # Run Phase 2 integration tests
@@ -245,14 +276,15 @@ cmake --build build
 ./build/bin/failover_test               # RIS failover routing
 ./build/bin/stress_test                 # High volume load testing
 
-# Or run all tests with CTest
-cd build && ctest --output-on-failure
-
-# Run tests by label
+# Filter tests by label
 ctest --test-dir build -L phase1      # Phase 1 unit tests only
 ctest --test-dir build -L phase2      # Phase 2 integration tests only
 ctest --test-dir build -L integration # All integration tests
 ctest --test-dir build -L stress      # Stress tests only
+
+# Filter tests by name pattern (Google Test)
+./build/bin/hl7_test --gtest_filter="HL7ParserTest.*"
+./build/bin/hl7_test --gtest_filter="*Timestamp*"
 ```
 
 ## License
