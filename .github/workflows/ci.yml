@@ -173,6 +173,13 @@ jobs:
       if: runner.os != 'Windows'
       working-directory: pacs_bridge
       run: |
+        # For clang on Linux, use libc++ for better C++23 support
+        # This ensures ABI compatibility with GoogleTest built from source
+        EXTRA_FLAGS=""
+        if [ "${{ matrix.compiler }}" = "clang" ] && [ "${{ runner.os }}" = "Linux" ]; then
+          EXTRA_FLAGS="-DCMAKE_CXX_FLAGS=-stdlib=libc++ -DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++ -lc++abi"
+        fi
+
         cmake -B build \
           -G Ninja \
           -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
@@ -182,7 +189,8 @@ jobs:
           -DBRIDGE_BUILD_HL7=ON \
           -DBRIDGE_BUILD_FHIR=OFF \
           -DCMAKE_C_COMPILER=${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }} \
-          -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }} \
+          $EXTRA_FLAGS
 
     # Tests enabled (Issue #6 - Test Framework Setup completed)
     - name: Configure CMake (Windows)
