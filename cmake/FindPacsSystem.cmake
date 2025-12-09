@@ -211,54 +211,28 @@ endif()
 # =============================================================================
 
 if(BRIDGE_BUILD_TESTS)
-    # Option to force FetchContent instead of system GTest
-    # This is recommended for clang on Linux to avoid ABI incompatibility with
-    # system-installed GTest (which is typically built with GCC/libstdc++)
-    option(PACS_BRIDGE_FORCE_FETCH_GTEST "Force downloading GoogleTest instead of using system version" OFF)
+    # Always use FetchContent to build GoogleTest from source.
+    # This ensures ABI compatibility because GTest is built with the same compiler
+    # and standard library as the project. System-installed GTest packages may
+    # have been built with different compiler/stdlib combinations, causing linker
+    # errors (e.g., libc++ vs libstdc++ mismatch on Linux/macOS with clang).
+    message(STATUS "Fetching GoogleTest from GitHub...")
 
-    # Check if we should skip system GTest
-    set(_use_system_gtest TRUE)
-    if(PACS_BRIDGE_FORCE_FETCH_GTEST)
-        set(_use_system_gtest FALSE)
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # On Linux with clang, system GTest may have ABI incompatibility
-        # due to being built with GCC/libstdc++ while we use libc++
-        message(STATUS "Clang on Linux detected: Using FetchContent for GTest to avoid ABI issues")
-        set(_use_system_gtest FALSE)
-    endif()
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.15.2
+        GIT_SHALLOW TRUE
+    )
 
-    set(_gtest_found FALSE)
+    # Prevent overriding parent project's compiler/linker settings on Windows
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    set(BUILD_GMOCK ON CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 
-    if(_use_system_gtest)
-        # Try to find system-installed GTest
-        find_package(GTest QUIET)
-        if(GTest_FOUND)
-            message(STATUS "Found GTest via find_package")
-            set(_gtest_found TRUE)
-        endif()
-    endif()
+    FetchContent_MakeAvailable(googletest)
 
-    if(NOT _gtest_found)
-        # Use FetchContent to download GoogleTest
-        message(STATUS "Fetching GoogleTest from GitHub...")
-
-        FetchContent_Declare(
-            googletest
-            GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG v1.15.2
-            GIT_SHALLOW TRUE
-        )
-
-        # Prevent overriding parent project's compiler/linker settings on Windows
-        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-        set(BUILD_GMOCK ON CACHE BOOL "" FORCE)
-        set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-
-        FetchContent_MakeAvailable(googletest)
-
-        message(STATUS "Fetched GoogleTest successfully")
-    endif()
-
+    message(STATUS "Fetched GoogleTest successfully")
     set(PACS_BRIDGE_HAS_GTEST TRUE CACHE BOOL "GTest is available" FORCE)
 else()
     set(PACS_BRIDGE_HAS_GTEST FALSE CACHE BOOL "GTest is available" FORCE)
