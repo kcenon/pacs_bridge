@@ -66,13 +66,15 @@ if(BRIDGE_ENABLE_COVERAGE)
 endif()
 
 # =============================================================================
-# Test Executable Macro (with Google Test)
+# Test Executable Macros
 # =============================================================================
 
-# Macro arguments:
+# Macro for tests that use Google Test framework
+# Uses gtest_discover_tests for automatic test discovery
+# Arguments:
 #   TEST_NAME - Name of the test executable
 #   Additional args (ARGN) - Labels for the test (e.g., "unit;hl7;phase1")
-macro(add_bridge_test TEST_NAME)
+macro(add_gtest_test TEST_NAME)
     add_executable(${TEST_NAME} ${TEST_NAME}.cpp)
 
     target_link_libraries(${TEST_NAME}
@@ -81,7 +83,7 @@ macro(add_bridge_test TEST_NAME)
             pacs_bridge_compile_options
     )
 
-    # Link Google Test if available
+    # Link Google Test
     if(PACS_BRIDGE_HAS_GTEST)
         if(TARGET GTest::gtest_main)
             target_link_libraries(${TEST_NAME} PRIVATE GTest::gtest_main GTest::gmock)
@@ -116,7 +118,6 @@ macro(add_bridge_test TEST_NAME)
 
     if(PACS_BRIDGE_HAS_GTEST)
         # Use gtest_discover_tests for better CTest integration
-        # Note: Properties are set here since gtest_discover_tests creates tests at build time
         include(GoogleTest)
         gtest_discover_tests(${TEST_NAME}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -125,14 +126,12 @@ macro(add_bridge_test TEST_NAME)
                 LABELS "${_TEST_LABELS}"
         )
     else()
-        # Fallback to manual test registration
+        # Fallback if GTest not available
         add_test(
             NAME ${TEST_NAME}
             COMMAND ${TEST_NAME}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         )
-
-        # Set test properties
         set_tests_properties(${TEST_NAME} PROPERTIES
             TIMEOUT ${_TEST_TIMEOUT}
             LABELS "${_TEST_LABELS}"
@@ -140,30 +139,81 @@ macro(add_bridge_test TEST_NAME)
     endif()
 endmacro()
 
+# Macro for tests that use custom (non-GTest) test framework
+# Uses add_test directly since gtest_discover_tests won't work
+# Arguments:
+#   TEST_NAME - Name of the test executable
+#   Additional args (ARGN) - Labels for the test (e.g., "unit;hl7;phase1")
+macro(add_bridge_test TEST_NAME)
+    add_executable(${TEST_NAME} ${TEST_NAME}.cpp)
+
+    target_link_libraries(${TEST_NAME}
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+
+    target_include_directories(${TEST_NAME}
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+
+    target_compile_definitions(${TEST_NAME}
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+
+    # Parse optional labels from additional arguments
+    set(_TEST_LABELS "unit")
+    if(ARGN)
+        set(_TEST_LABELS "${ARGN}")
+    endif()
+
+    # Parse timeout from labels or use default
+    set(_TEST_TIMEOUT 60)
+    if(_TEST_LABELS MATCHES "performance")
+        set(_TEST_TIMEOUT 120)
+    elseif(_TEST_LABELS MATCHES "load")
+        set(_TEST_TIMEOUT 180)
+    endif()
+
+    # Register as a single test (custom framework, no gtest discovery)
+    add_test(
+        NAME ${TEST_NAME}
+        COMMAND ${TEST_NAME}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+
+    set_tests_properties(${TEST_NAME} PROPERTIES
+        TIMEOUT ${_TEST_TIMEOUT}
+        LABELS "${_TEST_LABELS}"
+    )
+endmacro()
+
 # =============================================================================
 # Phase 1: HL7 Gateway Tests
 # =============================================================================
 
 if(BRIDGE_BUILD_HL7)
-    # HL7 Protocol Tests
-    add_bridge_test(hl7_test "unit;hl7;phase1")
+    # HL7 Protocol Tests (uses GTest framework)
+    add_gtest_test(hl7_test "unit;hl7;phase1")
 
-    # ADT Message Handler Tests (Issue #14)
+    # ADT Message Handler Tests (Issue #14) - custom framework
     add_bridge_test(adt_handler_test "unit;hl7;adt;phase1")
 
-    # ORM Message Handler Tests (Issue #15)
+    # ORM Message Handler Tests (Issue #15) - custom framework
     add_bridge_test(orm_handler_test "unit;hl7;orm;phase1")
 
-    # HL7-DICOM Mapping Tests
+    # HL7-DICOM Mapping Tests - custom framework
     add_bridge_test(mapping_test "unit;mapping;phase1")
 
-    # DICOM-HL7 Mapping Tests (MPPS to ORM - Issue #24)
+    # DICOM-HL7 Mapping Tests (MPPS to ORM - Issue #24) - custom framework
     add_bridge_test(dicom_hl7_mapper_test "unit;mapping;phase2")
 
-    # Message Router Tests
+    # Message Router Tests - custom framework
     add_bridge_test(router_test "unit;router;phase1")
 
-    # Patient Cache Tests
+    # Patient Cache Tests - custom framework
     add_bridge_test(cache_test "unit;cache;phase1")
 endif()
 
