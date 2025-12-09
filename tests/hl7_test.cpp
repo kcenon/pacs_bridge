@@ -696,6 +696,143 @@ bool test_parser_segment_iteration() {
     return true;
 }
 
+bool test_parser_escape_sequences() {
+    hl7_encoding_characters enc;  // Default encoding
+
+    // Test unescape: \F\ -> |
+    std::string escaped_f = "test\\F\\value";
+    std::string unescaped_f = hl7_parser::unescape(escaped_f, enc);
+    TEST_ASSERT(unescaped_f == "test|value", "\\F\\ should unescape to |");
+
+    // Test unescape: \S\ -> ^
+    std::string escaped_s = "test\\S\\value";
+    std::string unescaped_s = hl7_parser::unescape(escaped_s, enc);
+    TEST_ASSERT(unescaped_s == "test^value", "\\S\\ should unescape to ^");
+
+    // Test unescape: \T\ -> &
+    std::string escaped_t = "test\\T\\value";
+    std::string unescaped_t = hl7_parser::unescape(escaped_t, enc);
+    TEST_ASSERT(unescaped_t == "test&value", "\\T\\ should unescape to &");
+
+    // Test unescape: \R\ -> ~
+    std::string escaped_r = "test\\R\\value";
+    std::string unescaped_r = hl7_parser::unescape(escaped_r, enc);
+    TEST_ASSERT(unescaped_r == "test~value", "\\R\\ should unescape to ~");
+
+    // Test unescape: \E\ -> backslash
+    std::string escaped_e = "test\\E\\value";
+    std::string unescaped_e = hl7_parser::unescape(escaped_e, enc);
+    TEST_ASSERT(unescaped_e == "test\\value", "\\E\\ should unescape to \\");
+
+    // Test unescape: \.br\ -> newline
+    std::string escaped_br = "test\\.br\\value";
+    std::string unescaped_br = hl7_parser::unescape(escaped_br, enc);
+    TEST_ASSERT(unescaped_br == "test\nvalue", "\\.br\\ should unescape to newline");
+
+    // Test escape: pipe character to escaped form
+    std::string raw_pipe = "test|value";
+    std::string esc_pipe = hl7_parser::escape(raw_pipe, enc);
+    TEST_ASSERT(esc_pipe == "test\\F\\value", "| should escape to \\F\\");
+
+    // Test escape: caret to escaped form
+    std::string raw_caret = "test^value";
+    std::string esc_caret = hl7_parser::escape(raw_caret, enc);
+    TEST_ASSERT(esc_caret == "test\\S\\value", "^ should escape to \\S\\");
+
+    // Test escape roundtrip
+    std::string original = "test|with^special&chars~and\\backslash";
+    std::string escaped = hl7_parser::escape(original, enc);
+    std::string roundtrip = hl7_parser::unescape(escaped, enc);
+    TEST_ASSERT(roundtrip == original, "Escape/unescape roundtrip should preserve original");
+
+    return true;
+}
+
+bool test_parser_z_segment() {
+    // Test parsing message with Z-segment (custom segment)
+    const std::string msg_with_zds =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115110000||ORM^O01|MSG003|P|2.4|||AL|NE\r"
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN^WILLIAM||19800515|M\r"
+        "ORC|NW|ORD001^HIS|ACC001^PACS||SC\r"
+        "OBR|1|ORD001^HIS|ACC001^PACS|71020^CHEST XRAY^CPT\r"
+        "ZDS|1.2.840.10008.5.1.4.1.1.2.1.12345||Custom Z-segment data\r";
+
+    hl7_parser parser;
+    auto result = parser.parse(msg_with_zds);
+    TEST_ASSERT(result.has_value(), "Should parse message with ZDS segment");
+
+    // Check ZDS segment exists
+    TEST_ASSERT(result->has_segment("ZDS"), "Should have ZDS segment");
+
+    // Get ZDS segment
+    const auto* zds = result->segment("ZDS");
+    TEST_ASSERT(zds != nullptr, "ZDS segment pointer should not be null");
+
+    // Check ZDS field values
+    TEST_ASSERT(zds->field_value(1) == "1.2.840.10008.5.1.4.1.1.2.1.12345",
+                "ZDS-1 should contain Study Instance UID");
+    TEST_ASSERT(zds->field_value(3) == "Custom Z-segment data",
+                "ZDS-3 should contain custom data");
+
+    return true;
+}
+
+bool test_parser_non_standard_delimiters() {
+    // Test parsing with non-standard delimiters
+    const std::string msg_custom_delim =
+        "MSH#*~!@#SENDER#FAC#RECV#RFAC#20240115||ADT*A01#MSG001#P#2.4\r"
+        "PID#1##12345*HOSPITAL#####DOE*JOHN##M\r";
+
+    hl7_parser parser;
+    auto result = parser.parse(msg_custom_delim);
+    TEST_ASSERT(result.has_value(), "Should parse with non-standard delimiters");
+
+    auto enc = result->encoding();
+    TEST_ASSERT(enc.field_separator == '#', "Custom field separator should be #");
+    TEST_ASSERT(enc.component_separator == '*', "Custom component separator should be *");
+
+    // Verify field extraction works with custom delimiters
+    TEST_ASSERT(result->get_value("MSH.3") == "SENDER", "Should extract field with custom delimiter");
+
+    return true;
+}
+
+bool test_parser_performance() {
+    // Test that parsing typical message completes in < 1ms
+    const std::string typical_msg =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4|||AL|NE\r"
+        "EVN|A01|20240115103000|||OPERATOR^JOHN\r"
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN^WILLIAM||19800515|M|||123 MAIN ST^^SPRINGFIELD^IL^62701||555-123-4567\r"
+        "PV1|1|I|WARD^101^A^HOSPITAL||||SMITH^ROBERT^MD\r";
+
+    hl7_parser parser;
+    parse_details details;
+
+    // Parse message and capture timing
+    auto result = parser.parse(typical_msg, &details);
+    TEST_ASSERT(result.has_value(), "Should parse successfully");
+
+    // Verify parse time < 1ms (1000 microseconds)
+    // Note: First parse might be slower due to cache effects, so we allow some margin
+    TEST_ASSERT(details.parse_time_us < 10000, "Parse time should be < 10ms (with margin)");
+
+    // Run multiple parses to get better average
+    int64_t total_time = 0;
+    const int iterations = 100;
+    for (int i = 0; i < iterations; ++i) {
+        auto start = std::chrono::steady_clock::now();
+        auto r = parser.parse(typical_msg);
+        auto end = std::chrono::steady_clock::now();
+        total_time += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    }
+    int64_t avg_time = total_time / iterations;
+
+    // Average should be < 1ms (1000 microseconds)
+    TEST_ASSERT(avg_time < 1000, "Average parse time should be < 1ms");
+
+    return true;
+}
+
 // =============================================================================
 // HL7 Builder Tests
 // =============================================================================
@@ -936,6 +1073,10 @@ int run_all_tests() {
     RUN_TEST(test_parser_extract_header);
     RUN_TEST(test_parser_looks_like_hl7);
     RUN_TEST(test_parser_segment_iteration);
+    RUN_TEST(test_parser_escape_sequences);
+    RUN_TEST(test_parser_z_segment);
+    RUN_TEST(test_parser_non_standard_delimiters);
+    RUN_TEST(test_parser_performance);
 
     std::cout << "\n=== HL7 Builder Tests ===" << std::endl;
     RUN_TEST(test_builder_basic);
