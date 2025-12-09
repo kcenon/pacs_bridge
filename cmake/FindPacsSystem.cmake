@@ -206,5 +206,37 @@ if(PACS_BRIDGE_HAS_OPENSSL)
     )
 endif()
 
+# =============================================================================
+# Google Test (for unit testing)
+# =============================================================================
+
+if(BRIDGE_BUILD_TESTS)
+    # Always use FetchContent to build GoogleTest from source.
+    # This ensures ABI compatibility because GTest is built with the same compiler
+    # and standard library as the project. System-installed GTest packages may
+    # have been built with different compiler/stdlib combinations, causing linker
+    # errors (e.g., libc++ vs libstdc++ mismatch on Linux/macOS with clang).
+    message(STATUS "Fetching GoogleTest from GitHub...")
+
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.15.2
+        GIT_SHALLOW TRUE
+    )
+
+    # Prevent overriding parent project's compiler/linker settings on Windows
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    set(BUILD_GMOCK ON CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+
+    FetchContent_MakeAvailable(googletest)
+
+    message(STATUS "Fetched GoogleTest successfully")
+    set(PACS_BRIDGE_HAS_GTEST TRUE CACHE BOOL "GTest is available" FORCE)
+else()
+    set(PACS_BRIDGE_HAS_GTEST FALSE CACHE BOOL "GTest is available" FORCE)
+endif()
+
 # Export success
 set(PACS_SYSTEM_FOUND TRUE CACHE BOOL "PACS System dependencies found" FORCE)

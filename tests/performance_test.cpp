@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <thread>
