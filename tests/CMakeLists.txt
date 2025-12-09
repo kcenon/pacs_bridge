@@ -69,6 +69,9 @@ endif()
 # Test Executable Macro (with Google Test)
 # =============================================================================
 
+# Macro arguments:
+#   TEST_NAME - Name of the test executable
+#   Additional args (ARGN) - Labels for the test (e.g., "unit;hl7;phase1")
 macro(add_bridge_test TEST_NAME)
     add_executable(${TEST_NAME} ${TEST_NAME}.cpp)
 
@@ -97,14 +100,29 @@ macro(add_bridge_test TEST_NAME)
             PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
     )
 
+    # Parse optional labels from additional arguments
+    set(_TEST_LABELS "unit")
+    if(ARGN)
+        set(_TEST_LABELS "${ARGN}")
+    endif()
+
+    # Parse timeout from labels or use default
+    set(_TEST_TIMEOUT 60)
+    if(_TEST_LABELS MATCHES "performance")
+        set(_TEST_TIMEOUT 120)
+    elseif(_TEST_LABELS MATCHES "load")
+        set(_TEST_TIMEOUT 180)
+    endif()
+
     if(PACS_BRIDGE_HAS_GTEST)
         # Use gtest_discover_tests for better CTest integration
+        # Note: Properties are set here since gtest_discover_tests creates tests at build time
         include(GoogleTest)
         gtest_discover_tests(${TEST_NAME}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             PROPERTIES
-                TIMEOUT 60
-                LABELS "unit"
+                TIMEOUT ${_TEST_TIMEOUT}
+                LABELS "${_TEST_LABELS}"
         )
     else()
         # Fallback to manual test registration
@@ -116,8 +134,8 @@ macro(add_bridge_test TEST_NAME)
 
         # Set test properties
         set_tests_properties(${TEST_NAME} PROPERTIES
-            TIMEOUT 60
-            LABELS "unit"
+            TIMEOUT ${_TEST_TIMEOUT}
+            LABELS "${_TEST_LABELS}"
         )
     endif()
 endmacro()
@@ -128,46 +146,25 @@ endmacro()
 
 if(BRIDGE_BUILD_HL7)
     # HL7 Protocol Tests
-    add_bridge_test(hl7_test)
-    set_tests_properties(hl7_test PROPERTIES
-        LABELS "unit;hl7;phase1"
-    )
+    add_bridge_test(hl7_test "unit;hl7;phase1")
 
     # ADT Message Handler Tests (Issue #14)
-    add_bridge_test(adt_handler_test)
-    set_tests_properties(adt_handler_test PROPERTIES
-        LABELS "unit;hl7;adt;phase1"
-    )
+    add_bridge_test(adt_handler_test "unit;hl7;adt;phase1")
 
     # ORM Message Handler Tests (Issue #15)
-    add_bridge_test(orm_handler_test)
-    set_tests_properties(orm_handler_test PROPERTIES
-        LABELS "unit;hl7;orm;phase1"
-    )
+    add_bridge_test(orm_handler_test "unit;hl7;orm;phase1")
 
     # HL7-DICOM Mapping Tests
-    add_bridge_test(mapping_test)
-    set_tests_properties(mapping_test PROPERTIES
-        LABELS "unit;mapping;phase1"
-    )
+    add_bridge_test(mapping_test "unit;mapping;phase1")
 
     # DICOM-HL7 Mapping Tests (MPPS to ORM - Issue #24)
-    add_bridge_test(dicom_hl7_mapper_test)
-    set_tests_properties(dicom_hl7_mapper_test PROPERTIES
-        LABELS "unit;mapping;phase2"
-    )
+    add_bridge_test(dicom_hl7_mapper_test "unit;mapping;phase2")
 
     # Message Router Tests
-    add_bridge_test(router_test)
-    set_tests_properties(router_test PROPERTIES
-        LABELS "unit;router;phase1"
-    )
+    add_bridge_test(router_test "unit;router;phase1")
 
     # Patient Cache Tests
-    add_bridge_test(cache_test)
-    set_tests_properties(cache_test PROPERTIES
-        LABELS "unit;cache;phase1"
-    )
+    add_bridge_test(cache_test "unit;cache;phase1")
 endif()
 
 # =============================================================================
@@ -175,35 +172,23 @@ endif()
 # =============================================================================
 
 # MLLP Server/Client Tests
-add_bridge_test(mllp_test)
-set_tests_properties(mllp_test PROPERTIES
-    LABELS "unit;mllp;transport"
-)
+add_bridge_test(mllp_test "unit;mllp;transport")
 
 # =============================================================================
 # Configuration Tests
 # =============================================================================
 
-add_bridge_test(config_test)
-set_tests_properties(config_test PROPERTIES
-    LABELS "unit;config"
-)
+add_bridge_test(config_test "unit;config")
 
 # =============================================================================
 # Security Tests
 # =============================================================================
 
-add_bridge_test(security_test)
-set_tests_properties(security_test PROPERTIES
-    LABELS "unit;security"
-)
+add_bridge_test(security_test "unit;security")
 
 # TLS Tests (conditional on OpenSSL)
 if(PACS_BRIDGE_HAS_OPENSSL)
-    add_bridge_test(tls_test)
-    set_tests_properties(tls_test PROPERTIES
-        LABELS "unit;security;tls"
-    )
+    add_bridge_test(tls_test "unit;security;tls")
 else()
     message(STATUS "Skipping tls_test: OpenSSL not available")
 endif()
@@ -212,62 +197,56 @@ endif()
 # Monitoring Tests
 # =============================================================================
 
-add_bridge_test(health_check_test)
-set_tests_properties(health_check_test PROPERTIES
-    LABELS "unit;monitoring"
-)
+add_bridge_test(health_check_test "unit;monitoring")
 
 # =============================================================================
 # Performance Tests
 # =============================================================================
 
-add_bridge_test(performance_test)
-set_tests_properties(performance_test PROPERTIES
-    LABELS "unit;performance"
-    TIMEOUT 120  # Performance tests may take longer
-)
+add_bridge_test(performance_test "unit;performance")
 
 # =============================================================================
 # Load Testing Framework Tests
 # =============================================================================
 
-add_bridge_test(load_test)
-set_tests_properties(load_test PROPERTIES
-    LABELS "unit;load"
-    TIMEOUT 180  # Load tests may take longer
-)
+add_bridge_test(load_test "unit;load")
 
 # =============================================================================
 # PACS Adapter Tests (pacs_system Integration)
 # =============================================================================
 
 # MWL Client Tests (Phase 1 - Issue #17)
-add_bridge_test(mwl_client_test)
-set_tests_properties(mwl_client_test PROPERTIES
-    LABELS "unit;pacs_adapter;phase1"
-)
+add_bridge_test(mwl_client_test "unit;pacs_adapter;phase1")
 
 # MPPS Handler Tests (Phase 2 - Issue #23)
-add_bridge_test(mpps_handler_test)
-set_tests_properties(mpps_handler_test PROPERTIES
-    LABELS "unit;pacs_adapter;mpps;phase2"
-)
+add_bridge_test(mpps_handler_test "unit;pacs_adapter;mpps;phase2")
 
 # =============================================================================
 # Ecosystem Integration Test (Issue #4 - Dependency Setup Verification)
 # =============================================================================
 
-add_bridge_test(ecosystem_integration_test)
-set_tests_properties(ecosystem_integration_test PROPERTIES
-    LABELS "integration;ecosystem;phase0"
-)
+add_bridge_test(ecosystem_integration_test "integration;ecosystem;phase0")
 
 # =============================================================================
 # Phase 2 Integration Tests (Issue #29 - MPPS & Bidirectional)
 # =============================================================================
 
 # Macro for integration tests (longer timeout, different labels)
+# Arguments:
+#   TEST_NAME - Name of the test executable
+#   TEST_LABELS (optional) - Labels for the test (default: "integration;phase2")
+#   TEST_TIMEOUT (optional) - Timeout in seconds (default: 300)
 macro(add_integration_test TEST_NAME)
+    # Parse optional arguments
+    set(_INT_TEST_LABELS "integration;phase2")
+    set(_INT_TEST_TIMEOUT 300)
+    if(ARGC GREATER 1)
+        set(_INT_TEST_LABELS "${ARGV1}")
+    endif()
+    if(ARGC GREATER 2)
+        set(_INT_TEST_TIMEOUT "${ARGV2}")
+    endif()
+
     add_executable(${TEST_NAME} integration/${TEST_NAME}.cpp)
 
     target_link_libraries(${TEST_NAME}
@@ -294,35 +273,22 @@ macro(add_integration_test TEST_NAME)
 
     # Integration tests have longer timeout
     set_tests_properties(${TEST_NAME} PROPERTIES
-        TIMEOUT 300
-        LABELS "integration;phase2"
+        TIMEOUT ${_INT_TEST_TIMEOUT}
+        LABELS "${_INT_TEST_LABELS}"
     )
 endmacro()
 
 # MPPS Integration Tests (N-CREATE/N-SET flows)
-add_integration_test(mpps_integration_test)
-set_tests_properties(mpps_integration_test PROPERTIES
-    LABELS "integration;mpps;phase2"
-)
+add_integration_test(mpps_integration_test "integration;mpps;phase2")
 
 # Queue Persistence Tests (message recovery)
-add_integration_test(queue_persistence_test)
-set_tests_properties(queue_persistence_test PROPERTIES
-    LABELS "integration;queue;phase2"
-)
+add_integration_test(queue_persistence_test "integration;queue;phase2")
 
 # Failover Routing Tests (RIS failover)
-add_integration_test(failover_test)
-set_tests_properties(failover_test PROPERTIES
-    LABELS "integration;failover;phase2"
-)
+add_integration_test(failover_test "integration;failover;phase2")
 
 # Stress Tests (high volume)
-add_integration_test(stress_test)
-set_tests_properties(stress_test PROPERTIES
-    LABELS "integration;stress;phase2"
-    TIMEOUT 600  # Stress tests may take longer
-)
+add_integration_test(stress_test "integration;stress;phase2" 600)
 
 # =============================================================================
 # Test Summary
