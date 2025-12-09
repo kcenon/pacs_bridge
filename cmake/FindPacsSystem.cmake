@@ -211,13 +211,34 @@ endif()
 # =============================================================================
 
 if(BRIDGE_BUILD_TESTS)
-    # First try to find system-installed GTest
-    find_package(GTest QUIET)
+    # Option to force FetchContent instead of system GTest
+    # This is recommended for clang on Linux to avoid ABI incompatibility with
+    # system-installed GTest (which is typically built with GCC/libstdc++)
+    option(PACS_BRIDGE_FORCE_FETCH_GTEST "Force downloading GoogleTest instead of using system version" OFF)
 
-    if(GTest_FOUND)
-        message(STATUS "Found GTest via find_package")
-        set(PACS_BRIDGE_HAS_GTEST TRUE CACHE BOOL "GTest is available" FORCE)
-    else()
+    # Check if we should skip system GTest
+    set(_use_system_gtest TRUE)
+    if(PACS_BRIDGE_FORCE_FETCH_GTEST)
+        set(_use_system_gtest FALSE)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # On Linux with clang, system GTest may have ABI incompatibility
+        # due to being built with GCC/libstdc++ while we use libc++
+        message(STATUS "Clang on Linux detected: Using FetchContent for GTest to avoid ABI issues")
+        set(_use_system_gtest FALSE)
+    endif()
+
+    set(_gtest_found FALSE)
+
+    if(_use_system_gtest)
+        # Try to find system-installed GTest
+        find_package(GTest QUIET)
+        if(GTest_FOUND)
+            message(STATUS "Found GTest via find_package")
+            set(_gtest_found TRUE)
+        endif()
+    endif()
+
+    if(NOT _gtest_found)
         # Use FetchContent to download GoogleTest
         message(STATUS "Fetching GoogleTest from GitHub...")
 
@@ -236,8 +257,9 @@ if(BRIDGE_BUILD_TESTS)
         FetchContent_MakeAvailable(googletest)
 
         message(STATUS "Fetched GoogleTest successfully")
-        set(PACS_BRIDGE_HAS_GTEST TRUE CACHE BOOL "GTest is available" FORCE)
     endif()
+
+    set(PACS_BRIDGE_HAS_GTEST TRUE CACHE BOOL "GTest is available" FORCE)
 else()
     set(PACS_BRIDGE_HAS_GTEST FALSE CACHE BOOL "GTest is available" FORCE)
 endif()
