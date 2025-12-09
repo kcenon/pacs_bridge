@@ -175,22 +175,31 @@ jobs:
       run: |
         # For clang on Linux, use libc++ for better C++23 support
         # This ensures ABI compatibility with GoogleTest built from source
-        EXTRA_FLAGS=""
         if [ "${{ matrix.compiler }}" = "clang" ] && [ "${{ runner.os }}" = "Linux" ]; then
-          EXTRA_FLAGS="-DCMAKE_CXX_FLAGS=-stdlib=libc++ -DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++ -lc++abi"
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+            -DBRIDGE_BUILD_TESTS=ON \
+            -DBRIDGE_BUILD_EXAMPLES=OFF \
+            -DBRIDGE_BUILD_HL7=ON \
+            -DBRIDGE_BUILD_FHIR=OFF \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            "-DCMAKE_CXX_FLAGS=-stdlib=libc++" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-stdlib=libc++ -lc++abi"
+        else
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+            -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+            -DBRIDGE_BUILD_TESTS=ON \
+            -DBRIDGE_BUILD_EXAMPLES=OFF \
+            -DBRIDGE_BUILD_HL7=ON \
+            -DBRIDGE_BUILD_FHIR=OFF \
+            -DCMAKE_C_COMPILER=${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
         fi
-
-        cmake -B build \
-          -G Ninja \
-          -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
-          -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
-          -DBRIDGE_BUILD_TESTS=ON \
-          -DBRIDGE_BUILD_EXAMPLES=OFF \
-          -DBRIDGE_BUILD_HL7=ON \
-          -DBRIDGE_BUILD_FHIR=OFF \
-          -DCMAKE_C_COMPILER=${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }} \
-          -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }} \
-          $EXTRA_FLAGS
 
     # Tests enabled (Issue #6 - Test Framework Setup completed)
     - name: Configure CMake (Windows)
