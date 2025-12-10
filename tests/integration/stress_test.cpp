@@ -241,7 +241,11 @@ bool test_stress_sequential_moderate() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     stress_test_config config;
     config.message_count = 100;
@@ -283,7 +287,11 @@ bool test_stress_concurrent_senders() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     stress_test_config config;
     config.message_count = 200;
@@ -324,7 +332,11 @@ bool test_stress_high_volume_burst() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     stress_test_config config;
     config.message_count = 500;
@@ -367,7 +379,11 @@ bool test_stress_latency_normal() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     stress_test_config config;
     config.message_count = 100;
@@ -403,7 +419,11 @@ bool test_stress_latency_slow_server() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     stress_test_config config;
     config.message_count = 50;
@@ -441,7 +461,11 @@ bool test_stress_sustained_load() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     // Sustained test: 10 batches of 50 messages each with delays
     uint32_t total_sent = 0;
@@ -459,8 +483,12 @@ bool test_stress_sustained_load() {
         total_sent += result.messages_sent;
         total_success += result.messages_received;
 
-        // Brief pause between batches
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        // Brief pause between batches - yield-based wait
+        auto pause_deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds{100};
+        while (std::chrono::steady_clock::now() < pause_deadline) {
+            std::this_thread::yield();
+        }
     }
 
     auto test_end = std::chrono::steady_clock::now();
@@ -501,7 +529,11 @@ bool test_stress_recovery_after_overload() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     // Phase 1: Normal operation
     {
@@ -530,8 +562,12 @@ bool test_stress_recovery_after_overload() {
                   << (result.success_rate * 100) << "%" << std::endl;
     }
 
-    // Brief recovery period
-    std::this_thread::sleep_for(std::chrono::milliseconds{500});
+    // Brief recovery period - yield-based wait
+    auto recovery_deadline = std::chrono::steady_clock::now() +
+                             std::chrono::milliseconds{500};
+    while (std::chrono::steady_clock::now() < recovery_deadline) {
+        std::this_thread::yield();
+    }
 
     // Phase 3: Back to normal - should recover
     {
@@ -572,7 +608,11 @@ bool test_stress_mpps_high_volume() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
 
