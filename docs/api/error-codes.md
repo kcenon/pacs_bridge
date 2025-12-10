@@ -673,6 +673,88 @@ openssl x509 -in /etc/pacs_bridge/certs/server.crt -noout -dates
 
 ---
 
+## EMR Client Errors
+
+EMR Client errors occur when communicating with external EMR/FHIR servers.
+
+### PACS-1000: EMR Connection Failed
+
+**Description:** Failed to connect to EMR server.
+
+**Cause:** Network error, server unavailable, or invalid URL.
+
+**Resolution:**
+1. Verify EMR server URL is correct
+2. Check network connectivity
+3. Verify firewall rules
+
+---
+
+### PACS-1001: EMR Request Timeout
+
+**Description:** EMR request timed out.
+
+**Cause:** Server slow to respond or network latency.
+
+**Resolution:**
+1. Increase timeout configuration
+2. Check EMR server health
+3. Review network latency
+
+---
+
+### PACS-1002: EMR Invalid Response
+
+**Description:** Invalid or malformed response from EMR server.
+
+**Cause:** EMR server returned unexpected format.
+
+**Resolution:**
+1. Verify EMR server is FHIR R4 compliant
+2. Check Content-Type headers
+3. Review EMR server logs
+
+---
+
+### PACS-1003: EMR Resource Not Found
+
+**Description:** Requested resource was not found (HTTP 404).
+
+**Cause:** Resource ID does not exist.
+
+**Resolution:**
+1. Verify resource ID is correct
+2. Check if resource was deleted
+3. Review access permissions
+
+---
+
+### PACS-1004: EMR Unauthorized
+
+**Description:** Authentication failed (HTTP 401).
+
+**Cause:** Invalid or expired credentials.
+
+**Resolution:**
+1. Verify OAuth2 configuration
+2. Check token expiration
+3. Refresh authentication credentials
+
+---
+
+### PACS-1005: EMR Rate Limited
+
+**Description:** Rate limit exceeded (HTTP 429).
+
+**Cause:** Too many requests to EMR server.
+
+**Resolution:**
+1. Implement backoff strategy
+2. Reduce request frequency
+3. Contact EMR administrator for limit increase
+
+---
+
 ## Resolution Steps
 
 ### General Troubleshooting
