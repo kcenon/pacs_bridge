@@ -1659,6 +1659,81 @@ public:
 } // namespace pacs::bridge::fhir
 ```
 
+### DES-FHIR-003: patient_resource_handler
+
+**Traces to:** FR-2.2.1
+
+```cpp
+namespace pacs::bridge::fhir {
+
+/**
+ * @brief Handler for FHIR Patient resource operations
+ *
+ * Implements read and search operations for Patient resources by mapping
+ * from the internal patient cache (cache::patient_cache).
+ *
+ * Supported operations:
+ * - read: GET /Patient/{id}
+ * - search: GET /Patient?identifier=xxx
+ * - search: GET /Patient?name=xxx
+ * - search: GET /Patient?birthdate=xxx
+ */
+class patient_resource_handler : public resource_handler {
+public:
+    explicit patient_resource_handler(
+        std::shared_ptr<cache::patient_cache> cache);
+
+    // Read patient by ID
+    [[nodiscard]] resource_result<std::unique_ptr<fhir_resource>> read(
+        const std::string& id) override;
+
+    // Search for patients
+    // Supported parameters: _id, identifier, name, birthdate
+    [[nodiscard]] resource_result<search_result> search(
+        const std::map<std::string, std::string>& params,
+        const pagination_params& pagination) override;
+
+    // Get supported search parameters
+    [[nodiscard]] std::map<std::string, std::string>
+    supported_search_params() const override;
+
+    // Check if interaction is supported
+    [[nodiscard]] bool supports_interaction(
+        interaction_type type) const noexcept override;
+
+private:
+    std::shared_ptr<cache::patient_cache> cache_;
+};
+
+/**
+ * @brief Convert DICOM patient to FHIR Patient resource
+ */
+[[nodiscard]] std::unique_ptr<patient_resource> dicom_to_fhir_patient(
+    const mapping::dicom_patient& dicom_patient,
+    const std::optional<std::string>& patient_id = std::nullopt);
+
+/**
+ * @brief Convert DICOM name format to FHIR HumanName
+ * DICOM PN format: Family^Given^Middle^Prefix^Suffix
+ */
+[[nodiscard]] fhir_human_name dicom_name_to_fhir(std::string_view dicom_name);
+
+/**
+ * @brief Convert DICOM date format to FHIR date format
+ * DICOM: YYYYMMDD -> FHIR: YYYY-MM-DD
+ */
+[[nodiscard]] std::string dicom_date_to_fhir(std::string_view dicom_date);
+
+/**
+ * @brief Convert DICOM sex code to FHIR gender
+ * DICOM: M, F, O -> FHIR: male, female, other, unknown
+ */
+[[nodiscard]] administrative_gender dicom_sex_to_fhir_gender(
+    std::string_view dicom_sex);
+
+} // namespace pacs::bridge::fhir
+```
+
 ---
 
 ## 4. Translation Layer Module

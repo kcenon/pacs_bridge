@@ -1129,6 +1129,81 @@ public:
 } // namespace pacs::bridge::fhir
 ```
 
+### DES-FHIR-003: patient_resource_handler
+
+**추적 대상:** FR-2.2.1
+
+```cpp
+namespace pacs::bridge::fhir {
+
+/**
+ * @brief FHIR Patient 리소스 핸들러
+ *
+ * 내부 환자 캐시(cache::patient_cache)에서 Patient 리소스를 매핑하여
+ * 읽기 및 검색 작업을 구현합니다.
+ *
+ * 지원 작업:
+ * - read: GET /Patient/{id}
+ * - search: GET /Patient?identifier=xxx
+ * - search: GET /Patient?name=xxx
+ * - search: GET /Patient?birthdate=xxx
+ */
+class patient_resource_handler : public resource_handler {
+public:
+    explicit patient_resource_handler(
+        std::shared_ptr<cache::patient_cache> cache);
+
+    // ID로 환자 조회
+    [[nodiscard]] resource_result<std::unique_ptr<fhir_resource>> read(
+        const std::string& id) override;
+
+    // 환자 검색
+    // 지원 파라미터: _id, identifier, name, birthdate
+    [[nodiscard]] resource_result<search_result> search(
+        const std::map<std::string, std::string>& params,
+        const pagination_params& pagination) override;
+
+    // 지원되는 검색 파라미터 반환
+    [[nodiscard]] std::map<std::string, std::string>
+    supported_search_params() const override;
+
+    // 인터랙션 지원 여부 확인
+    [[nodiscard]] bool supports_interaction(
+        interaction_type type) const noexcept override;
+
+private:
+    std::shared_ptr<cache::patient_cache> cache_;
+};
+
+/**
+ * @brief DICOM 환자를 FHIR Patient 리소스로 변환
+ */
+[[nodiscard]] std::unique_ptr<patient_resource> dicom_to_fhir_patient(
+    const mapping::dicom_patient& dicom_patient,
+    const std::optional<std::string>& patient_id = std::nullopt);
+
+/**
+ * @brief DICOM 이름 형식을 FHIR HumanName으로 변환
+ * DICOM PN 형식: Family^Given^Middle^Prefix^Suffix
+ */
+[[nodiscard]] fhir_human_name dicom_name_to_fhir(std::string_view dicom_name);
+
+/**
+ * @brief DICOM 날짜 형식을 FHIR 날짜 형식으로 변환
+ * DICOM: YYYYMMDD -> FHIR: YYYY-MM-DD
+ */
+[[nodiscard]] std::string dicom_date_to_fhir(std::string_view dicom_date);
+
+/**
+ * @brief DICOM 성별 코드를 FHIR 성별로 변환
+ * DICOM: M, F, O -> FHIR: male, female, other, unknown
+ */
+[[nodiscard]] administrative_gender dicom_sex_to_fhir_gender(
+    std::string_view dicom_sex);
+
+} // namespace pacs::bridge::fhir
+```
+
 ---
 
 ## 4. 변환 계층 모듈
