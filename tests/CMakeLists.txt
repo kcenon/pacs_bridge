@@ -198,6 +198,9 @@ if(BRIDGE_BUILD_HL7)
     # HL7 Protocol Tests (uses GTest framework)
     add_gtest_test(hl7_test "unit;hl7;phase1")
 
+    # ORU Generator Tests (Issue #25) - GTest framework
+    add_gtest_test(oru_generator_test "unit;hl7;oru;phase2")
+
     # ADT Message Handler Tests (Issue #14) - custom framework
     add_bridge_test(adt_handler_test "unit;hl7;adt;phase1")
 
@@ -365,6 +368,7 @@ message(STATUS "")
 message(STATUS "Tests enabled:")
 if(BRIDGE_BUILD_HL7)
     message(STATUS "  - hl7_test")
+    message(STATUS "  - oru_generator_test")
     message(STATUS "  - adt_handler_test")
     message(STATUS "  - orm_handler_test")
     message(STATUS "  - mapping_test")
