@@ -1850,6 +1850,141 @@ private:
 } // namespace pacs::bridge::router
 ```
 
+### DES-ROUTE-003: outbound_router
+
+**Traces to:** FR-4.2.1, FR-4.2.2, FR-4.2.3, FR-4.2.4
+
+**Implementation Status:** ✅ Implemented (Issue #28)
+
+```cpp
+namespace pacs::bridge::router {
+
+/**
+ * @brief Outbound destination configuration
+ */
+struct outbound_destination {
+    std::string name;           // Unique identifier
+    std::string host;           // Target hostname
+    uint16_t port;              // Target port
+    std::vector<std::string> message_types;  // e.g., {"ORM^O01", "ORU^R01"}
+    int priority = 100;         // Lower = higher priority
+    bool enabled = true;
+    size_t retry_count = 3;
+    std::chrono::milliseconds retry_delay{1000};
+    std::chrono::seconds health_check_interval{30};
+};
+
+/**
+ * @brief Delivery result
+ */
+struct delivery_result {
+    bool success;
+    std::string destination_name;
+    std::chrono::milliseconds round_trip_time;
+    size_t retry_count;
+    size_t failover_count;
+};
+
+/**
+ * @brief Outbound message router
+ *
+ * Routes generated HL7 messages to configured destinations
+ * with failover support and health checking.
+ *
+ * Features:
+ *   - Message type-based destination selection
+ *   - Priority-based routing with failover
+ *   - Health checking for destinations
+ *   - Async delivery with queue support
+ *   - Connection pool integration
+ */
+class outbound_router {
+public:
+    explicit outbound_router(const outbound_router_config& config);
+    ~outbound_router();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Lifecycle
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Start the router
+     */
+    [[nodiscard]] std::expected<void, outbound_error> start();
+
+    /**
+     * @brief Stop the router
+     */
+    void stop();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Message Routing
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Route message to appropriate destination(s)
+     * @param message HL7 message to route
+     * @return Delivery result or error
+     */
+    [[nodiscard]] std::expected<delivery_result, outbound_error>
+    route(const hl7::hl7_message& message);
+
+    /**
+     * @brief Get destinations for message type
+     * @param message_type Message type (e.g., "ORM^O01")
+     * @return Destination names in priority order
+     */
+    [[nodiscard]] std::vector<std::string>
+    get_destinations(std::string_view message_type) const;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Health Management
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Get health status of destination
+     */
+    [[nodiscard]] destination_health
+    get_destination_health(std::string_view name) const;
+
+    /**
+     * @brief Set health status change callback
+     */
+    void set_health_callback(health_callback callback);
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::router
+```
+
+#### Failover Routing
+
+The `outbound_router` implements priority-based failover:
+
+1. **Destination Selection**: Routes to highest priority (lowest number) destination first
+2. **Health Checking**: Skips destinations marked as unavailable
+3. **Failover**: On failure, automatically tries next priority destination
+4. **Recovery**: Periodic health checks restore unavailable destinations
+
+**Example Configuration:**
+```yaml
+outbound:
+  - name: "RIS_PRIMARY"
+    host: "ris1.hospital.local"
+    port: 2576
+    message_types: ["ORM^O01", "ORU^R01"]
+    priority: 1
+
+  - name: "RIS_BACKUP"
+    host: "ris2.hospital.local"
+    port: 2576
+    message_types: ["ORM^O01", "ORU^R01"]
+    priority: 2  # Failover destination
+```
+
 ---
 
 ## 6. pacs_system Adapter Module
