@@ -1,6 +1,8 @@
 /**
  * @file lockfree_queue.cpp
  * @brief Implementation of lock-free queue for high-performance message passing
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/70 - C++20 Concepts support
  */
 
 #include "pacs/bridge/performance/lockfree_queue.h"
@@ -8,6 +10,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <concepts>
 #include <condition_variable>
 #include <functional>
 #include <memory>
@@ -66,7 +69,7 @@ private:
 // Work-Stealing Queue Implementation
 // =============================================================================
 
-template <typename T>
+template <concepts::Queueable T>
 struct work_stealing_queue<T>::impl {
     static constexpr size_t CACHE_LINE_SIZE = 64;
 
@@ -166,34 +169,34 @@ struct work_stealing_queue<T>::impl {
     }
 };
 
-template <typename T>
+template <concepts::Queueable T>
 work_stealing_queue<T>::work_stealing_queue(size_t capacity)
     : impl_(std::make_unique<impl>(capacity)) {}
 
-template <typename T>
+template <concepts::Queueable T>
 work_stealing_queue<T>::~work_stealing_queue() = default;
 
-template <typename T>
+template <concepts::Queueable T>
 void work_stealing_queue<T>::push(T item) {
     impl_->push(std::move(item));
 }
 
-template <typename T>
+template <concepts::Queueable T>
 std::optional<T> work_stealing_queue<T>::pop() noexcept {
     return impl_->try_pop();
 }
 
-template <typename T>
+template <concepts::Queueable T>
 std::optional<T> work_stealing_queue<T>::steal() noexcept {
     return impl_->try_steal();
 }
 
-template <typename T>
+template <concepts::Queueable T>
 bool work_stealing_queue<T>::empty() const noexcept {
     return impl_->is_empty();
 }
 
-template <typename T>
+template <concepts::Queueable T>
 size_t work_stealing_queue<T>::size() const noexcept {
     return impl_->approx_size();
 }
