@@ -254,6 +254,9 @@ add_bridge_test(config_manager_test "unit;config;hot-reload")
 
 add_bridge_test(security_test "unit;security")
 
+# OAuth2 and Smart-on-FHIR Tests (Issue #103)
+add_bridge_test(oauth2_test "unit;security;oauth2;emr")
+
 # TLS Tests (conditional on OpenSSL)
 if(PACS_BRIDGE_HAS_OPENSSL)
     add_bridge_test(tls_test "unit;security;tls")
@@ -417,6 +420,7 @@ message(STATUS "  - mllp_test")
 message(STATUS "  - config_test")
 message(STATUS "  - config_manager_test")
 message(STATUS "  - security_test")
+message(STATUS "  - oauth2_test")
 if(PACS_BRIDGE_HAS_OPENSSL)
     message(STATUS "  - tls_test")
 endif()

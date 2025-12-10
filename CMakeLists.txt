@@ -198,18 +198,27 @@ list(APPEND PACS_BRIDGE_HEADERS
 list(APPEND PACS_BRIDGE_SOURCES
     src/security/access_control.cpp
     src/security/audit_logger.cpp
+    src/security/basic_auth_provider.cpp
     src/security/input_validator.cpp
     src/security/log_sanitizer.cpp
+    src/security/oauth2_client.cpp
     src/security/rate_limiter.cpp
+    src/security/smart_discovery.cpp
     src/security/tls_context.cpp
     src/security/tls_socket.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/security/access_control.h
     include/pacs/bridge/security/audit_logger.h
+    include/pacs/bridge/security/auth_provider.h
+    include/pacs/bridge/security/basic_auth_provider.h
     include/pacs/bridge/security/input_validator.h
     include/pacs/bridge/security/log_sanitizer.h
+    include/pacs/bridge/security/oauth2_client.h
+    include/pacs/bridge/security/oauth2_types.h
     include/pacs/bridge/security/rate_limiter.h
+    include/pacs/bridge/security/smart_configuration.h
+    include/pacs/bridge/security/smart_discovery.h
     include/pacs/bridge/security/tls_context.h
     include/pacs/bridge/security/tls_socket.h
     include/pacs/bridge/security/tls_types.h
