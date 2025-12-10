@@ -19,6 +19,7 @@
 #include <expected>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <string>
 
