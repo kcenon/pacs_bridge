@@ -116,6 +116,7 @@ if(BRIDGE_BUILD_HL7)
         src/protocol/hl7/adt_handler.cpp
         src/protocol/hl7/orm_handler.cpp
         src/protocol/hl7/oru_generator.cpp
+        src/protocol/hl7/siu_handler.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/protocol/hl7/hl7_types.h
@@ -126,6 +127,7 @@ if(BRIDGE_BUILD_HL7)
         include/pacs/bridge/protocol/hl7/adt_handler.h
         include/pacs/bridge/protocol/hl7/orm_handler.h
         include/pacs/bridge/protocol/hl7/oru_generator.h
+        include/pacs/bridge/protocol/hl7/siu_handler.h
     )
 endif()
 
