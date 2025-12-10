@@ -401,7 +401,7 @@ logging:
 
 ### Production Configuration with TLS
 
-See [examples/config/config-production.yaml](../../examples/config/config-production.yaml) for a complete production configuration example.
+See `examples/config/config-production.yaml` in the repository root for a complete production configuration example.
 
 ### High Availability Configuration
 

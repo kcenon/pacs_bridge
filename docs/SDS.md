@@ -535,7 +535,6 @@ modality_mapping:
 |----------|-------------|
 | [PRD.md](PRD.md) | Product Requirements Document |
 | [SRS.md](SRS.md) | Software Requirements Specification |
-| [ARCHITECTURE.md](../ARCHITECTURE.md) | System Architecture |
 | pacs_system SDS | Core PACS design reference |
 
 ### 8.3 Reference Materials
