@@ -371,6 +371,9 @@ if(BRIDGE_BUILD_FHIR)
 
     # Patient Resource Tests (Phase 3 - Issue #32)
     add_bridge_test(patient_resource_test "unit;fhir;patient;phase3")
+
+    # FHIR-DICOM Mapper Tests (Phase 3 - Issue #35)
+    add_gtest_test(fhir_dicom_mapper_test "unit;fhir;mapping;phase3")
 endif()
 
 # =============================================================================
@@ -421,6 +424,8 @@ if(BRIDGE_BUILD_FHIR)
     message(STATUS "")
     message(STATUS "Phase 3 FHIR Tests:")
     message(STATUS "  - fhir_server_test")
+    message(STATUS "  - patient_resource_test")
+    message(STATUS "  - fhir_dicom_mapper_test")
 endif()
 message(STATUS "==========================")
 message(STATUS "")
