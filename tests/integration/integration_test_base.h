@@ -569,17 +569,20 @@ public:
     }
 
     /**
-     * @brief Wait with timeout for a condition
+     * @brief Wait with timeout for a condition using yield-based polling
+     *
+     * This provides more responsive waiting compared to sleep_for-based polling,
+     * allowing the condition to be checked more frequently while still being
+     * cooperative with other threads.
      */
     template <typename Predicate>
     static bool wait_for(Predicate pred, std::chrono::milliseconds timeout) {
-        auto start = std::chrono::steady_clock::now();
+        auto deadline = std::chrono::steady_clock::now() + timeout;
         while (!pred()) {
-            auto elapsed = std::chrono::steady_clock::now() - start;
-            if (elapsed > timeout) {
+            if (std::chrono::steady_clock::now() >= deadline) {
                 return false;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds{10});
+            std::this_thread::yield();
         }
         return true;
     }

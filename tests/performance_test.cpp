@@ -40,6 +40,24 @@ namespace pacs::bridge::performance::test {
         }                                                                      \
     } while (0)
 
+/**
+ * @brief Wait until a condition is met or timeout occurs
+ * @param condition Function returning true when condition is met
+ * @param timeout Maximum time to wait
+ * @return true if condition was met, false on timeout
+ */
+template <typename Predicate>
+bool wait_for(Predicate condition, std::chrono::milliseconds timeout) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!condition()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::yield();
+    }
+    return true;
+}
+
 #define RUN_TEST(test_func)                                                    \
     do {                                                                       \
         std::cout << "Running " << #test_func << "..." << std::endl;           \
@@ -401,7 +419,10 @@ bool test_thread_pool_task_submission() {
     }
 
     // Wait for tasks to complete
-    std::this_thread::sleep_for(std::chrono::milliseconds{500});
+    TEST_ASSERT(
+        wait_for([&counter]() { return counter.load() >= 100; },
+                 std::chrono::milliseconds{5000}),
+        "All tasks should complete within timeout");
 
     pool.stop(true, std::chrono::seconds{5});
 
@@ -442,7 +463,13 @@ bool test_thread_pool_priority_scheduling() {
         },
         task_priority::normal);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds{200});
+    // Wait for all tasks to complete
+    TEST_ASSERT(
+        wait_for([&execution_order, &order_mutex]() {
+            std::lock_guard lock(order_mutex);
+            return execution_order.size() >= 3;
+        }, std::chrono::milliseconds{2000}),
+        "All tasks should complete within timeout");
     pool.stop(true, std::chrono::seconds{5});
 
     // High priority should execute before low priority
@@ -463,14 +490,24 @@ bool test_thread_pool_statistics() {
 
     TEST_ASSERT(stats.total_threads.load() == 2, "Should have 2 threads");
 
+    std::atomic<int> task_count{0};
+
     // Submit and complete some tasks
     for (int i = 0; i < 10; ++i) {
-        pool.post([]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        pool.post([&task_count]() {
+            // Simulate brief work using yield-based wait
+            auto work_deadline = std::chrono::steady_clock::now() +
+                                 std::chrono::milliseconds{1};
+            while (std::chrono::steady_clock::now() < work_deadline) {
+                std::this_thread::yield();
+            }
+            task_count.fetch_add(1, std::memory_order_relaxed);
         });
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    // Wait for all tasks to complete
+    wait_for([&task_count]() { return task_count.load() >= 10; },
+             std::chrono::milliseconds{1000});
 
     TEST_ASSERT(stats.total_submitted.load() >= 10, "Should track submissions");
 
@@ -707,7 +744,11 @@ bool test_integration_thread_pool_with_parser() {
     }
 
     // Wait for completion
-    std::this_thread::sleep_for(std::chrono::seconds{2});
+    TEST_ASSERT(
+        wait_for([&successful_parses, &failed_parses]() {
+            return (successful_parses.load() + failed_parses.load()) >= 1000;
+        }, std::chrono::milliseconds{10000}),
+        "All parsing tasks should complete within timeout");
     pool.stop(true, std::chrono::seconds{10});
 
     std::cout << "    Successful parses: " << successful_parses.load() << std::endl;

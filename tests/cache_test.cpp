@@ -13,7 +13,9 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <condition_variable>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -44,6 +46,24 @@ namespace pacs::bridge::cache::test {
             failed++;                                                          \
         }                                                                      \
     } while (0)
+
+/**
+ * @brief Wait until a condition is met or timeout occurs
+ * @param condition Function returning true when condition is met
+ * @param timeout Maximum time to wait
+ * @return true if condition was met, false on timeout
+ */
+template <typename Predicate>
+bool wait_until(Predicate condition, std::chrono::milliseconds timeout) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!condition()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::yield();
+    }
+    return true;
+}
 
 // Helper to create test patient
 mapping::dicom_patient create_test_patient(const std::string& id,
@@ -277,8 +297,14 @@ bool test_cache_custom_ttl() {
     auto result1 = cache.get("12345");
     TEST_ASSERT(result1.has_value(), "Should find patient immediately");
 
-    // Wait for expiration
-    std::this_thread::sleep_for(std::chrono::seconds{3});
+    // Wait for expiration using condition-based waiting
+    bool expired = wait_until(
+        [&cache]() {
+            auto result = cache.get("12345");
+            return !result.has_value();
+        },
+        std::chrono::milliseconds{5000});
+    TEST_ASSERT(expired, "Entry should expire within timeout");
 
     auto result2 = cache.get("12345");
     TEST_ASSERT(!result2.has_value(), "Should not find expired patient");
@@ -299,8 +325,23 @@ bool test_cache_evict_expired() {
 
     TEST_ASSERT(cache.size() == 5, "Should have 5 entries");
 
-    // Wait for expiration
-    std::this_thread::sleep_for(std::chrono::seconds{2});
+    // Wait for expiration using condition-based waiting
+    bool all_expired = wait_until(
+        [&cache]() {
+            // Check if any entry is still accessible (not expired)
+            for (int i = 0; i < 5; i++) {
+                auto result = cache.peek(std::to_string(i));
+                if (result.has_value()) {
+                    auto meta = cache.get_metadata(std::to_string(i));
+                    if (meta && !meta->is_expired()) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        },
+        std::chrono::milliseconds{5000});
+    TEST_ASSERT(all_expired, "All entries should expire within timeout");
 
     size_t evicted = cache.evict_expired();
     TEST_ASSERT(evicted == 5, "Should evict 5 entries");
@@ -323,7 +364,15 @@ bool test_cache_mixed_ttl_eviction() {
     cache.put("long1", create_test_patient("long1"), std::chrono::seconds{60});
     cache.put("long2", create_test_patient("long2"), std::chrono::seconds{60});
 
-    std::this_thread::sleep_for(std::chrono::seconds{2});
+    // Wait for short TTL entries to expire using condition-based waiting
+    bool short_expired = wait_until(
+        [&cache]() {
+            auto meta1 = cache.get_metadata("short1");
+            auto meta2 = cache.get_metadata("short2");
+            return (!meta1 || meta1->is_expired()) && (!meta2 || meta2->is_expired());
+        },
+        std::chrono::milliseconds{5000});
+    TEST_ASSERT(short_expired, "Short TTL entries should expire within timeout");
 
     size_t evicted = cache.evict_expired();
     TEST_ASSERT(evicted == 2, "Should evict 2 expired entries");

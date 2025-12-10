@@ -37,6 +37,24 @@ namespace pacs::bridge::mllp::test {
         }                                                                      \
     } while (0)
 
+/**
+ * @brief Wait until a condition is met or timeout occurs
+ * @param condition Function returning true when condition is met
+ * @param timeout Maximum time to wait
+ * @return true if condition was met, false on timeout
+ */
+template <typename Predicate>
+bool wait_for(Predicate condition, std::chrono::milliseconds timeout) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!condition()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::yield();
+    }
+    return true;
+}
+
 #define RUN_TEST(test_func)                                                    \
     do {                                                                       \
         std::cout << "Running " << #test_func << "..." << std::endl;           \
@@ -491,8 +509,11 @@ bool test_server_client_communication() {
         return true;
     }
 
-    // Give server time to start
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    // Wait for server to be ready
+    TEST_ASSERT(
+        wait_for([&server]() { return server.is_running(); },
+                 std::chrono::milliseconds{1000}),
+        "Server should start");
 
     // Client configuration
     mllp_client_config client_config;
@@ -521,7 +542,10 @@ bool test_server_client_communication() {
                 "Response should not be empty");
 
     // Verify server received message
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    TEST_ASSERT(
+        wait_for([&messages_received]() { return messages_received >= 1; },
+                 std::chrono::milliseconds{1000}),
+        "Server should receive message");
     TEST_ASSERT(messages_received == 1, "Server should have received 1 message");
 
     // Disconnect and stop

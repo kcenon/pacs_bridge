@@ -517,6 +517,8 @@ struct benchmark_runner::impl {
         auto deadline = std::chrono::steady_clock::now() + config.duration;
 
         while (std::chrono::steady_clock::now() < deadline && !cancelled.load()) {
+            uint64_t before = completed.load(std::memory_order_relaxed);
+
             // Submit tasks
             for (size_t i = 0; i < 100; ++i) {
                 pool.post(
@@ -530,8 +532,14 @@ struct benchmark_runner::impl {
                 ++submitted;
             }
 
-            // Brief pause to let tasks complete
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            // Wait for at least some tasks to complete before submitting more
+            auto wait_deadline = std::chrono::steady_clock::now() +
+                                 std::chrono::milliseconds(100);
+            while (completed.load(std::memory_order_relaxed) < before + 50 &&
+                   std::chrono::steady_clock::now() < wait_deadline &&
+                   !cancelled.load()) {
+                std::this_thread::yield();
+            }
         }
 
         // Wait for completion

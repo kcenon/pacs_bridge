@@ -697,7 +697,12 @@ bool test_handler_concurrent_events() {
     std::atomic<int> callback_count{0};
     handler->set_callback([&](mpps_event event, const mpps_dataset& mpps) {
         callback_count++;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // Simulate brief work using yield-based wait
+        auto work_deadline = std::chrono::steady_clock::now() +
+                             std::chrono::milliseconds(1);
+        while (std::chrono::steady_clock::now() < work_deadline) {
+            std::this_thread::yield();
+        }
     });
 
     handler->start();
