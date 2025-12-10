@@ -150,13 +150,21 @@ list(APPEND PACS_BRIDGE_HEADERS
 list(APPEND PACS_BRIDGE_SOURCES
     src/router/message_router.cpp
     src/router/outbound_router.cpp
-    src/router/queue_manager.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/router/message_router.h
     include/pacs/bridge/router/outbound_router.h
-    include/pacs/bridge/router/queue_manager.h
 )
+
+# Queue Manager (requires SQLite)
+if(PACS_BRIDGE_HAS_SQLITE)
+    list(APPEND PACS_BRIDGE_SOURCES
+        src/router/queue_manager.cpp
+    )
+    list(APPEND PACS_BRIDGE_HEADERS
+        include/pacs/bridge/router/queue_manager.h
+    )
+endif()
 
 # Cache
 list(APPEND PACS_BRIDGE_SOURCES
