@@ -15,7 +15,7 @@
 | **프로젝트** | PACS Bridge |
 | **작성자** | kcenon@naver.com |
 | **상태** | 초안 |
-| **관련 문서** | [PRD](PRD_KO.md), [pacs_system SRS](../../pacs_system/docs/SRS_KO.md), [참조 자료](reference_materials/) |
+| **관련 문서** | [PRD](PRD_KO.md), [참조 자료](reference_materials/README.md) |
 
 ---
 

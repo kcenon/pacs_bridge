@@ -1,0 +1,977 @@
+openapi: 3.0.3
+info:
+  title: PACS Bridge FHIR R4 API
+  description: |
+    FHIR R4 REST API for PACS Bridge integration with modern EHR systems.
+
+    This API provides access to radiology workflow resources including:
+    - Patient demographics
+    - ServiceRequest (imaging orders)
+    - ImagingStudy results
+    - Task management
+
+    ## Authentication
+
+    The API supports the following authentication methods:
+    - Bearer token (OAuth 2.0)
+    - Basic authentication
+    - Client certificates (mTLS)
+
+    ## FHIR Conformance
+
+    This API conforms to FHIR R4 (4.0.1) specification.
+
+  version: 1.0.0
+  contact:
+    name: PACS Bridge Team
+    url: https://github.com/kcenon/pacs_bridge
+    email: kcenon@naver.com
+  license:
+    name: BSD 3-Clause
+    url: https://opensource.org/licenses/BSD-3-Clause
+
+servers:
+  - url: https://pacs-bridge.hospital.local/fhir/r4
+    description: Production FHIR server
+  - url: http://localhost:8080/fhir/r4
+    description: Development FHIR server
+
+paths:
+  /metadata:
+    get:
+      summary: Get capability statement
+      description: Returns the server's capability statement (conformance resource)
+      operationId: getCapabilityStatement
+      tags:
+        - Conformance
+      responses:
+        '200':
+          description: Capability statement
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/CapabilityStatement'
+
+  /Patient:
+    get:
+      summary: Search patients
+      description: Search for patients by various criteria
+      operationId: searchPatients
+      tags:
+        - Patient
+      parameters:
+        - name: _id
+          in: query
+          description: Patient resource ID
+          schema:
+            type: string
+        - name: identifier
+          in: query
+          description: Patient identifier (MRN)
+          schema:
+            type: string
+        - name: family
+          in: query
+          description: Family name
+          schema:
+            type: string
+        - name: given
+          in: query
+          description: Given name
+          schema:
+            type: string
+        - name: birthdate
+          in: query
+          description: Birth date
+          schema:
+            type: string
+            format: date
+        - name: gender
+          in: query
+          description: Gender
+          schema:
+            type: string
+            enum: [male, female, other, unknown]
+        - name: _count
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 100
+        - name: _offset
+          in: query
+          description: Offset for pagination
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+        '400':
+          description: Invalid search parameters
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+    post:
+      summary: Create patient
+      description: Create a new patient resource
+      operationId: createPatient
+      tags:
+        - Patient
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+      responses:
+        '201':
+          description: Patient created
+          headers:
+            Location:
+              description: URL of the created resource
+              schema:
+                type: string
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '400':
+          description: Invalid resource
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+
+  /Patient/{id}:
+    get:
+      summary: Read patient
+      description: Read a patient resource by ID
+      operationId: readPatient
+      tags:
+        - Patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Patient resource ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patient resource
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '404':
+          description: Patient not found
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+    put:
+      summary: Update patient
+      description: Update an existing patient resource
+      operationId: updatePatient
+      tags:
+        - Patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Patient resource ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+      responses:
+        '200':
+          description: Patient updated
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '404':
+          description: Patient not found
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+
+  /ServiceRequest:
+    get:
+      summary: Search service requests
+      description: Search for imaging orders (service requests)
+      operationId: searchServiceRequests
+      tags:
+        - ServiceRequest
+      parameters:
+        - name: _id
+          in: query
+          description: Resource ID
+          schema:
+            type: string
+        - name: identifier
+          in: query
+          description: Order identifier
+          schema:
+            type: string
+        - name: patient
+          in: query
+          description: Patient reference
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Order status
+          schema:
+            type: string
+            enum: [draft, active, on-hold, revoked, completed, entered-in-error, unknown]
+        - name: code
+          in: query
+          description: Procedure code
+          schema:
+            type: string
+        - name: authored
+          in: query
+          description: Order date
+          schema:
+            type: string
+            format: date
+        - name: _count
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+    post:
+      summary: Create service request
+      description: Create a new imaging order
+      operationId: createServiceRequest
+      tags:
+        - ServiceRequest
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/ServiceRequest'
+      responses:
+        '201':
+          description: ServiceRequest created
+          headers:
+            Location:
+              description: URL of the created resource
+              schema:
+                type: string
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequest'
+
+  /ServiceRequest/{id}:
+    get:
+      summary: Read service request
+      description: Read a service request by ID
+      operationId: readServiceRequest
+      tags:
+        - ServiceRequest
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ServiceRequest resource ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ServiceRequest resource
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequest'
+        '404':
+          description: ServiceRequest not found
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+    put:
+      summary: Update service request
+      description: Update an existing service request
+      operationId: updateServiceRequest
+      tags:
+        - ServiceRequest
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ServiceRequest resource ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/ServiceRequest'
+      responses:
+        '200':
+          description: ServiceRequest updated
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/ServiceRequest'
+
+  /ImagingStudy:
+    get:
+      summary: Search imaging studies
+      description: Search for imaging studies
+      operationId: searchImagingStudies
+      tags:
+        - ImagingStudy
+      parameters:
+        - name: _id
+          in: query
+          description: Resource ID
+          schema:
+            type: string
+        - name: identifier
+          in: query
+          description: Study identifier (accession number)
+          schema:
+            type: string
+        - name: patient
+          in: query
+          description: Patient reference
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Study status
+          schema:
+            type: string
+            enum: [registered, available, cancelled, entered-in-error, unknown]
+        - name: modality
+          in: query
+          description: Modality code
+          schema:
+            type: string
+        - name: started
+          in: query
+          description: Study start date
+          schema:
+            type: string
+            format: date
+        - name: _count
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /ImagingStudy/{id}:
+    get:
+      summary: Read imaging study
+      description: Read an imaging study by ID
+      operationId: readImagingStudy
+      tags:
+        - ImagingStudy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ImagingStudy resource ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ImagingStudy resource
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/ImagingStudy'
+        '404':
+          description: ImagingStudy not found
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+
+  /Task:
+    get:
+      summary: Search tasks
+      description: Search for workflow tasks
+      operationId: searchTasks
+      tags:
+        - Task
+      parameters:
+        - name: _id
+          in: query
+          description: Resource ID
+          schema:
+            type: string
+        - name: patient
+          in: query
+          description: Patient reference
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Task status
+          schema:
+            type: string
+            enum: [draft, requested, received, accepted, rejected, ready, cancelled, in-progress, on-hold, failed, completed, entered-in-error]
+        - name: focus
+          in: query
+          description: Related resource reference
+          schema:
+            type: string
+        - name: _count
+          in: query
+          description: Number of results per page
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+    post:
+      summary: Create task
+      description: Create a new workflow task
+      operationId: createTask
+      tags:
+        - Task
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/Task'
+      responses:
+        '201':
+          description: Task created
+          headers:
+            Location:
+              description: URL of the created resource
+              schema:
+                type: string
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+  /Task/{id}:
+    get:
+      summary: Read task
+      description: Read a task by ID
+      operationId: readTask
+      tags:
+        - Task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Task resource ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task resource
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task not found
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+    put:
+      summary: Update task
+      description: Update an existing task
+      operationId: updateTask
+      tags:
+        - Task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Task resource ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/fhir+json:
+            schema:
+              $ref: '#/components/schemas/Task'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/fhir+json:
+              schema:
+                $ref: '#/components/schemas/Task'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    CapabilityStatement:
+      type: object
+      properties:
+        resourceType:
+          type: string
+          enum: [CapabilityStatement]
+        status:
+          type: string
+        date:
+          type: string
+          format: date-time
+        kind:
+          type: string
+        fhirVersion:
+          type: string
+        format:
+          type: array
+          items:
+            type: string
+        rest:
+          type: array
+          items:
+            type: object
+
+    Bundle:
+      type: object
+      required:
+        - resourceType
+        - type
+      properties:
+        resourceType:
+          type: string
+          enum: [Bundle]
+        type:
+          type: string
+          enum: [searchset, batch, transaction, batch-response, transaction-response]
+        total:
+          type: integer
+        link:
+          type: array
+          items:
+            type: object
+            properties:
+              relation:
+                type: string
+              url:
+                type: string
+        entry:
+          type: array
+          items:
+            type: object
+            properties:
+              fullUrl:
+                type: string
+              resource:
+                type: object
+
+    Patient:
+      type: object
+      required:
+        - resourceType
+      properties:
+        resourceType:
+          type: string
+          enum: [Patient]
+        id:
+          type: string
+        identifier:
+          type: array
+          items:
+            type: object
+            properties:
+              system:
+                type: string
+              value:
+                type: string
+        name:
+          type: array
+          items:
+            type: object
+            properties:
+              family:
+                type: string
+              given:
+                type: array
+                items:
+                  type: string
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        birthDate:
+          type: string
+          format: date
+        address:
+          type: array
+          items:
+            type: object
+            properties:
+              line:
+                type: array
+                items:
+                  type: string
+              city:
+                type: string
+              state:
+                type: string
+              postalCode:
+                type: string
+              country:
+                type: string
+      example:
+        resourceType: Patient
+        id: "12345"
+        identifier:
+          - system: "urn:oid:1.2.3.4.5.6"
+            value: "12345"
+        name:
+          - family: "Doe"
+            given:
+              - "John"
+              - "M"
+        gender: male
+        birthDate: "1980-01-15"
+
+    ServiceRequest:
+      type: object
+      required:
+        - resourceType
+        - status
+        - intent
+        - subject
+      properties:
+        resourceType:
+          type: string
+          enum: [ServiceRequest]
+        id:
+          type: string
+        identifier:
+          type: array
+          items:
+            type: object
+            properties:
+              system:
+                type: string
+              value:
+                type: string
+        status:
+          type: string
+          enum: [draft, active, on-hold, revoked, completed, entered-in-error, unknown]
+        intent:
+          type: string
+          enum: [proposal, plan, directive, order, original-order, reflex-order, filler-order, instance-order, option]
+        category:
+          type: array
+          items:
+            type: object
+            properties:
+              coding:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    system:
+                      type: string
+                    code:
+                      type: string
+                    display:
+                      type: string
+        code:
+          type: object
+          properties:
+            coding:
+              type: array
+              items:
+                type: object
+                properties:
+                  system:
+                    type: string
+                  code:
+                    type: string
+                  display:
+                    type: string
+        subject:
+          type: object
+          properties:
+            reference:
+              type: string
+        occurrenceDateTime:
+          type: string
+          format: date-time
+        requester:
+          type: object
+          properties:
+            reference:
+              type: string
+        reasonCode:
+          type: array
+          items:
+            type: object
+            properties:
+              text:
+                type: string
+      example:
+        resourceType: ServiceRequest
+        id: "order-001"
+        identifier:
+          - system: "urn:oid:1.2.3.4.5.6"
+            value: "ORD001"
+        status: active
+        intent: order
+        code:
+          coding:
+            - system: "http://hospital.local/procedures"
+              code: "CT001"
+              display: "CT Head Without Contrast"
+        subject:
+          reference: "Patient/12345"
+        occurrenceDateTime: "2025-12-10T13:00:00Z"
+        requester:
+          reference: "Practitioner/1234"
+        reasonCode:
+          - text: "Headache for 2 weeks"
+
+    ImagingStudy:
+      type: object
+      required:
+        - resourceType
+        - status
+        - subject
+      properties:
+        resourceType:
+          type: string
+          enum: [ImagingStudy]
+        id:
+          type: string
+        identifier:
+          type: array
+          items:
+            type: object
+            properties:
+              system:
+                type: string
+              value:
+                type: string
+        status:
+          type: string
+          enum: [registered, available, cancelled, entered-in-error, unknown]
+        modality:
+          type: array
+          items:
+            type: object
+            properties:
+              system:
+                type: string
+              code:
+                type: string
+        subject:
+          type: object
+          properties:
+            reference:
+              type: string
+        started:
+          type: string
+          format: date-time
+        basedOn:
+          type: array
+          items:
+            type: object
+            properties:
+              reference:
+                type: string
+        numberOfSeries:
+          type: integer
+        numberOfInstances:
+          type: integer
+        procedureCode:
+          type: array
+          items:
+            type: object
+            properties:
+              coding:
+                type: array
+                items:
+                  type: object
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              uid:
+                type: string
+              modality:
+                type: object
+              numberOfInstances:
+                type: integer
+      example:
+        resourceType: ImagingStudy
+        id: "study-001"
+        identifier:
+          - system: "urn:dicom:uid"
+            value: "1.2.3.4.5.6.7.8.9"
+        status: available
+        modality:
+          - system: "http://dicom.nema.org/resources/ontology/DCM"
+            code: "CT"
+        subject:
+          reference: "Patient/12345"
+        started: "2025-12-10T13:00:00Z"
+        basedOn:
+          - reference: "ServiceRequest/order-001"
+        numberOfSeries: 3
+        numberOfInstances: 150
+
+    Task:
+      type: object
+      required:
+        - resourceType
+        - status
+        - intent
+      properties:
+        resourceType:
+          type: string
+          enum: [Task]
+        id:
+          type: string
+        status:
+          type: string
+          enum: [draft, requested, received, accepted, rejected, ready, cancelled, in-progress, on-hold, failed, completed, entered-in-error]
+        intent:
+          type: string
+          enum: [unknown, proposal, plan, order, original-order, reflex-order, filler-order, instance-order, option]
+        focus:
+          type: object
+          properties:
+            reference:
+              type: string
+        for:
+          type: object
+          properties:
+            reference:
+              type: string
+        executionPeriod:
+          type: object
+          properties:
+            start:
+              type: string
+              format: date-time
+            end:
+              type: string
+              format: date-time
+        lastModified:
+          type: string
+          format: date-time
+      example:
+        resourceType: Task
+        id: "task-001"
+        status: in-progress
+        intent: order
+        focus:
+          reference: "ServiceRequest/order-001"
+        for:
+          reference: "Patient/12345"
+        executionPeriod:
+          start: "2025-12-10T13:00:00Z"
+        lastModified: "2025-12-10T13:00:00Z"
+
+    OperationOutcome:
+      type: object
+      required:
+        - resourceType
+        - issue
+      properties:
+        resourceType:
+          type: string
+          enum: [OperationOutcome]
+        issue:
+          type: array
+          items:
+            type: object
+            required:
+              - severity
+              - code
+            properties:
+              severity:
+                type: string
+                enum: [fatal, error, warning, information]
+              code:
+                type: string
+              details:
+                type: object
+                properties:
+                  text:
+                    type: string
+              diagnostics:
+                type: string
+              location:
+                type: array
+                items:
+                  type: string
+      example:
+        resourceType: OperationOutcome
+        issue:
+          - severity: error
+            code: not-found
+            diagnostics: "Resource not found"
+
+security:
+  - bearerAuth: []
+  - basicAuth: []
+
+tags:
+  - name: Conformance
+    description: Server conformance and capabilities
+  - name: Patient
+    description: Patient demographics
+  - name: ServiceRequest
+    description: Imaging orders
+  - name: ImagingStudy
+    description: Imaging study results
+  - name: Task
+    description: Workflow tasks

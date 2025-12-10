@@ -15,7 +15,7 @@
 | **Project** | PACS Bridge |
 | **Author** | kcenon@naver.com |
 | **Status** | Draft |
-| **Related Documents** | [PRD](PRD.md), [pacs_system SRS](../../pacs_system/docs/SRS.md), [Reference Materials](reference_materials/) |
+| **Related Documents** | [PRD](PRD.md), [Reference Materials](reference_materials/README.md) |
 
 ---
 

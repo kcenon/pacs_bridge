@@ -1,0 +1,94 @@
+site_name: PACS Bridge Documentation
+site_description: HIS/RIS integration bridge for PACS System
+site_author: kcenon
+site_url: https://kcenon.github.io/pacs_bridge/
+
+repo_name: kcenon/pacs_bridge
+repo_url: https://github.com/kcenon/pacs_bridge
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/kcenon
+  version:
+    provider: mike
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Configuration: user-guide/configuration.md
+      - Message Flows: user-guide/message-flows.md
+      - Troubleshooting: user-guide/troubleshooting.md
+  - Administrator Guide:
+      - Deployment: admin-guide/deployment.md
+      - High Availability: admin-guide/high-availability.md
+      - Monitoring: admin-guide/monitoring.md
+      - Backup & Recovery: admin-guide/backup-recovery.md
+  - API Reference:
+      - HL7 Messages: api/hl7-messages.md
+      - FHIR API: api/fhir-api.yaml
+      - Error Codes: api/error-codes.md
+  - Developer Guide:
+      - Architecture: developer/architecture.md
+      - Modules: developer/modules.md
+      - Contributing: developer/contributing.md
+  - Operations:
+      - Runbook: operations/runbook.md
+  - Specifications:
+      - PRD: PRD.md
+      - SRS: SRS.md
+      - SDS: SDS.md

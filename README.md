@@ -219,6 +219,31 @@ pacs_system:
 
 ## Documentation
 
+### User Guides
+- [Getting Started](docs/user-guide/getting-started.md) - Quick start guide
+- [Configuration Guide](docs/user-guide/configuration.md) - Configuration options
+- [Message Flows](docs/user-guide/message-flows.md) - HL7/DICOM message flows
+- [Troubleshooting](docs/user-guide/troubleshooting.md) - Common issues and solutions
+
+### Administrator Guides
+- [Deployment Guide](docs/admin-guide/deployment.md) - Docker, bare metal, Kubernetes
+- [High Availability](docs/admin-guide/high-availability.md) - HA configuration
+- [Monitoring Guide](docs/admin-guide/monitoring.md) - Prometheus, Grafana, alerting
+- [Backup & Recovery](docs/admin-guide/backup-recovery.md) - Data protection
+
+### API Reference
+- [HL7 Messages](docs/api/hl7-messages.md) - HL7 v2.x message specifications
+- [FHIR API](docs/api/fhir-api.yaml) - OpenAPI 3.0 specification
+- [Error Codes](docs/api/error-codes.md) - Error code reference
+
+### Developer Guides
+- [Architecture](docs/developer/architecture.md) - System architecture
+- [Modules](docs/developer/modules.md) - Module descriptions
+- [Contributing](docs/developer/contributing.md) - Contribution guidelines
+
+### Operations
+- [Runbook](docs/operations/runbook.md) - Operational procedures
+
 ### Specifications
 - [Product Requirements (PRD)](docs/PRD.md) | [한국어](docs/PRD_KO.md)
 - [Software Requirements (SRS)](docs/SRS.md) | [한국어](docs/SRS_KO.md)
@@ -234,7 +259,7 @@ pacs_system:
 - [DICOM-HL7 Mapping](docs/reference_materials/07_dicom_hl7_mapping.md)
 - [MWL-HL7 Integration](docs/reference_materials/08_mwl_hl7_integration.md)
 
-### Monitoring & Operations
+### Monitoring & Metrics
 - [Monitoring Guide](docs/monitoring/README.md) - Prometheus metrics, Grafana dashboard, alerting rules
 
 ### Verification & Validation
