@@ -86,6 +86,8 @@ jobs:
         path: pacs_bridge
 
     # Cache kcenon ecosystem dependencies
+    # Cache key includes version suffix to force refresh when dependencies update
+    # v2: Updated for common_system C++20 Concepts support (Issue #70)
     - name: Cache kcenon dependencies
       uses: actions/cache@v4
       with:
@@ -97,9 +99,9 @@ jobs:
           network_system
           monitoring_system
           pacs_system
-        key: kcenon-deps-${{ runner.os }}-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
+        key: kcenon-deps-v2-${{ runner.os }}-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
         restore-keys: |
-          kcenon-deps-${{ runner.os }}-
+          kcenon-deps-v2-${{ runner.os }}-
 
     - name: Checkout dependencies (Unix)
       if: runner.os != 'Windows'
@@ -256,6 +258,7 @@ jobs:
       with:
         path: pacs_bridge
 
+    # Cache key v2 for C++20 Concepts support (Issue #70)
     - name: Cache kcenon dependencies
       uses: actions/cache@v4
       with:
@@ -267,9 +270,9 @@ jobs:
           network_system
           monitoring_system
           pacs_system
-        key: kcenon-deps-Linux-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
+        key: kcenon-deps-v2-Linux-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
         restore-keys: |
-          kcenon-deps-Linux-
+          kcenon-deps-v2-Linux-
 
     - name: Checkout dependencies
       run: |

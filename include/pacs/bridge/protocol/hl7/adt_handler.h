@@ -16,16 +16,20 @@
  *   - HL7 Parser for message parsing
  *   - HL7-DICOM Mapper for patient data extraction
  *   - Patient Cache for demographic storage
+ *   - C++20 Concepts for callback type safety (Issue #70)
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/14
+ * @see https://github.com/kcenon/pacs_bridge/issues/70
  * @see docs/reference_materials/02_hl7_message_types.md
  */
 
 #include "pacs/bridge/cache/patient_cache.h"
+#include "pacs/bridge/concepts/bridge_concepts.h"
 #include "pacs/bridge/mapping/hl7_dicom_mapper.h"
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
+#include <concepts>
 #include <expected>
 #include <functional>
 #include <memory>
@@ -449,6 +453,22 @@ public:
      * @brief Set callback for patient merge
      */
     void on_patient_merged(patient_merged_callback callback);
+
+    /**
+     * @brief Set callback for patient creation (concept-constrained)
+     *
+     * Template version using C++20 Concepts for compile-time validation.
+     *
+     * @tparam Callback Type satisfying concepts::EventCallback<dicom_patient>
+     * @param callback Function to call when patient is created
+     *
+     * @see concepts::EventCallback
+     */
+    template <concepts::EventCallback<mapping::dicom_patient> Callback>
+    void on_patient_created_v2(Callback&& callback) {
+        on_patient_created(
+            patient_created_callback(std::forward<Callback>(callback)));
+    }
 
     // =========================================================================
     // Configuration

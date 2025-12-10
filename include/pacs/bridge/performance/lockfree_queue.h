@@ -15,14 +15,18 @@
  *   - Configurable backoff on contention
  *   - Wait-free try_push/try_pop operations
  *   - Batch operations for throughput
+ *   - C++20 Concepts for type safety (Issue #70)
  *
  * @see docs/SRS.md NFR-1.1 (Throughput >= 500 msg/s)
+ * @see https://github.com/kcenon/pacs_bridge/issues/70
  */
 
+#include "pacs/bridge/concepts/bridge_concepts.h"
 #include "pacs/bridge/performance/performance_types.h"
 
 #include <atomic>
 #include <chrono>
+#include <concepts>
 #include <cstdint>
 #include <expected>
 #include <memory>
@@ -84,7 +88,7 @@ struct queue_statistics {
  * Thread-safe queue using lock-free atomic operations for high-performance
  * message passing between producers and consumers.
  *
- * @tparam T Element type (should be move-constructible)
+ * @tparam T Element type (must satisfy concepts::Queueable - move-constructible)
  *
  * Example usage:
  * @code
@@ -101,8 +105,10 @@ struct queue_statistics {
  *         process(*msg);
  *     }
  * @endcode
+ *
+ * @see concepts::Queueable
  */
-template <typename T>
+template <concepts::Queueable T>
 class lockfree_queue {
 public:
     // -------------------------------------------------------------------------
@@ -252,10 +258,12 @@ private:
  *
  * Supports multiple priority levels with lock-free operations per level.
  *
- * @tparam T Element type
+ * @tparam T Element type (must satisfy concepts::Queueable)
  * @tparam Priorities Number of priority levels (default 4: high, normal, low, background)
+ *
+ * @see concepts::Queueable
  */
-template <typename T, size_t Priorities = 4>
+template <concepts::Queueable T, size_t Priorities = 4>
 class priority_lockfree_queue {
 public:
     // -------------------------------------------------------------------------
@@ -367,8 +375,12 @@ private:
  * Single-producer (owner thread) can push/pop from bottom.
  * Multiple consumers (steal threads) can steal from top.
  * Optimized for locality - owner works on recently added items.
+ *
+ * @tparam T Element type (must satisfy concepts::Queueable)
+ *
+ * @see concepts::Queueable
  */
-template <typename T>
+template <concepts::Queueable T>
 class work_stealing_queue {
 public:
     /**

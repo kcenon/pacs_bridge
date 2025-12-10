@@ -15,13 +15,17 @@
  *   - Thread-safe acquire/release operations
  *   - Pool shrinking when usage is low
  *   - Statistics tracking for optimization
+ *   - C++20 Concepts for type safety (Issue #70)
  *
  * @see docs/SRS.md NFR-1.5 (Memory < 200MB)
+ * @see https://github.com/kcenon/pacs_bridge/issues/70
  */
 
+#include "pacs/bridge/concepts/bridge_concepts.h"
 #include "pacs/bridge/performance/performance_types.h"
 
 #include <atomic>
+#include <concepts>
 #include <cstdint>
 #include <expected>
 #include <functional>
@@ -94,7 +98,8 @@ struct pool_statistics {
  * Manages a pool of pre-allocated objects that can be acquired and
  * released without dynamic allocation overhead.
  *
- * @tparam T Object type to pool (must be default constructible)
+ * @tparam T Object type to pool (must satisfy concepts::Poolable -
+ *           default constructible and destructible)
  *
  * Example usage:
  * @code
@@ -113,8 +118,10 @@ struct pool_statistics {
  *         // Object automatically returned to pool when out of scope
  *     }
  * @endcode
+ *
+ * @see concepts::Poolable
  */
-template <typename T>
+template <concepts::Poolable T>
 class object_pool {
 public:
     // -------------------------------------------------------------------------
