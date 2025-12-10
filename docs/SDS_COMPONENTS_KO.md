@@ -1431,44 +1431,103 @@ struct mpps_status_mapping {
 ### DES-TRANS-003: fhir_dicom_mapper
 
 **추적 대상:** FR-2.2.2, FR-2.2.3
+**상태:** 구현 완료 ([Issue #35](https://github.com/kcenon/pacs_bridge/issues/35))
+**헤더:** `include/pacs/bridge/mapping/fhir_dicom_mapper.h`
+**소스:** `src/mapping/fhir_dicom_mapper.cpp`
+**테스트:** `tests/fhir_dicom_mapper_test.cpp` (50개 테스트)
 
 ```cpp
 namespace pacs::bridge::mapping {
 
 /**
- * @brief FHIR에서 DICOM으로의 매퍼
+ * @brief FHIR-DICOM 양방향 매퍼
  *
- * FHIR ServiceRequest를 DICOM MWL 항목으로 변환.
+ * FHIR R4 리소스와 DICOM 데이터 구조 간의 양방향 매핑을 제공합니다.
+ * MWL(Modality Worklist) 및 검사 쿼리를 지원합니다.
+ *
+ * 지원 매핑:
+ *   - FHIR ServiceRequest -> DICOM MWL 예약 프로시저 단계
+ *   - DICOM Study -> FHIR ImagingStudy
+ *   - FHIR Patient <-> DICOM Patient (양방향)
+ *
+ * 기능:
+ *   - LOINC에서 DICOM 프로시저 코드 변환
+ *   - SNOMED에서 DICOM 신체 부위 코드 변환
+ *   - 자동 UID 생성
+ *   - 날짜/시간 형식 변환 (FHIR <-> DICOM)
+ *   - 우선순위 매핑 (routine/urgent/stat <-> MEDIUM/HIGH/STAT)
  */
 class fhir_dicom_mapper {
 public:
-    explicit fhir_dicom_mapper(const mapping_config& config);
+    using patient_lookup_function =
+        std::function<std::expected<dicom_patient, fhir_dicom_error>(
+            const std::string&)>;
 
-    /**
-     * @brief ServiceRequest를 MWL 데이터셋으로 변환
-     */
-    [[nodiscard]] Result<pacs::core::dicom_dataset> service_request_to_mwl(
-        const fhir::service_request_resource& request,
-        const fhir::patient_resource& patient);
+    fhir_dicom_mapper();
+    explicit fhir_dicom_mapper(const fhir_dicom_mapper_config& config);
 
-    /**
-     * @brief DICOM 검사에서 ImagingStudy로 변환
-     */
-    [[nodiscard]] Result<fhir::imaging_study_resource> study_to_imaging_study(
-        const pacs::core::dicom_dataset& study);
+    // ServiceRequest를 MWL로 변환
+    [[nodiscard]] std::expected<mwl_item, fhir_dicom_error>
+    service_request_to_mwl(const fhir_service_request& request,
+                           const dicom_patient& patient) const;
 
-    /**
-     * @brief DICOM 인구통계에서 Patient로 변환
-     */
-    [[nodiscard]] Result<fhir::patient_resource> dataset_to_patient(
-        const pacs::core::dicom_dataset& dataset);
+    // DICOM Study를 ImagingStudy로 변환
+    [[nodiscard]] std::expected<fhir_imaging_study, fhir_dicom_error>
+    study_to_imaging_study(
+        const dicom_study& study,
+        const std::optional<std::string>& patient_reference = std::nullopt) const;
+
+    // 환자 매핑 (양방향)
+    [[nodiscard]] std::expected<std::unique_ptr<fhir::patient_resource>, fhir_dicom_error>
+    dicom_to_fhir_patient(const dicom_patient& dicom_patient) const;
+
+    [[nodiscard]] std::expected<dicom_patient, fhir_dicom_error>
+    fhir_to_dicom_patient(const fhir::patient_resource& patient) const;
+
+    // 코드 시스템 변환
+    [[nodiscard]] std::optional<fhir_coding> loinc_to_dicom(const std::string& loinc_code) const;
+    [[nodiscard]] std::optional<fhir_coding> snomed_to_dicom(const std::string& snomed_code) const;
+
+    // 유틸리티 함수
+    [[nodiscard]] std::string generate_uid(const std::string& suffix = "") const;
 
 private:
-    mapping_config config_;
+    class impl;
+    std::unique_ptr<impl> pimpl_;
 };
 
 } // namespace pacs::bridge::mapping
 ```
+
+#### FHIR에서 DICOM으로의 필드 매핑
+
+**ServiceRequest → DICOM MWL:**
+
+| FHIR 요소 | DICOM 태그 | 설명 |
+|-----------|-----------|------|
+| subject.reference | PatientID (0010,0020) | 환자 식별자 |
+| code.coding[0].code | (0008,0100) CodeValue | 프로시저 코드 |
+| code.coding[0].display | (0008,0104) CodeMeaning | 프로시저 설명 |
+| occurrenceDateTime | (0040,0002/0003) 예약 시작일/시간 | 예약 일시 |
+| performer[0].reference | (0040,0010) ScheduledStationAETitle | 대상 장비 |
+| priority | (0040,1003) RequestedProcedurePriority | 주문 우선순위 |
+
+**DICOM Study → ImagingStudy:**
+
+| DICOM 태그 | FHIR 요소 | 설명 |
+|-----------|-----------|------|
+| (0020,000D) StudyInstanceUID | identifier[0].value | 검사 고유 ID |
+| (0008,0020/0030) StudyDate/Time | started | 검사 시작 시간 |
+| (0008,0050) AccessionNumber | identifier[1].value | 접수 번호 |
+| (0008,1030) StudyDescription | description | 검사 설명 |
+
+#### 우선순위 매핑
+
+| FHIR 우선순위 | DICOM 우선순위 |
+|---------------|----------------|
+| stat | STAT |
+| urgent | HIGH |
+| routine | MEDIUM |
 
 ---
 

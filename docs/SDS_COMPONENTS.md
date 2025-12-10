@@ -1961,43 +1961,190 @@ struct mpps_status_mapping {
 ### DES-TRANS-003: fhir_dicom_mapper
 
 **Traces to:** FR-2.2.2, FR-2.2.3
+**Status:** Implemented ([Issue #35](https://github.com/kcenon/pacs_bridge/issues/35))
+**Header:** `include/pacs/bridge/mapping/fhir_dicom_mapper.h`
+**Source:** `src/mapping/fhir_dicom_mapper.cpp`
+**Tests:** `tests/fhir_dicom_mapper_test.cpp` (50 tests)
 
 ```cpp
 namespace pacs::bridge::mapping {
 
 /**
- * @brief FHIR to DICOM mapper
+ * @brief FHIR to DICOM and DICOM to FHIR mapper
  *
- * Converts FHIR ServiceRequest to DICOM MWL entries.
+ * Provides bidirectional mapping between FHIR R4 resources and DICOM
+ * data structures for MWL (Modality Worklist) and study queries.
+ *
+ * Supported mappings:
+ *   - FHIR ServiceRequest -> DICOM MWL Scheduled Procedure Step
+ *   - DICOM Study -> FHIR ImagingStudy
+ *   - FHIR Patient <-> DICOM Patient (bidirectional)
+ *
+ * Features:
+ *   - LOINC to DICOM procedure code translation
+ *   - SNOMED to DICOM body site code translation
+ *   - Automatic UID generation
+ *   - DateTime format conversion (FHIR <-> DICOM)
+ *   - Priority mapping (routine/urgent/stat <-> MEDIUM/HIGH/STAT)
  */
 class fhir_dicom_mapper {
 public:
-    explicit fhir_dicom_mapper(const mapping_config& config);
+    using patient_lookup_function =
+        std::function<std::expected<dicom_patient, fhir_dicom_error>(
+            const std::string&)>;
 
-    /**
-     * @brief Convert ServiceRequest to MWL dataset
-     */
-    [[nodiscard]] Result<pacs::core::dicom_dataset> service_request_to_mwl(
-        const fhir::service_request_resource& request,
-        const fhir::patient_resource& patient);
+    fhir_dicom_mapper();
+    explicit fhir_dicom_mapper(const fhir_dicom_mapper_config& config);
 
-    /**
-     * @brief Convert ImagingStudy from DICOM study
-     */
-    [[nodiscard]] Result<fhir::imaging_study_resource> study_to_imaging_study(
-        const pacs::core::dicom_dataset& study);
+    // ServiceRequest to MWL Mapping
+    [[nodiscard]] std::expected<mwl_item, fhir_dicom_error>
+    service_request_to_mwl(const fhir_service_request& request,
+                           const dicom_patient& patient) const;
 
-    /**
-     * @brief Convert Patient from DICOM demographics
-     */
-    [[nodiscard]] Result<fhir::patient_resource> dataset_to_patient(
-        const pacs::core::dicom_dataset& dataset);
+    [[nodiscard]] std::expected<mwl_item, fhir_dicom_error>
+    service_request_to_mwl(const fhir_service_request& request) const;
+
+    // DICOM Study to ImagingStudy Mapping
+    [[nodiscard]] std::expected<fhir_imaging_study, fhir_dicom_error>
+    study_to_imaging_study(
+        const dicom_study& study,
+        const std::optional<std::string>& patient_reference = std::nullopt) const;
+
+    // Patient Mapping (Bidirectional)
+    [[nodiscard]] std::expected<std::unique_ptr<fhir::patient_resource>, fhir_dicom_error>
+    dicom_to_fhir_patient(const dicom_patient& dicom_patient) const;
+
+    [[nodiscard]] std::expected<dicom_patient, fhir_dicom_error>
+    fhir_to_dicom_patient(const fhir::patient_resource& patient) const;
+
+    // Code System Translation
+    [[nodiscard]] std::optional<fhir_coding> loinc_to_dicom(
+        const std::string& loinc_code) const;
+    [[nodiscard]] std::optional<fhir_coding> snomed_to_dicom(
+        const std::string& snomed_code) const;
+
+    // Utility Functions
+    [[nodiscard]] std::string generate_uid(const std::string& suffix = "") const;
+
+    [[nodiscard]] static std::expected<std::pair<std::string, std::string>, fhir_dicom_error>
+    fhir_datetime_to_dicom(std::string_view fhir_datetime);
+
+    [[nodiscard]] static std::expected<std::string, fhir_dicom_error>
+    dicom_datetime_to_fhir(std::string_view dicom_date, std::string_view dicom_time);
+
+    [[nodiscard]] static std::string fhir_priority_to_dicom(std::string_view fhir_priority);
+    [[nodiscard]] static std::string dicom_priority_to_fhir(std::string_view dicom_priority);
+
+    // Configuration
+    [[nodiscard]] const fhir_dicom_mapper_config& config() const noexcept;
+    void set_config(const fhir_dicom_mapper_config& config);
+    void set_patient_lookup(patient_lookup_function lookup);
+
+    // Validation
+    [[nodiscard]] std::vector<std::string> validate_service_request(
+        const fhir_service_request& request) const;
+    [[nodiscard]] std::vector<std::string> validate_mwl(const mwl_item& item) const;
 
 private:
-    mapping_config config_;
+    class impl;
+    std::unique_ptr<impl> pimpl_;
 };
 
+// JSON Serialization Helpers
+[[nodiscard]] std::string imaging_study_to_json(const fhir_imaging_study& study);
+[[nodiscard]] std::expected<fhir_service_request, fhir_dicom_error>
+service_request_from_json(const std::string& json);
+[[nodiscard]] std::string service_request_to_json(const fhir_service_request& request);
+
 } // namespace pacs::bridge::mapping
+```
+
+#### FHIR to DICOM Field Mappings
+
+**ServiceRequest → DICOM MWL:**
+
+| FHIR Element | DICOM Tag | Description |
+|--------------|-----------|-------------|
+| subject.reference | Patient lookup → PatientID (0010,0020) | Patient identifier |
+| code.coding[0].code | (0008,0100) CodeValue | Procedure code |
+| code.coding[0].display | (0008,0104) CodeMeaning | Procedure description |
+| code.coding[0].system | (0008,0102) CodingSchemeDesignator | Code system |
+| occurrenceDateTime | (0040,0002/0003) ScheduledProcedureStepStartDate/Time | Scheduled datetime |
+| performer[0].reference | (0040,0010) ScheduledStationAETitle | Target modality |
+| performer[0].display | (0040,0006) ScheduledPerformingPhysicianName | Performing physician |
+| requester.display | (0008,0090) ReferringPhysicianName | Ordering physician |
+| priority | (0040,1003) RequestedProcedurePriority | Order urgency |
+
+**DICOM Study → ImagingStudy:**
+
+| DICOM Tag | FHIR Element | Description |
+|-----------|--------------|-------------|
+| (0020,000D) StudyInstanceUID | identifier[0].value | Study unique ID |
+| (0008,0020/0030) StudyDate/Time | started | When study began |
+| (0008,0050) AccessionNumber | identifier[1].value | Order/accession number |
+| (0008,1030) StudyDescription | description | Study description |
+| (0020,1206) NumberOfStudyRelatedSeries | numberOfSeries | Series count |
+| (0020,1208) NumberOfStudyRelatedInstances | numberOfInstances | Instance count |
+| (0008,0090) ReferringPhysicianName | referrer.display | Ordering physician |
+
+#### Code System Translation Tables
+
+**LOINC to DICOM Modality:**
+- 24558-9 (CT Chest) → CT
+- 24627-2 (CT Abdomen) → CT
+- 30746-2 (MRI Brain) → MR
+- 36813-4 (MRI Spine) → MR
+- 38269-7 (US Abdomen) → US
+- 24725-4 (Chest X-Ray) → CR
+- 44136-0 (PET Scan) → PT
+- 24566-2 (Mammogram) → MG
+
+**Priority Mapping:**
+| FHIR Priority | DICOM Priority |
+|---------------|----------------|
+| stat | STAT |
+| asap | HIGH |
+| urgent | HIGH |
+| routine | MEDIUM |
+
+#### Usage Example
+
+```cpp
+fhir_dicom_mapper mapper;
+
+// Configure patient lookup
+mapper.set_patient_lookup([&cache](const std::string& ref)
+    -> std::expected<dicom_patient, fhir_dicom_error> {
+    auto patient_id = fhir_dicom_mapper::parse_patient_reference(ref);
+    if (!patient_id) {
+        return std::unexpected(fhir_dicom_error::patient_not_found);
+    }
+    return cache.get_patient(*patient_id);
+});
+
+// Convert ServiceRequest to MWL
+fhir_service_request request;
+request.code.coding.push_back({"http://loinc.org", {}, "24558-9", "CT Chest"});
+request.subject.reference = "Patient/patient-123";
+request.occurrence_date_time = "2024-01-15T10:00:00Z";
+request.priority = "routine";
+
+auto mwl = mapper.service_request_to_mwl(request);
+if (mwl) {
+    // Use MWL item for DICOM MWL SCP
+}
+
+// Convert DICOM Study to ImagingStudy
+dicom_study study;
+study.study_instance_uid = "1.2.3.4.5.6.7.8.9";
+study.study_date = "20240115";
+study.study_time = "103000";
+
+auto imaging_study = mapper.study_to_imaging_study(study);
+if (imaging_study) {
+    std::string json = imaging_study_to_json(*imaging_study);
+    // Return JSON via FHIR REST API
+}
 ```
 
 ---
