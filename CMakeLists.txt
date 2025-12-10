@@ -309,6 +309,21 @@ if(BRIDGE_BUILD_FHIR)
     )
 endif()
 
+# EMR Client Module (Phase 5) - FHIR R4 Client for external EMR systems
+list(APPEND PACS_BRIDGE_SOURCES
+    src/emr/emr_types.cpp
+    src/emr/fhir_bundle.cpp
+    src/emr/http_client_adapter.cpp
+    src/emr/fhir_client.cpp
+)
+list(APPEND PACS_BRIDGE_HEADERS
+    include/pacs/bridge/emr/emr_types.h
+    include/pacs/bridge/emr/search_params.h
+    include/pacs/bridge/emr/fhir_bundle.h
+    include/pacs/bridge/emr/http_client_adapter.h
+    include/pacs/bridge/emr/fhir_client.h
+)
+
 # =============================================================================
 # Create Main Library
 # =============================================================================
