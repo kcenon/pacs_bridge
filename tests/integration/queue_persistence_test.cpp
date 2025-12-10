@@ -107,7 +107,15 @@ private:
         while (running_) {
             auto msg = queue_.peek();
             if (!msg.has_value()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds{100});
+                // Wait for messages using yield-based polling
+                auto wait_start = std::chrono::steady_clock::now();
+                while (running_ && !queue_.peek().has_value()) {
+                    if (std::chrono::steady_clock::now() - wait_start >
+                        std::chrono::milliseconds{100}) {
+                        break;
+                    }
+                    std::this_thread::yield();
+                }
                 continue;
             }
 
@@ -118,8 +126,13 @@ private:
                 queue_.dequeue();  // Remove from queue on success
                 successful_deliveries_++;
             } else {
-                // Wait before retry
-                std::this_thread::sleep_for(config_.retry_interval);
+                // Wait before retry using yield-based polling
+                auto retry_deadline = std::chrono::steady_clock::now() +
+                                      config_.retry_interval;
+                while (running_ &&
+                       std::chrono::steady_clock::now() < retry_deadline) {
+                    std::this_thread::yield();
+                }
             }
         }
     }
@@ -271,7 +284,11 @@ bool test_queue_recovery_ris_unavailable() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     // Setup outbound queue
     outbound_queue_simulator::config queue_config;
@@ -298,8 +315,11 @@ bool test_queue_recovery_ris_unavailable() {
     queue.enqueue("MSH|^~\\&|PACS||RIS||20240101||ORM^O01|2|P|2.4\r");
     queue.enqueue("MSH|^~\\&|PACS||RIS||20240101||ORM^O01|3|P|2.4\r");
 
-    // Wait a bit and verify messages are not delivered
-    std::this_thread::sleep_for(std::chrono::milliseconds{500});
+    // Wait a bit and verify messages are not delivered (RIS unavailable)
+    // Use wait_for with a condition that should NOT become true
+    integration_test_fixture::wait_for(
+        [&ris]() { return ris.messages_received() > 1; },
+        std::chrono::milliseconds{500});  // Expected to timeout
     INTEGRATION_TEST_ASSERT(ris.messages_received() == 1,
                             "Only first message should be delivered");
     INTEGRATION_TEST_ASSERT(queue.queue_size() >= 1,
@@ -368,7 +388,11 @@ bool test_queue_recovery_after_restart() {
     // Phase 3: Start RIS and new queue instance
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     {
         outbound_queue_simulator::config queue_config;
@@ -414,7 +438,11 @@ bool test_queue_partial_delivery_recovery() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     outbound_queue_simulator::config queue_config;
     queue_config.storage_path = temp_path;
@@ -436,9 +464,16 @@ bool test_queue_partial_delivery_recovery() {
         std::chrono::milliseconds{3000});
     INTEGRATION_TEST_ASSERT(partial, "Some messages should be delivered");
 
-    // Make RIS unavailable
+    // Make RIS unavailable and wait for queue to detect it
     ris.set_available(false);
-    std::this_thread::sleep_for(std::chrono::milliseconds{500});
+    // Allow time for any in-flight delivery to complete or fail
+    integration_test_fixture::wait_for(
+        [&ris]() { return !ris.is_available(); },
+        std::chrono::milliseconds{100});
+    // Brief wait for delivery attempts to fail
+    integration_test_fixture::wait_for(
+        [&queue]() { return queue.delivery_attempts() > 2; },
+        std::chrono::milliseconds{500});
 
     uint32_t received_before = ris.messages_received();
     size_t remaining = queue.queue_size();
