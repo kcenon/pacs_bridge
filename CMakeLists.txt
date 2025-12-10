@@ -149,9 +149,11 @@ list(APPEND PACS_BRIDGE_HEADERS
 # Router
 list(APPEND PACS_BRIDGE_SOURCES
     src/router/message_router.cpp
+    src/router/outbound_router.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/router/message_router.h
+    include/pacs/bridge/router/outbound_router.h
 )
 
 # Cache

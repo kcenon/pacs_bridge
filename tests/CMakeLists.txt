@@ -213,6 +213,9 @@ if(BRIDGE_BUILD_HL7)
     # Message Router Tests - custom framework
     add_bridge_test(router_test "unit;router;phase1")
 
+    # Outbound Router Tests (Issue #28) - GTest framework
+    add_gtest_test(outbound_router_test "unit;router;phase2")
+
     # Patient Cache Tests - custom framework
     add_bridge_test(cache_test "unit;cache;phase1")
 endif()
