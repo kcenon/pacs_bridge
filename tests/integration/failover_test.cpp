@@ -149,8 +149,13 @@ private:
     }
 
     void health_check_loop() {
+        auto next_check = std::chrono::steady_clock::now();
         while (running_) {
-            std::this_thread::sleep_for(config_.health_check_interval);
+            next_check += config_.health_check_interval;
+            while (running_ && std::chrono::steady_clock::now() < next_check) {
+                std::this_thread::yield();
+            }
+            if (!running_) break;
 
             if (!primary_healthy_) {
                 // Check if primary is back online
@@ -211,7 +216,11 @@ bool test_failover_route_to_primary() {
     INTEGRATION_TEST_ASSERT(primary_ris.start(),
                             "Failed to start primary RIS");
     INTEGRATION_TEST_ASSERT(backup_ris.start(), "Failed to start backup RIS");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&]() { return primary_ris.is_running() && backup_ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "Servers should start");
 
     // Setup failover router
     failover_router::config router_config;
@@ -268,7 +277,11 @@ bool test_failover_to_backup() {
 
     mock_ris_server backup_ris(backup_config);
     INTEGRATION_TEST_ASSERT(backup_ris.start(), "Failed to start backup RIS");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&]() { return backup_ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "Backup server should start");
 
     // Setup failover router
     failover_router::config router_config;
@@ -323,7 +336,11 @@ bool test_failover_and_failback() {
 
     mock_ris_server backup_ris(backup_config);
     INTEGRATION_TEST_ASSERT(backup_ris.start(), "Failed to start backup RIS");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&]() { return backup_ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "Backup server should start");
 
     // Setup failover router with health checks
     failover_router::config router_config;
@@ -449,7 +466,11 @@ bool test_failover_multiple_backups() {
     mock_ris_server backup2_ris(backup2_config);
     INTEGRATION_TEST_ASSERT(backup2_ris.start(),
                             "Failed to start second backup RIS");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&]() { return backup2_ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "Backup2 server should start");
 
     // Setup failover router with multiple backups
     failover_router::config router_config;
@@ -494,7 +515,11 @@ bool test_failover_rapid_cycles() {
 
     mock_ris_server backup_ris(backup_config);
     INTEGRATION_TEST_ASSERT(backup_ris.start(), "Failed to start backup RIS");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&]() { return backup_ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "Backup server should start");
 
     // Setup router
     failover_router::config router_config;
@@ -526,7 +551,10 @@ bool test_failover_rapid_cycles() {
 
         mock_ris_server primary_ris(primary_config);
         primary_ris.start();
-        std::this_thread::sleep_for(std::chrono::milliseconds{200});
+        // Wait for primary to start and health check to detect it
+        integration_test_fixture::wait_for(
+            [&]() { return primary_ris.is_running() && router.is_primary_healthy(); },
+            std::chrono::milliseconds{1000});
 
         // Send while primary is up
         for (int i = 0; i < 2; ++i) {
@@ -537,7 +565,10 @@ bool test_failover_rapid_cycles() {
 
         total_received += primary_ris.messages_received();
         primary_ris.stop();
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        // Wait for router to detect primary failure
+        integration_test_fixture::wait_for(
+            [&]() { return !router.is_primary_healthy(); },
+            std::chrono::milliseconds{500});
     }
 
     total_received += backup_ris.messages_received();
@@ -573,7 +604,11 @@ bool test_failover_statistics() {
 
     INTEGRATION_TEST_ASSERT(primary_ris.start(), "Failed to start primary");
     INTEGRATION_TEST_ASSERT(backup_ris.start(), "Failed to start backup");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&]() { return primary_ris.is_running() && backup_ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "Servers should start");
 
     // Setup router
     failover_router::config router_config;
@@ -589,7 +624,10 @@ bool test_failover_statistics() {
     for (int i = 0; i < 3; ++i) {
         router.route_message("MSH|MSG" + std::to_string(i) + "\r");
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    // Wait for messages to be processed
+    integration_test_fixture::wait_for(
+        [&]() { return primary_ris.messages_received() >= 3; },
+        std::chrono::milliseconds{1000});
 
     INTEGRATION_TEST_ASSERT(router.messages_to_primary() == 3,
                             "Should track 3 to primary");
@@ -600,13 +638,18 @@ bool test_failover_statistics() {
 
     // Phase 2: Make primary fail
     primary_ris.stop();
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    integration_test_fixture::wait_for(
+        [&]() { return !primary_ris.is_running(); },
+        std::chrono::milliseconds{500});
 
     // Send more messages
     for (int i = 3; i < 6; ++i) {
         router.route_message("MSH|MSG" + std::to_string(i) + "\r");
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    // Wait for backup to receive messages
+    integration_test_fixture::wait_for(
+        [&]() { return backup_ris.messages_received() >= 3; },
+        std::chrono::milliseconds{1000});
 
     INTEGRATION_TEST_ASSERT(router.messages_to_primary() == 3,
                             "Primary count unchanged");
