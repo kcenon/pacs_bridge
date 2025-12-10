@@ -13,6 +13,8 @@ set(FHIR_SOURCES
     patient_resource.cpp
     service_request_resource.cpp
     imaging_study_resource.cpp
+    subscription_resource.cpp
+    subscription_manager.cpp
 )
 
 set(FHIR_HEADERS
@@ -24,6 +26,8 @@ set(FHIR_HEADERS
     ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/patient_resource.h
     ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/service_request_resource.h
     ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/imaging_study_resource.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/subscription_resource.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/subscription_manager.h
 )
 
 # Export sources to parent scope for main library
