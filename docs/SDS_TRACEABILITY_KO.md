@@ -1,8 +1,8 @@
 # SDS - 요구사항 추적성 매트릭스
 
-> **버전:** 1.0.0
+> **버전:** 1.1.0
 > **상위 문서:** [SDS_KO.md](SDS_KO.md)
-> **최종 수정일:** 2025-12-07
+> **최종 수정일:** 2025-12-10
 
 ---
 
@@ -78,7 +78,7 @@
 | FR-2.1.5 | 대용량 결과 집합에 대한 페이지네이션 처리 | DES-FHIR-001 | - | ○ |
 | FR-2.2.1 | Patient 리소스 지원 | DES-FHIR-002 (patient_resource) | - | ○ |
 | FR-2.2.2 | ServiceRequest (영상 오더) 지원 | DES-FHIR-002 (service_request_resource) | SEQ-007 | ○ |
-| FR-2.2.3 | ImagingStudy 리소스 지원 | DES-FHIR-002 (imaging_study_resource) | SEQ-008 | ○ |
+| FR-2.2.3 | ImagingStudy 리소스 지원 | DES-FHIR-002 (imaging_study_resource) | SEQ-008 | ✓ |
 | FR-2.2.4 | DiagnosticReport 리소스 지원 | DES-FHIR-002 (diagnostic_report_resource) | - | ○ |
 | FR-2.2.5 | Task (워크리스트 항목) 지원 | DES-FHIR-002 | - | ○ |
 | FR-2.3.1 | REST-hook 구독 지원 | - | - | ○ |

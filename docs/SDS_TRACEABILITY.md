@@ -1,8 +1,8 @@
 # SDS - Requirements Traceability Matrix
 
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 > **Parent Document:** [SDS.md](SDS.md)
-> **Last Updated:** 2025-12-07
+> **Last Updated:** 2025-12-10
 
 ---
 
@@ -78,7 +78,7 @@ This document establishes bidirectional traceability between:
 | FR-2.1.5 | Handle pagination for large result sets | DES-FHIR-001 | - | ○ |
 | FR-2.2.1 | Support Patient resource | DES-FHIR-002 (patient_resource) | - | ○ |
 | FR-2.2.2 | Support ServiceRequest (imaging orders) | DES-FHIR-002 (service_request_resource) | SEQ-007 | ○ |
-| FR-2.2.3 | Support ImagingStudy resource | DES-FHIR-002 (imaging_study_resource) | SEQ-008 | ○ |
+| FR-2.2.3 | Support ImagingStudy resource | DES-FHIR-002 (imaging_study_resource) | SEQ-008 | ✓ |
 | FR-2.2.4 | Support DiagnosticReport resource | DES-FHIR-002 (diagnostic_report_resource) | - | ○ |
 | FR-2.2.5 | Support Task (worklist items) | DES-FHIR-002 | - | ○ |
 | FR-2.3.1 | Support REST-hook subscriptions | - | - | ○ |
