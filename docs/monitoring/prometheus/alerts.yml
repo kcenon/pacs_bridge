@@ -1,0 +1,171 @@
+# PACS Bridge Prometheus Alerting Rules
+#
+# Deploy these rules to your Prometheus server configuration.
+#
+# Example prometheus.yml:
+#   rule_files:
+#     - /etc/prometheus/rules/pacs_bridge_alerts.yml
+
+groups:
+  - name: pacs_bridge_critical
+    rules:
+      # High Error Rate Alert
+      - alert: PACBridgeHighErrorRate
+        expr: |
+          sum(rate(hl7_message_errors_total{job="pacs_bridge"}[5m]))
+          / sum(rate(hl7_messages_received_total{job="pacs_bridge"}[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge error rate is too high"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-high-error-rate"
+
+      # Service Unavailable Alert
+      - alert: PACBridgeServiceDown
+        expr: up{job="pacs_bridge"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge service is down"
+          description: "The PACS Bridge instance {{ $labels.instance }} is not responding to scrapes"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-down"
+
+      # Queue Depth Critical
+      - alert: PACBridgeQueueCritical
+        expr: sum(queue_depth{job="pacs_bridge"}) > 10000
+        for: 5m
+        labels:
+          severity: critical
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge queue depth is critical"
+          description: "Total queue depth is {{ $value }} messages (threshold: 10000)"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-queue-critical"
+
+      # Dead Letters Growing
+      - alert: PACBridgeDeadLettersGrowing
+        expr: |
+          increase(queue_dead_letters_total{job="pacs_bridge"}[15m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge dead letter queue is growing"
+          description: "{{ $value }} messages moved to dead letter queue in the last 15 minutes"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-dead-letters"
+
+  - name: pacs_bridge_warning
+    rules:
+      # High Latency Warning
+      - alert: PACBridgeHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(hl7_message_processing_duration_seconds_bucket{job="pacs_bridge"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge processing latency is elevated"
+          description: "P95 latency is {{ $value | humanizeDuration }} (threshold: 500ms)"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-high-latency"
+
+      # Memory Usage Warning
+      - alert: PACBridgeHighMemory
+        expr: process_resident_memory_bytes{job="pacs_bridge"} > 858993459  # 80% of 1GB
+        for: 10m
+        labels:
+          severity: warning
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge memory usage is high"
+          description: "Memory usage is {{ $value | humanize1024 }}B (threshold: 800MB)"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-high-memory"
+
+      # Queue Depth Warning
+      - alert: PACBridgeQueueWarning
+        expr: sum(queue_depth{job="pacs_bridge"}) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge queue depth is elevated"
+          description: "Total queue depth is {{ $value }} messages (threshold: 1000)"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-queue-warning"
+
+      # No Messages Processed
+      - alert: PACBridgeNoMessages
+        expr: |
+          sum(rate(hl7_messages_received_total{job="pacs_bridge"}[10m])) == 0
+          and sum(hl7_messages_received_total{job="pacs_bridge"}) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge is not receiving messages"
+          description: "No HL7 messages received in the last 10 minutes"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-no-messages"
+
+      # Delivery Failures
+      - alert: PACBridgeDeliveryFailures
+        expr: |
+          rate(queue_delivery_failures_total{job="pacs_bridge"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge message delivery failures detected"
+          description: "Delivery failure rate is {{ $value }} per second for {{ $labels.destination }}"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-delivery-failures"
+
+      # MLLP Connection Drop
+      - alert: PACBridgeConnectionDrop
+        expr: |
+          delta(mllp_active_connections{job="pacs_bridge"}[5m]) < -5
+        for: 1m
+        labels:
+          severity: warning
+          service: pacs_bridge
+        annotations:
+          summary: "PACS Bridge MLLP connections dropping"
+          description: "Lost {{ $value | abs }} MLLP connections in the last 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-connection-drop"
+
+  - name: pacs_bridge_mwl
+    rules:
+      # MWL Query Slow
+      - alert: PACBridgeMWLQuerySlow
+        expr: |
+          histogram_quantile(0.95, rate(mwl_query_duration_seconds_bucket{job="pacs_bridge"}[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          service: pacs_bridge
+          component: mwl
+        annotations:
+          summary: "MWL queries are slow"
+          description: "P95 MWL query latency is {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-mwl-slow"
+
+      # MWL Operations Stalled
+      - alert: PACBridgeMWLStalled
+        expr: |
+          sum(rate(mwl_entries_created_total{job="pacs_bridge"}[15m])) == 0
+          and sum(mwl_entries_created_total{job="pacs_bridge"}) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: pacs_bridge
+          component: mwl
+        annotations:
+          summary: "MWL operations have stalled"
+          description: "No MWL entries created in the last 15 minutes"
+          runbook_url: "https://docs.example.com/runbooks/pacs-bridge-mwl-stalled"

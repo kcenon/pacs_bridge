@@ -219,11 +219,13 @@ list(APPEND PACS_BRIDGE_HEADERS
 list(APPEND PACS_BRIDGE_SOURCES
     src/monitoring/health_checker.cpp
     src/monitoring/health_server.cpp
+    src/monitoring/bridge_metrics.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/monitoring/health_types.h
     include/pacs/bridge/monitoring/health_checker.h
     include/pacs/bridge/monitoring/health_server.h
+    include/pacs/bridge/monitoring/bridge_metrics.h
 )
 
 # Performance
@@ -429,6 +431,7 @@ message(STATUS "")
 message(STATUS "Features:")
 message(STATUS "  TLS Support:      ${PACS_BRIDGE_HAS_OPENSSL}")
 message(STATUS "  PACS System:      ${PACS_BRIDGE_HAS_PACS_SYSTEM}")
+message(STATUS "  Monitoring:       ${PACS_BRIDGE_HAS_MONITORING_SYSTEM}")
 message(STATUS "")
 message(STATUS "Install Prefix:     ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "========================================")

@@ -28,6 +28,11 @@ public:
     impl(health_checker& checker, const config& cfg)
         : checker_(checker), config_(cfg) {}
 
+    void set_metrics_provider(metrics_provider provider) {
+        std::lock_guard lock(metrics_mutex_);
+        metrics_provider_ = std::move(provider);
+    }
+
     ~impl() { stop(true); }
 
     bool start() {
@@ -81,6 +86,13 @@ public:
         return url.str();
     }
 
+    [[nodiscard]] std::string metrics_url() const {
+        std::ostringstream url;
+        url << "http://" << config_.bind_address << ":" << config_.port
+            << config_.metrics_path;
+        return url.str();
+    }
+
     [[nodiscard]] statistics get_statistics() const {
         std::lock_guard lock(stats_mutex_);
         return stats_;
@@ -116,6 +128,12 @@ public:
             response = handle_deep();
             std::lock_guard lock(stats_mutex_);
             stats_.deep_health_requests++;
+        } else if (config_.enable_metrics_endpoint &&
+                   (path == config_.metrics_path ||
+                    normalized_path == config_.metrics_path)) {
+            response = handle_metrics();
+            std::lock_guard lock(stats_mutex_);
+            stats_.metrics_requests++;
         } else {
             response = http_response::not_found();
             std::lock_guard lock(stats_mutex_);
@@ -173,12 +191,31 @@ private:
         }
     }
 
+    [[nodiscard]] http_response handle_metrics() const {
+        std::lock_guard lock(metrics_mutex_);
+        if (!metrics_provider_) {
+            return http_response{200, "text/plain; version=0.0.4; charset=utf-8",
+                                 "# No metrics provider configured\n"};
+        }
+
+        try {
+            std::string metrics = metrics_provider_();
+            return http_response{200, "text/plain; version=0.0.4; charset=utf-8",
+                                 std::move(metrics)};
+        } catch (const std::exception& e) {
+            return http_response::internal_error(e.what());
+        }
+    }
+
     health_checker& checker_;
     config config_;
     std::atomic<bool> running_{false};
 
     mutable std::mutex stats_mutex_;
     mutable statistics stats_;
+
+    mutable std::mutex metrics_mutex_;
+    metrics_provider metrics_provider_;
 };
 
 // Health Server public methods
@@ -215,6 +252,14 @@ std::string health_server::readiness_url() const {
 
 std::string health_server::deep_health_url() const {
     return pimpl_->deep_health_url();
+}
+
+std::string health_server::metrics_url() const {
+    return pimpl_->metrics_url();
+}
+
+void health_server::set_metrics_provider(metrics_provider provider) {
+    pimpl_->set_metrics_provider(std::move(provider));
 }
 
 health_server::statistics health_server::get_statistics() const {

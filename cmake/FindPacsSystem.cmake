@@ -7,6 +7,7 @@
 #   - thread_system (thread pool, concurrency)
 #   - messaging_system (networking, message handling)
 #   - container_system (data structures)
+#   - monitoring_system (metrics, observability, Prometheus export)
 #   - pacs_system (DICOM MWL/MPPS components)
 #
 # Build modes:
@@ -26,6 +27,7 @@
 #   kcenon::thread_system
 #   kcenon::messaging_system
 #   kcenon::container_system
+#   kcenon::monitoring_system (if available)
 #   kcenon::pacs_system (if available)
 # =============================================================================
 
@@ -112,6 +114,15 @@ else()
 
     # Container system (required for data structures)
     fetch_kcenon_component(container_system)
+
+    # Monitoring system (optional, for metrics and observability)
+    option(BRIDGE_BUILD_MONITORING "Enable monitoring_system integration for metrics export" ON)
+    if(BRIDGE_BUILD_MONITORING)
+        fetch_kcenon_component(monitoring_system)
+        set(PACS_BRIDGE_HAS_MONITORING_SYSTEM TRUE CACHE BOOL "monitoring_system is available" FORCE)
+    else()
+        set(PACS_BRIDGE_HAS_MONITORING_SYSTEM FALSE CACHE BOOL "monitoring_system is available" FORCE)
+    endif()
 
     # PACS system (optional, for DICOM MWL/MPPS integration)
     option(BRIDGE_BUILD_PACS_INTEGRATION "Enable pacs_system integration for DICOM support" ON)
@@ -215,6 +226,18 @@ else()
         target_link_libraries(pacs_bridge_dependencies INTERFACE container_system)
     elseif(TARGET kcenon::container_system)
         target_link_libraries(pacs_bridge_dependencies INTERFACE kcenon::container_system)
+    endif()
+
+    # Link monitoring_system if available
+    if(PACS_BRIDGE_HAS_MONITORING_SYSTEM)
+        if(TARGET monitoring_system)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE monitoring_system)
+        elseif(TARGET kcenon::monitoring_system)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE kcenon::monitoring_system)
+        endif()
+        target_compile_definitions(pacs_bridge_dependencies INTERFACE
+            PACS_BRIDGE_HAS_MONITORING_SYSTEM
+        )
     endif()
 
     # Link pacs_system if available
