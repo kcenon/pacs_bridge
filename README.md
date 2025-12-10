@@ -42,12 +42,13 @@ pacs_bridge/
 │   ├── protocol/hl7/     # HL7 v2.x message handling
 │   ├── mllp/             # MLLP transport layer
 │   ├── fhir/             # FHIR R4 Gateway (Phase 3)
+│   ├── emr/              # EMR client (FHIR R4 client, Phase 5)
 │   ├── mapping/          # HL7-DICOM translation
 │   ├── router/           # Message routing
 │   ├── pacs_adapter/     # PACS system integration
 │   ├── config/           # Configuration management
 │   ├── cache/            # Patient demographics cache
-│   ├── security/         # TLS, audit, access control
+│   ├── security/         # TLS, audit, OAuth2/Smart-on-FHIR
 │   ├── monitoring/       # Health checks, metrics
 │   ├── performance/      # Performance utilities
 │   ├── testing/          # Test utilities
@@ -276,6 +277,7 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Phase 2 | MPPS and Bidirectional Flow | **In Progress** |
 | Phase 3 | FHIR Gateway and Reporting | Planning |
 | Phase 4 | Production Hardening | Planning |
+| Phase 5 | EMR Integration (FHIR R4 Client) | **In Progress** |
 
 ### Phase 1 Implementation Status
 
@@ -308,6 +310,17 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Message Queue | Outbound queue with persistence | Pending |
 | Message Router | Failover routing support | Pending |
 
+### Phase 5 Implementation Status
+
+| Module | Component | Status |
+|--------|-----------|--------|
+| EMR Client | FHIR R4 HTTP Client | Implemented |
+| EMR Client | OAuth2/Smart-on-FHIR Auth | Implemented |
+| EMR Client | Patient Demographics Query | Implemented |
+| EMR Client | Patient Matching/Disambiguation | Implemented |
+| EMR Client | DiagnosticReport Posting | Pending |
+| Integration | EMR Integration Tests | Pending |
+
 ## Running Tests
 
 Tests use Google Test framework with automatic test discovery.
@@ -335,6 +348,10 @@ ctest --test-dir build -j $(nproc) --output-on-failure
 ./build/bin/bridge_metrics_test         # Prometheus metrics
 ./build/bin/ecosystem_integration_test  # Verify dependency setup
 
+# Run Phase 5 EMR client tests
+./build/bin/fhir_client_test            # FHIR R4 HTTP client
+./build/bin/patient_lookup_test         # Patient demographics query
+
 # Run Phase 2 integration tests
 ./build/bin/mpps_integration_test       # MPPS N-CREATE/N-SET flows
 ./build/bin/queue_persistence_test      # Message queue recovery
@@ -344,6 +361,7 @@ ctest --test-dir build -j $(nproc) --output-on-failure
 # Filter tests by label
 ctest --test-dir build -L phase1      # Phase 1 unit tests only
 ctest --test-dir build -L phase2      # Phase 2 integration tests only
+ctest --test-dir build -L phase5      # Phase 5 EMR client tests
 ctest --test-dir build -L integration # All integration tests
 ctest --test-dir build -L stress      # Stress tests only
 
