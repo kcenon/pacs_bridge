@@ -12,6 +12,7 @@
  *   GET /health/live  - Liveness check (K8s livenessProbe)
  *   GET /health/ready - Readiness check (K8s readinessProbe)
  *   GET /health/deep  - Deep health check with component details
+ *   GET /metrics      - Prometheus metrics (optional, requires metrics_provider)
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/41
  */
@@ -90,6 +91,7 @@ struct http_response {
  * | /health/live | GET | Liveness check | livenessProbe |
  * | /health/ready | GET | Readiness check | readinessProbe |
  * | /health/deep | GET | Deep health check | - |
+ * | /metrics | GET | Prometheus metrics | - |
  *
  * Response Codes:
  *   - 200 OK: Healthy/Ready
@@ -138,7 +140,20 @@ public:
 
         /** CORS allowed origins (if enable_cors is true) */
         std::vector<std::string> cors_origins;
+
+        /** Enable /metrics endpoint for Prometheus */
+        bool enable_metrics_endpoint = true;
+
+        /** Path for metrics endpoint */
+        std::string metrics_path = "/metrics";
     };
+
+    /**
+     * @brief Type for metrics provider function
+     *
+     * A function that returns Prometheus-formatted metrics string
+     */
+    using metrics_provider = std::function<std::string()>;
 
     /**
      * @brief Constructor with default configuration
@@ -223,6 +238,32 @@ public:
      */
     [[nodiscard]] std::string deep_health_url() const;
 
+    /**
+     * @brief Get full URL for metrics endpoint
+     */
+    [[nodiscard]] std::string metrics_url() const;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Metrics Integration
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @brief Set the metrics provider function
+     *
+     * The provider function will be called when /metrics endpoint is requested.
+     * It should return a Prometheus text format string.
+     *
+     * @param provider Function that returns Prometheus metrics string
+     *
+     * @example
+     * ```cpp
+     * server.set_metrics_provider([]() {
+     *     return bridge_metrics_collector::instance().get_prometheus_metrics();
+     * });
+     * ```
+     */
+    void set_metrics_provider(metrics_provider provider);
+
     // ═══════════════════════════════════════════════════════════════════════
     // Statistics
     // ═══════════════════════════════════════════════════════════════════════
@@ -242,6 +283,9 @@ public:
 
         /** Requests to /health/deep */
         size_t deep_health_requests = 0;
+
+        /** Requests to /metrics */
+        size_t metrics_requests = 0;
 
         /** Current active connections */
         size_t active_connections = 0;
