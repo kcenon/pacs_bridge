@@ -394,6 +394,13 @@ if(BRIDGE_BUILD_FHIR)
 endif()
 
 # =============================================================================
+# Phase 5: EMR Client Tests (Issue #102)
+# =============================================================================
+
+# FHIR R4 Client Tests
+add_gtest_test(fhir_client_test "unit;emr;fhir;phase5")
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -449,5 +456,8 @@ if(BRIDGE_BUILD_FHIR)
     message(STATUS "  - fhir_dicom_mapper_test")
     message(STATUS "  - subscription_test")
 endif()
+message(STATUS "")
+message(STATUS "Phase 5 EMR Client Tests:")
+message(STATUS "  - fhir_client_test")
 message(STATUS "==========================")
 message(STATUS "")
