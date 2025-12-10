@@ -312,11 +312,16 @@ if(BRIDGE_BUILD_FHIR)
 endif()
 
 # EMR Client Module (Phase 5) - FHIR R4 Client for external EMR systems
+# See: https://github.com/kcenon/pacs_bridge/issues/102
+# See: https://github.com/kcenon/pacs_bridge/issues/104
 list(APPEND PACS_BRIDGE_SOURCES
     src/emr/emr_types.cpp
     src/emr/fhir_bundle.cpp
     src/emr/http_client_adapter.cpp
     src/emr/fhir_client.cpp
+    src/emr/patient_lookup.cpp
+    src/emr/fhir_patient_parser.cpp
+    src/emr/patient_matcher.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/emr/emr_types.h
@@ -324,6 +329,9 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/emr/fhir_bundle.h
     include/pacs/bridge/emr/http_client_adapter.h
     include/pacs/bridge/emr/fhir_client.h
+    include/pacs/bridge/emr/patient_record.h
+    include/pacs/bridge/emr/patient_lookup.h
+    include/pacs/bridge/emr/patient_matcher.h
 )
 
 # =============================================================================
