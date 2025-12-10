@@ -245,6 +245,7 @@ add_bridge_test(mllp_test "unit;mllp;transport")
 # =============================================================================
 
 add_bridge_test(config_test "unit;config")
+add_bridge_test(config_manager_test "unit;config;hot-reload")
 
 # =============================================================================
 # Security Tests
@@ -385,6 +386,7 @@ if(BRIDGE_BUILD_HL7)
 endif()
 message(STATUS "  - mllp_test")
 message(STATUS "  - config_test")
+message(STATUS "  - config_manager_test")
 message(STATUS "  - security_test")
 if(PACS_BRIDGE_HAS_OPENSSL)
     message(STATUS "  - tls_test")

@@ -2724,6 +2724,86 @@ public:
         const std::filesystem::path& path);
 };
 
+/**
+ * @brief Configuration manager with hot-reload support
+ *
+ * Provides runtime configuration management with support for:
+ * - Configuration hot-reload without restart
+ * - SIGHUP signal handling for reload trigger
+ * - Component reload callbacks
+ * - Validation before applying changes
+ * - File change watching (optional)
+ *
+ * Reloadable fields:
+ * - routing_rules
+ * - hl7.outbound_destinations
+ * - mapping configuration
+ * - logging.level, logging.format
+ *
+ * Non-reloadable fields (require restart):
+ * - Listener ports
+ * - TLS certificates
+ * - Database paths
+ */
+class config_manager {
+public:
+    using reload_callback = std::function<void(const bridge_config&)>;
+
+    /**
+     * @brief Constructor with configuration file path
+     */
+    explicit config_manager(const std::filesystem::path& config_path);
+
+    /**
+     * @brief Get the current configuration
+     */
+    [[nodiscard]] const bridge_config& get() const;
+
+    /**
+     * @brief Reload configuration from file
+     */
+    [[nodiscard]] reload_result reload();
+
+    /**
+     * @brief Check if configuration file has changed
+     */
+    [[nodiscard]] bool has_file_changed() const;
+
+    /**
+     * @brief Register a callback for configuration reload
+     */
+    size_t on_reload(reload_callback callback);
+
+    /**
+     * @brief Enable SIGHUP signal handler for reload
+     */
+    bool enable_signal_handler();
+
+    /**
+     * @brief Enable file change watching
+     */
+    bool enable_file_watcher(std::chrono::seconds check_interval);
+};
+
+/**
+ * @brief Administrative HTTP server for configuration management
+ *
+ * Endpoints:
+ * - POST /admin/reload - Trigger configuration reload
+ * - GET  /admin/config - View current configuration
+ * - GET  /admin/status - Get reload statistics
+ */
+class admin_server {
+public:
+    explicit admin_server(config_manager& manager);
+
+    [[nodiscard]] bool start();
+    void stop();
+
+    [[nodiscard]] admin_response handle_request(
+        std::string_view method, std::string_view path) const;
+};
+
 } // namespace pacs::bridge::config
 ```
 
