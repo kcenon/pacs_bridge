@@ -186,12 +186,14 @@ list(APPEND PACS_BRIDGE_SOURCES
     src/config/config_loader.cpp
     src/config/config_manager.cpp
     src/config/admin_server.cpp
+    src/config/emr_config.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/config/bridge_config.h
     include/pacs/bridge/config/config_loader.h
     include/pacs/bridge/config/config_manager.h
     include/pacs/bridge/config/admin_server.h
+    include/pacs/bridge/config/emr_config.h
 )
 
 # Security
