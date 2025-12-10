@@ -21,6 +21,7 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 - **Flexible Routing** - Multi-gateway support with failover
 - **IHE SWF Compliant** - Follows IHE Scheduled Workflow integration profile
 - **C++20 Concepts** - Type-safe templates with clear compile-time constraints
+- **Prometheus Metrics** - Built-in metrics export for monitoring and alerting
 
 ## Architecture
 
@@ -164,6 +165,7 @@ cmake --build build
 |--------|---------|-------------|
 | `BRIDGE_STANDALONE_BUILD` | `ON` | Build without external kcenon dependencies |
 | `BRIDGE_BUILD_PACS_INTEGRATION` | `ON` | Enable pacs_system for DICOM MWL/MPPS (requires full build) |
+| `BRIDGE_BUILD_MONITORING` | `ON` | Enable monitoring_system for Prometheus metrics (requires full build) |
 | `BRIDGE_BUILD_HL7` | `ON` | Build HL7 gateway module |
 | `BRIDGE_BUILD_FHIR` | `OFF` | Build FHIR gateway module (future) |
 | `BRIDGE_BUILD_TESTS` | `ON` | Build unit tests (uses Google Test) |
@@ -232,6 +234,9 @@ pacs_system:
 - [DICOM-HL7 Mapping](docs/reference_materials/07_dicom_hl7_mapping.md)
 - [MWL-HL7 Integration](docs/reference_materials/08_mwl_hl7_integration.md)
 
+### Monitoring & Operations
+- [Monitoring Guide](docs/monitoring/README.md) - Prometheus metrics, Grafana dashboard, alerting rules
+
 ### Verification & Validation
 - [Verification Report](docs/VERIFICATION_REPORT.md) | [한국어](docs/VERIFICATION_REPORT_KO.md)
 - [Validation Report](docs/VALIDATION_REPORT.md) | [한국어](docs/VALIDATION_REPORT_KO.md)
@@ -270,6 +275,9 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Queue Tests | Message persistence & recovery | Implemented |
 | Failover Tests | RIS failover routing | Implemented |
 | Stress Tests | High volume load testing | Implemented |
+| Monitoring | Prometheus metrics collector | Implemented |
+| Monitoring | /metrics HTTP endpoint | Implemented |
+| Monitoring | Grafana dashboard & alerts | Implemented |
 | MPPS Handler | MPPS event processing | Pending |
 | HL7 Mapper | MPPS to ORM^O01 conversion | Pending |
 | Message Queue | Outbound queue with persistence | Pending |
@@ -299,6 +307,7 @@ ctest --test-dir build -j $(nproc) --output-on-failure
 ./build/bin/mllp_test                   # MLLP transport
 ./build/bin/config_test                 # Configuration
 ./build/bin/mwl_client_test             # MWL client
+./build/bin/bridge_metrics_test         # Prometheus metrics
 ./build/bin/ecosystem_integration_test  # Verify dependency setup
 
 # Run Phase 2 integration tests
