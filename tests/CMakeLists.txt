@@ -13,6 +13,7 @@
 #   - security_test   : Security module tests
 #   - tls_test        : TLS functionality tests
 #   - health_check_test : Health check endpoint tests
+#   - bridge_metrics_test : Bridge metrics collector tests (Issue #40)
 #   - performance_test  : Performance optimization tests
 #   - load_test       : Load testing framework tests
 #
@@ -266,6 +267,10 @@ endif()
 
 add_bridge_test(health_check_test "unit;monitoring")
 
+# Bridge Metrics Tests (Issue #40, #90)
+# These tests work with the internal implementation regardless of monitoring_system availability
+add_gtest_test(bridge_metrics_test "unit;monitoring;metrics")
+
 # =============================================================================
 # Performance Tests
 # =============================================================================
@@ -413,6 +418,7 @@ if(PACS_BRIDGE_HAS_OPENSSL)
     message(STATUS "  - tls_test")
 endif()
 message(STATUS "  - health_check_test")
+message(STATUS "  - bridge_metrics_test")
 message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
 message(STATUS "  - mwl_client_test")
