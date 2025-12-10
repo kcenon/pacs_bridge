@@ -277,6 +277,7 @@ if(BRIDGE_BUILD_FHIR)
         src/fhir/resource_handler.cpp
         src/fhir/fhir_server.cpp
         src/fhir/patient_resource.cpp
+        src/fhir/service_request_resource.cpp
         src/mapping/fhir_dicom_mapper.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
@@ -286,6 +287,7 @@ if(BRIDGE_BUILD_FHIR)
         include/pacs/bridge/fhir/resource_handler.h
         include/pacs/bridge/fhir/fhir_server.h
         include/pacs/bridge/fhir/patient_resource.h
+        include/pacs/bridge/fhir/service_request_resource.h
         include/pacs/bridge/mapping/fhir_dicom_mapper.h
     )
 endif()
