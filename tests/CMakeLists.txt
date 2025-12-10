@@ -362,6 +362,15 @@ add_integration_test(failover_test "integration;failover;phase2")
 add_integration_test(stress_test "integration;stress;phase2" 600)
 
 # =============================================================================
+# Phase 3: FHIR Gateway Tests (Issue #31)
+# =============================================================================
+
+if(BRIDGE_BUILD_FHIR)
+    # FHIR Server Tests (Phase 3 - Issue #31)
+    add_bridge_test(fhir_server_test "unit;fhir;phase3")
+endif()
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -405,5 +414,10 @@ if(PACS_BRIDGE_HAS_SQLITE)
 endif()
 message(STATUS "  - failover_test")
 message(STATUS "  - stress_test")
+if(BRIDGE_BUILD_FHIR)
+    message(STATUS "")
+    message(STATUS "Phase 3 FHIR Tests:")
+    message(STATUS "  - fhir_server_test")
+endif()
 message(STATUS "==========================")
 message(STATUS "")

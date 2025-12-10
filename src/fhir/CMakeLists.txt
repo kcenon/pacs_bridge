@@ -5,11 +5,21 @@
 # See: https://github.com/kcenon/pacs_bridge/issues/31
 
 set(FHIR_SOURCES
-    # Placeholder - implementation pending
-    # fhir_types.cpp
-    # fhir_resource.cpp
-    # fhir_server.cpp
+    fhir_types.cpp
+    fhir_resource.cpp
+    operation_outcome.cpp
+    resource_handler.cpp
+    fhir_server.cpp
 )
 
-# Library will be added when implementation is complete
-# add_library(pacs_bridge_fhir STATIC ${FHIR_SOURCES})
+set(FHIR_HEADERS
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/fhir_types.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/fhir_resource.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/operation_outcome.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/resource_handler.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/fhir_server.h
+)
+
+# Export sources to parent scope for main library
+set(PACS_BRIDGE_FHIR_SOURCES ${FHIR_SOURCES} PARENT_SCOPE)
+set(PACS_BRIDGE_FHIR_HEADERS ${FHIR_HEADERS} PARENT_SCOPE)

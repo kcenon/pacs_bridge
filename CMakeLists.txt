@@ -268,6 +268,24 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/pacs_adapter/mpps_handler.h
 )
 
+# FHIR Gateway (Phase 3)
+if(BRIDGE_BUILD_FHIR)
+    list(APPEND PACS_BRIDGE_SOURCES
+        src/fhir/fhir_types.cpp
+        src/fhir/fhir_resource.cpp
+        src/fhir/operation_outcome.cpp
+        src/fhir/resource_handler.cpp
+        src/fhir/fhir_server.cpp
+    )
+    list(APPEND PACS_BRIDGE_HEADERS
+        include/pacs/bridge/fhir/fhir_types.h
+        include/pacs/bridge/fhir/fhir_resource.h
+        include/pacs/bridge/fhir/operation_outcome.h
+        include/pacs/bridge/fhir/resource_handler.h
+        include/pacs/bridge/fhir/fhir_server.h
+    )
+endif()
+
 # =============================================================================
 # Create Main Library
 # =============================================================================
