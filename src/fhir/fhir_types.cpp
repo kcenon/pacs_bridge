@@ -225,6 +225,9 @@ std::optional<resource_type> parse_resource_type(
     if (iequals(trimmed, "Endpoint")) {
         return resource_type::endpoint;
     }
+    if (iequals(trimmed, "Subscription")) {
+        return resource_type::subscription;
+    }
     if (iequals(trimmed, "OperationOutcome")) {
         return resource_type::operation_outcome;
     }

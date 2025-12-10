@@ -186,6 +186,7 @@ enum class resource_type {
     practitioner,
     organization,
     endpoint,
+    subscription,
     operation_outcome,
     bundle,
     capability_statement,
@@ -205,6 +206,7 @@ enum class resource_type {
         case resource_type::practitioner: return "Practitioner";
         case resource_type::organization: return "Organization";
         case resource_type::endpoint: return "Endpoint";
+        case resource_type::subscription: return "Subscription";
         case resource_type::operation_outcome: return "OperationOutcome";
         case resource_type::bundle: return "Bundle";
         case resource_type::capability_statement: return "CapabilityStatement";

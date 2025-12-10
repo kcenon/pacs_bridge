@@ -281,6 +281,8 @@ if(BRIDGE_BUILD_FHIR)
         src/fhir/patient_resource.cpp
         src/fhir/service_request_resource.cpp
         src/fhir/imaging_study_resource.cpp
+        src/fhir/subscription_resource.cpp
+        src/fhir/subscription_manager.cpp
         src/mapping/fhir_dicom_mapper.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
@@ -292,6 +294,8 @@ if(BRIDGE_BUILD_FHIR)
         include/pacs/bridge/fhir/patient_resource.h
         include/pacs/bridge/fhir/service_request_resource.h
         include/pacs/bridge/fhir/imaging_study_resource.h
+        include/pacs/bridge/fhir/subscription_resource.h
+        include/pacs/bridge/fhir/subscription_manager.h
         include/pacs/bridge/mapping/fhir_dicom_mapper.h
     )
 endif()

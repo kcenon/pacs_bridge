@@ -385,6 +385,9 @@ if(BRIDGE_BUILD_FHIR)
 
     # FHIR-DICOM Mapper Tests (Phase 3 - Issue #35)
     add_gtest_test(fhir_dicom_mapper_test "unit;fhir;mapping;phase3")
+
+    # Subscription Tests (Phase 3 - Issue #36)
+    add_bridge_test(subscription_test "unit;fhir;subscription;phase3")
 endif()
 
 # =============================================================================
@@ -440,6 +443,7 @@ if(BRIDGE_BUILD_FHIR)
     message(STATUS "  - service_request_resource_test")
     message(STATUS "  - imaging_study_resource_test")
     message(STATUS "  - fhir_dicom_mapper_test")
+    message(STATUS "  - subscription_test")
 endif()
 message(STATUS "==========================")
 message(STATUS "")
