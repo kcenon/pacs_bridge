@@ -244,7 +244,7 @@ hl7:
     std::atomic<int> callback_count{0};
     std::string received_name;
 
-    auto handle = manager.on_reload([&](const bridge_config& config) {
+    [[maybe_unused]] auto handle = manager.on_reload([&](const bridge_config& config) {
         callback_count++;
         received_name = config.name;
     });
@@ -296,7 +296,7 @@ logging:
 
     // Reload
     config_file.update(yaml2);
-    manager.reload();
+    (void)manager.reload();
 
     TEST_ASSERT(!changed_fields.empty(), "Should have changed fields");
 
@@ -325,7 +325,7 @@ hl7:
     TEST_ASSERT(removed, "Callback should be removed");
 
     // Reload
-    manager.reload();
+    (void)manager.reload();
     TEST_ASSERT(callback_count == 0, "Callback should not be called");
 
     return true;
@@ -355,7 +355,7 @@ hl7:
                 "File should be marked as changed after update");
 
     // Reload
-    manager.reload();
+    (void)manager.reload();
 
     // Not changed after reload
     TEST_ASSERT(!manager.has_file_changed(),
@@ -408,7 +408,7 @@ hl7:
     TEST_ASSERT(stats.callback_count == 1, "Should have 1 callback");
 
     // Reload
-    manager.reload();
+    (void)manager.reload();
 
     stats = manager.get_statistics();
     TEST_ASSERT(stats.reload_attempts == 1, "Attempts should be 1");
@@ -521,7 +521,7 @@ hl7:
     config_manager manager(config_file.path());
 
     admin_server server(manager);
-    server.start();
+    (void)server.start();
 
     // Test POST /admin/reload
     config_file.update(yaml2);
@@ -679,7 +679,7 @@ hl7:
     TEST_ASSERT(stats.total_requests == 0, "Initial requests should be 0");
 
     // Make a request
-    server.handle_request("POST", "/admin/reload");
+    (void)server.handle_request("POST", "/admin/reload");
 
     stats = server.get_statistics();
     TEST_ASSERT(stats.total_requests == 1, "Should have 1 request");

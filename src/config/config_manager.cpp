@@ -32,8 +32,9 @@ namespace {
 // Global atomic flag for signal handling
 std::atomic<bool> g_sighup_received{false};
 
-// Pointer to the active config_manager for signal handling
-std::atomic<config_manager::impl*> g_active_manager{nullptr};
+// Pointer to the active config_manager impl for signal handling
+// Using void* to avoid private class access issue
+std::atomic<void*> g_active_manager{nullptr};
 
 #ifndef _WIN32
 // Previous signal handler to restore
@@ -276,7 +277,7 @@ public:
             return false;
         }
 
-        g_active_manager.store(this);
+        g_active_manager.store(static_cast<void*>(this));
         signal_handler_enabled_ = true;
         return true;
 #endif
@@ -298,7 +299,7 @@ public:
 
     bool process_pending_signal() {
         if (g_sighup_received.exchange(false)) {
-            reload();
+            (void)reload();
             return true;
         }
         return false;
@@ -327,7 +328,7 @@ public:
                 }
 
                 if (has_file_changed()) {
-                    reload();
+                    (void)reload();
                 }
             }
         });
