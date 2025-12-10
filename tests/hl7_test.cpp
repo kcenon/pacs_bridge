@@ -18,6 +18,7 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_parser.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
+#include "pacs/bridge/protocol/hl7/hl7_validator.h"
 
 #include "test_helpers.h"
 
@@ -872,6 +873,308 @@ TEST_F(HL7BuilderTest, MessageIdGenerator) {
 
     auto prefixed = message_id_generator::generate_with_prefix("TEST");
     EXPECT_THAT(prefixed, StartsWith("TEST"));
+}
+
+// =============================================================================
+// HL7 Validator Tests
+// =============================================================================
+
+class HL7ValidatorTest : public pacs_bridge_test {};
+
+TEST_F(HL7ValidatorTest, ValidateADT_A01) {
+    auto result = hl7_message::parse(hl7_samples::ADT_A01);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate(*result);
+    EXPECT_TRUE(validation.valid);
+    EXPECT_EQ(validation.type, message_type::ADT);
+    EXPECT_EQ(validation.trigger_event, "A01");
+    EXPECT_EQ(validation.error_count(), 0u);
+}
+
+TEST_F(HL7ValidatorTest, ValidateADT_A08) {
+    auto result = hl7_message::parse(hl7_samples::ADT_A08);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate(*result);
+    EXPECT_TRUE(validation.valid);
+    EXPECT_EQ(validation.type, message_type::ADT);
+    EXPECT_EQ(validation.trigger_event, "A08");
+}
+
+TEST_F(HL7ValidatorTest, ValidateORM_O01) {
+    auto result = hl7_message::parse(hl7_samples::ORM_O01);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate(*result);
+    EXPECT_TRUE(validation.valid);
+    EXPECT_EQ(validation.type, message_type::ORM);
+    EXPECT_EQ(validation.trigger_event, "O01");
+}
+
+TEST_F(HL7ValidatorTest, ValidateORU_R01) {
+    auto result = hl7_message::parse(hl7_samples::ORU_R01);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate(*result);
+    // Note: Sample ORU_R01 might not have OBR-25
+    EXPECT_EQ(validation.type, message_type::ORU);
+    EXPECT_EQ(validation.trigger_event, "R01");
+}
+
+TEST_F(HL7ValidatorTest, ValidateACK) {
+    auto result = hl7_message::parse(hl7_samples::ACK_AA);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate(*result);
+    EXPECT_TRUE(validation.valid);
+    EXPECT_EQ(validation.type, message_type::ACK);
+}
+
+TEST_F(HL7ValidatorTest, MissingRequiredSegment_EVN) {
+    // ADT without EVN segment
+    const char* adt_no_evn =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN\r";
+
+    auto result = hl7_message::parse(adt_no_evn);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_adt(*result);
+    EXPECT_FALSE(validation.valid);
+    EXPECT_GT(validation.error_count(), 0u);
+
+    // Check for EVN segment error
+    bool found_evn_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("EVN") != std::string::npos &&
+            issue.severity == validation_severity::error) {
+            found_evn_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_evn_error);
+}
+
+TEST_F(HL7ValidatorTest, MissingRequiredField_PatientID) {
+    // ADT without PID-3 (Patient ID)
+    const char* adt_no_pid3 =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
+        "EVN|A01|20240115103000\r"
+        "PID|1||||DOE^JOHN\r";
+
+    auto result = hl7_message::parse(adt_no_pid3);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_adt(*result);
+    EXPECT_FALSE(validation.valid);
+
+    // Check for PID.3 error
+    bool found_pid3_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("PID.3") != std::string::npos) {
+            found_pid3_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_pid3_error);
+}
+
+TEST_F(HL7ValidatorTest, MissingRequiredField_PatientName) {
+    // ADT without PID-5 (Patient Name)
+    const char* adt_no_name =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
+        "EVN|A01|20240115103000\r"
+        "PID|1||12345^^^HOSPITAL^MR\r";
+
+    auto result = hl7_message::parse(adt_no_name);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_adt(*result);
+    EXPECT_FALSE(validation.valid);
+
+    // Check for PID.5 error
+    bool found_pid5_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("PID.5") != std::string::npos) {
+            found_pid5_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_pid5_error);
+}
+
+TEST_F(HL7ValidatorTest, ORM_MissingORC) {
+    // ORM without ORC segment
+    const char* orm_no_orc =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115110000||ORM^O01|MSG003|P|2.4\r"
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN\r"
+        "OBR|1|ORD001^HIS|ACC001^PACS|71020^CHEST XRAY^CPT\r";
+
+    auto result = hl7_message::parse(orm_no_orc);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_orm(*result);
+    EXPECT_FALSE(validation.valid);
+
+    // Check for ORC segment error
+    bool found_orc_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("ORC") != std::string::npos &&
+            issue.type == validation_issue_type::missing_segment) {
+            found_orc_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_orc_error);
+}
+
+TEST_F(HL7ValidatorTest, ORM_MissingOrderControl) {
+    // ORM with empty ORC-1
+    const char* orm_no_orc1 =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115110000||ORM^O01|MSG003|P|2.4\r"
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN\r"
+        "ORC||ORD001^HIS|ACC001^PACS\r"
+        "OBR|1|ORD001^HIS|ACC001^PACS|71020^CHEST XRAY^CPT\r";
+
+    auto result = hl7_message::parse(orm_no_orc1);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_orm(*result);
+    EXPECT_FALSE(validation.valid);
+
+    // Check for ORC.1 error
+    bool found_orc1_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("ORC.1") != std::string::npos) {
+            found_orc1_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_orc1_error);
+}
+
+TEST_F(HL7ValidatorTest, ACK_InvalidAckCode) {
+    // ACK with invalid ack code
+    const char* ack_invalid =
+        "MSH|^~\\&|PACS|RADIOLOGY|HIS|HOSPITAL|20240115103001||ACK|ACK001|P|2.4\r"
+        "MSA|XX|MSG001|Invalid code\r";
+
+    auto result = hl7_message::parse(ack_invalid);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_ack(*result);
+    EXPECT_FALSE(validation.valid);
+
+    // Check for MSA.1 invalid value error
+    bool found_msa1_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("MSA.1") != std::string::npos &&
+            issue.type == validation_issue_type::invalid_field_value) {
+            found_msa1_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_msa1_error);
+}
+
+TEST_F(HL7ValidatorTest, ACK_MissingMSA) {
+    // ACK without MSA segment
+    const char* ack_no_msa =
+        "MSH|^~\\&|PACS|RADIOLOGY|HIS|HOSPITAL|20240115103001||ACK|ACK001|P|2.4\r";
+
+    auto result = hl7_message::parse(ack_no_msa);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_ack(*result);
+    EXPECT_FALSE(validation.valid);
+
+    // Check for MSA segment error
+    bool found_msa_error = false;
+    for (const auto& issue : validation.issues) {
+        if (issue.location.find("MSA") != std::string::npos &&
+            issue.type == validation_issue_type::missing_segment) {
+            found_msa_error = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(found_msa_error);
+}
+
+TEST_F(HL7ValidatorTest, MissingMSH) {
+    // Message without MSH - should fail at parse level
+    const char* no_msh =
+        "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN\r";
+
+    auto result = hl7_message::parse(no_msh);
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(HL7ValidatorTest, ValidationSummary) {
+    // ADT without EVN and PID-5
+    const char* incomplete_adt =
+        "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
+        "PID|1||12345^^^HOSPITAL^MR\r";
+
+    auto result = hl7_message::parse(incomplete_adt);
+    ASSERT_TRUE(result.has_value());
+
+    auto validation = hl7_validator::validate_adt(*result);
+    EXPECT_FALSE(validation.valid);
+
+    std::string summary = validation.summary();
+    EXPECT_THAT(summary, HasSubstr("error"));
+    EXPECT_THAT(summary, HasSubstr("EVN"));
+}
+
+TEST_F(HL7ValidatorTest, AutoDetectMessageType) {
+    // Test auto-detection for different message types
+    auto adt = hl7_message::parse(hl7_samples::ADT_A01);
+    ASSERT_TRUE(adt.has_value());
+    EXPECT_EQ(hl7_validator::validate(*adt).type, message_type::ADT);
+
+    auto orm = hl7_message::parse(hl7_samples::ORM_O01);
+    ASSERT_TRUE(orm.has_value());
+    EXPECT_EQ(hl7_validator::validate(*orm).type, message_type::ORM);
+
+    auto ack = hl7_message::parse(hl7_samples::ACK_AA);
+    ASSERT_TRUE(ack.has_value());
+    EXPECT_EQ(hl7_validator::validate(*ack).type, message_type::ACK);
+}
+
+TEST_F(HL7ValidatorTest, CheckSegmentHelper) {
+    auto msg = hl7_message::parse(hl7_samples::ADT_A01);
+    ASSERT_TRUE(msg.has_value());
+
+    validator_result result;
+    result.type = message_type::ADT;
+
+    // Existing segment - should pass
+    EXPECT_TRUE(hl7_validator::check_segment(*msg, "PID", result, true));
+    EXPECT_TRUE(result.valid);
+
+    // Non-existing required segment - should fail
+    EXPECT_FALSE(hl7_validator::check_segment(*msg, "ZZZ", result, true));
+    EXPECT_FALSE(result.valid);
+}
+
+TEST_F(HL7ValidatorTest, CheckFieldHelper) {
+    auto msg = hl7_message::parse(hl7_samples::ADT_A01);
+    ASSERT_TRUE(msg.has_value());
+
+    validator_result result;
+    result.type = message_type::ADT;
+    result.valid = true;
+
+    // Existing field - should pass
+    EXPECT_TRUE(hl7_validator::check_field(*msg, "PID.3", result, true));
+    EXPECT_TRUE(result.valid);
+
+    // Non-existing required field - should fail
+    result.valid = true;
+    result.issues.clear();
+    EXPECT_FALSE(hl7_validator::check_field(*msg, "PID.99", result, true));
+    EXPECT_FALSE(result.valid);
 }
 
 }  // namespace
