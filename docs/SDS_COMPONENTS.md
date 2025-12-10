@@ -389,6 +389,132 @@ private:
 } // namespace pacs::bridge::hl7
 ```
 
+### DES-HL7-003a: oru_generator
+
+**Traces to:** FR-2.3.1, FR-2.3.2
+
+**Status:** Implemented (Issue #25)
+
+```cpp
+namespace pacs::bridge::hl7 {
+
+/**
+ * @brief Report status codes (OBR-25, OBX-11)
+ */
+enum class report_status : char {
+    preliminary = 'P',     ///< Preliminary - Draft report
+    final_report = 'F',    ///< Final - Complete report
+    corrected = 'C',       ///< Corrected - Amended report
+    cancelled = 'X'        ///< Cancelled - Report cancelled
+};
+
+/**
+ * @brief Study information for ORU message generation
+ */
+struct oru_study_info {
+    std::string patient_id;
+    std::string patient_id_authority;
+    std::string patient_family_name;
+    std::string patient_given_name;
+    std::string patient_birth_date;
+    std::string patient_sex;
+    std::string placer_order_number;
+    std::string accession_number;
+    std::string procedure_code;
+    std::string procedure_description;
+    std::string procedure_coding_system;
+    std::optional<hl7_timestamp> observation_datetime;
+    std::string referring_physician_id;
+    std::string referring_physician_family_name;
+    std::string referring_physician_given_name;
+    std::string radiologist_id;
+    std::string radiologist_family_name;
+    std::string radiologist_given_name;
+    std::optional<std::string> study_instance_uid;
+
+    [[nodiscard]] bool is_valid() const noexcept;
+};
+
+/**
+ * @brief Configuration options for ORU message generation
+ */
+struct oru_generator_config {
+    std::string sending_application = "PACS";
+    std::string sending_facility = "RADIOLOGY";
+    std::string receiving_application = "RIS";
+    std::string receiving_facility = "HOSPITAL";
+    std::string version = "2.5.1";
+    std::string processing_id = "P";
+    bool use_loinc_codes = true;
+    std::string loinc_report_code = "18782-3";
+    std::string loinc_report_description = "Radiology Study observation";
+    std::string loinc_coding_system = "LN";
+};
+
+/**
+ * @brief ORU^R01 message generator for radiology reports
+ *
+ * Generates ORU^R01 messages for radiology report notifications
+ * with support for preliminary, final, corrected, and cancelled statuses.
+ */
+class oru_generator {
+public:
+    explicit oru_generator(const oru_generator_config& config = {});
+
+    /**
+     * @brief Generate ORU^R01 message with specified status
+     */
+    [[nodiscard]] std::expected<hl7_message, hl7_error> generate(
+        const oru_study_info& study,
+        std::string_view report_text,
+        report_status status) const;
+
+    /**
+     * @brief Generate preliminary report ORU^R01 message
+     */
+    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_preliminary(
+        const oru_study_info& study,
+        std::string_view report_text) const;
+
+    /**
+     * @brief Generate final report ORU^R01 message
+     */
+    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_final(
+        const oru_study_info& study,
+        std::string_view report_text) const;
+
+    /**
+     * @brief Generate corrected report ORU^R01 message
+     */
+    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_corrected(
+        const oru_study_info& study,
+        std::string_view report_text) const;
+
+    /**
+     * @brief Generate cancelled report ORU^R01 message
+     */
+    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_cancelled(
+        const oru_study_info& study,
+        std::string_view cancellation_reason = "") const;
+
+    /**
+     * @brief Encode text for HL7 OBX segment (handles special chars and newlines)
+     */
+    [[nodiscard]] static std::string encode_report_text(
+        std::string_view text,
+        const hl7_encoding_characters& encoding = {});
+
+    /**
+     * @brief Decode HL7-encoded text back to plain text
+     */
+    [[nodiscard]] static std::string decode_report_text(
+        std::string_view encoded_text,
+        const hl7_encoding_characters& encoding = {});
+};
+
+} // namespace pacs::bridge::hl7
+```
+
 ### DES-HL7-004: hl7_validator
 
 **Traces to:** FR-1.1.4, FR-1.2
