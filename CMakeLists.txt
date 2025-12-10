@@ -112,6 +112,7 @@ if(BRIDGE_BUILD_HL7)
         src/protocol/hl7/hl7_message.cpp
         src/protocol/hl7/hl7_parser.cpp
         src/protocol/hl7/hl7_builder.cpp
+        src/protocol/hl7/hl7_validator.cpp
         src/protocol/hl7/adt_handler.cpp
         src/protocol/hl7/orm_handler.cpp
     )
@@ -120,6 +121,7 @@ if(BRIDGE_BUILD_HL7)
         include/pacs/bridge/protocol/hl7/hl7_message.h
         include/pacs/bridge/protocol/hl7/hl7_parser.h
         include/pacs/bridge/protocol/hl7/hl7_builder.h
+        include/pacs/bridge/protocol/hl7/hl7_validator.h
         include/pacs/bridge/protocol/hl7/adt_handler.h
         include/pacs/bridge/protocol/hl7/orm_handler.h
     )
