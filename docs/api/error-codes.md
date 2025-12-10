@@ -595,6 +595,84 @@ openssl x509 -in /etc/pacs_bridge/certs/server.crt -noout -dates
 
 ---
 
+### PACS-6020: OAuth2 Token Request Failed
+
+**Description:** Failed to obtain access token from OAuth2 authorization server.
+
+**Cause:** Network error, server unavailable, or invalid endpoint.
+
+**Resolution:**
+1. Verify OAuth2 token URL is correct
+2. Check network connectivity to authorization server
+3. Review authorization server logs
+
+---
+
+### PACS-6021: OAuth2 Invalid Credentials
+
+**Description:** OAuth2 client credentials are invalid.
+
+**Cause:** Wrong client_id or client_secret.
+
+**Resolution:**
+1. Verify client_id and client_secret
+2. Check if credentials have expired
+3. Regenerate credentials if needed
+
+---
+
+### PACS-6022: OAuth2 Token Expired
+
+**Description:** OAuth2 access token has expired.
+
+**Cause:** Token lifetime exceeded.
+
+**Resolution:**
+1. Token will auto-refresh on next request
+2. Verify token_refresh_margin is configured properly
+3. Check authorization server clock synchronization
+
+---
+
+### PACS-6023: OAuth2 Refresh Failed
+
+**Description:** Failed to refresh OAuth2 access token.
+
+**Cause:** Refresh token invalid or revoked.
+
+**Resolution:**
+1. Re-authenticate to obtain new tokens
+2. Check if refresh token was revoked
+3. Verify refresh token endpoint
+
+---
+
+### PACS-6024: OAuth2 Scope Denied
+
+**Description:** Requested OAuth2 scope was denied.
+
+**Cause:** Insufficient client permissions.
+
+**Resolution:**
+1. Check configured scopes
+2. Request required scopes from administrator
+3. Review client registration
+
+---
+
+### PACS-6025: Smart-on-FHIR Discovery Failed
+
+**Description:** Failed to discover Smart-on-FHIR configuration.
+
+**Cause:** Discovery endpoint unavailable or invalid response.
+
+**Resolution:**
+1. Verify FHIR server base URL
+2. Check .well-known/smart-configuration endpoint
+3. Ensure FHIR server supports Smart-on-FHIR
+
+---
+
 ## Resolution Steps
 
 ### General Troubleshooting
