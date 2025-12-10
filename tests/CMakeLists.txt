@@ -368,6 +368,9 @@ add_integration_test(stress_test "integration;stress;phase2" 600)
 if(BRIDGE_BUILD_FHIR)
     # FHIR Server Tests (Phase 3 - Issue #31)
     add_bridge_test(fhir_server_test "unit;fhir;phase3")
+
+    # Patient Resource Tests (Phase 3 - Issue #32)
+    add_bridge_test(patient_resource_test "unit;fhir;patient;phase3")
 endif()
 
 # =============================================================================

@@ -10,6 +10,7 @@ set(FHIR_SOURCES
     operation_outcome.cpp
     resource_handler.cpp
     fhir_server.cpp
+    patient_resource.cpp
 )
 
 set(FHIR_HEADERS
@@ -18,6 +19,7 @@ set(FHIR_HEADERS
     ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/operation_outcome.h
     ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/resource_handler.h
     ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/fhir_server.h
+    ${CMAKE_SOURCE_DIR}/include/pacs/bridge/fhir/patient_resource.h
 )
 
 # Export sources to parent scope for main library
