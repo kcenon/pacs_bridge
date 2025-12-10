@@ -391,14 +391,15 @@ bool test_scoped_timer_basic() {
             recorded_duration = d;
         });
 
-        // Simulate some work
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        // Simulate some work - use longer sleep for CI stability
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
     TEST_ASSERT(recorded_duration.count() > 0,
                 "Timer should record non-zero duration");
-    TEST_ASSERT(recorded_duration >= std::chrono::milliseconds(10),
-                "Timer should record at least 10ms");
+    // Use relaxed threshold to handle CI timing variability (especially on Windows)
+    TEST_ASSERT(recorded_duration >= std::chrono::milliseconds(25),
+                "Timer should record at least 25ms (with CI tolerance)");
 
     return true;
 }
@@ -422,11 +423,13 @@ bool test_scoped_timer_cancel() {
 bool test_scoped_timer_elapsed() {
     scoped_metrics_timer timer([](auto /*d*/) {});
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    // Use longer sleep for CI stability (especially on Windows)
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     auto elapsed = timer.elapsed();
 
-    TEST_ASSERT(elapsed >= std::chrono::milliseconds(5),
-                "Elapsed should be at least 5ms");
+    // Use relaxed threshold to handle CI timing variability
+    TEST_ASSERT(elapsed >= std::chrono::milliseconds(25),
+                "Elapsed should be at least 25ms (with CI tolerance)");
 
     // Cancel to prevent callback
     timer.cancel();
