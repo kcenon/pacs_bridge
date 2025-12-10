@@ -207,6 +207,9 @@ if(BRIDGE_BUILD_HL7)
     # ORM Message Handler Tests (Issue #15) - custom framework
     add_bridge_test(orm_handler_test "unit;hl7;orm;phase1")
 
+    # SIU Message Handler Tests (Issue #26) - GTest framework
+    add_gtest_test(siu_handler_test "unit;hl7;siu;phase2")
+
     # HL7-DICOM Mapping Tests - custom framework
     add_bridge_test(mapping_test "unit;mapping;phase1")
 
@@ -371,6 +374,7 @@ if(BRIDGE_BUILD_HL7)
     message(STATUS "  - oru_generator_test")
     message(STATUS "  - adt_handler_test")
     message(STATUS "  - orm_handler_test")
+    message(STATUS "  - siu_handler_test")
     message(STATUS "  - mapping_test")
     message(STATUS "  - router_test")
     message(STATUS "  - outbound_router_test")
