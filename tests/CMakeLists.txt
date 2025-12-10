@@ -216,6 +216,9 @@ if(BRIDGE_BUILD_HL7)
     # Outbound Router Tests (Issue #28) - GTest framework
     add_gtest_test(outbound_router_test "unit;router;phase2")
 
+    # Queue Manager Tests (Issue #27) - GTest framework
+    add_gtest_test(queue_manager_test "unit;router;queue;phase2")
+
     # Patient Cache Tests - custom framework
     add_bridge_test(cache_test "unit;cache;phase1")
 endif()
@@ -358,6 +361,8 @@ if(BRIDGE_BUILD_HL7)
     message(STATUS "  - orm_handler_test")
     message(STATUS "  - mapping_test")
     message(STATUS "  - router_test")
+    message(STATUS "  - outbound_router_test")
+    message(STATUS "  - queue_manager_test")
     message(STATUS "  - cache_test")
 endif()
 message(STATUS "  - mllp_test")
