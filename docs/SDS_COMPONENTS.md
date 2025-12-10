@@ -1,8 +1,8 @@
 # SDS - Component Designs
 
-> **Version:** 1.5.0
+> **Version:** 1.6.0
 > **Parent Document:** [SDS.md](SDS.md)
-> **Last Updated:** 2025-12-07
+> **Last Updated:** 2025-12-10
 
 ---
 
@@ -1730,6 +1730,107 @@ private:
  */
 [[nodiscard]] administrative_gender dicom_sex_to_fhir_gender(
     std::string_view dicom_sex);
+
+} // namespace pacs::bridge::fhir
+```
+
+### DES-FHIR-004: service_request_handler
+
+**Traces to:** FR-2.2.2, SRS-FHIR-003
+
+```cpp
+namespace pacs::bridge::fhir {
+
+/**
+ * @brief Handler for FHIR ServiceRequest resource operations
+ *
+ * Implements CRUD operations for ServiceRequest resources by mapping
+ * to DICOM MWL (Modality Worklist) entries.
+ *
+ * Supported operations:
+ * - create: POST /ServiceRequest (creates MWL entry)
+ * - read: GET /ServiceRequest/{id}
+ * - search: GET /ServiceRequest?patient=xxx
+ * - search: GET /ServiceRequest?status=xxx
+ * - update: PUT /ServiceRequest/{id}
+ *
+ * Workflow:
+ *   POST /ServiceRequest
+ *          │
+ *          ▼
+ *   Validate resource
+ *          │
+ *          ▼
+ *   Resolve Patient reference
+ *          │
+ *          ▼
+ *   Map to DICOM MWL
+ *          │
+ *          ▼
+ *   Create MWL entry via pacs_system
+ *          │
+ *          ▼
+ *   Return created resource with id
+ */
+class service_request_handler : public resource_handler {
+public:
+    service_request_handler(
+        std::shared_ptr<cache::patient_cache> patient_cache,
+        std::shared_ptr<mapping::fhir_dicom_mapper> mapper,
+        std::shared_ptr<mwl_storage> storage);
+
+    // Create new ServiceRequest (creates MWL entry)
+    [[nodiscard]] resource_result<std::unique_ptr<fhir_resource>> create(
+        std::unique_ptr<fhir_resource> resource) override;
+
+    // Read ServiceRequest by ID
+    [[nodiscard]] resource_result<std::unique_ptr<fhir_resource>> read(
+        const std::string& id) override;
+
+    // Update existing ServiceRequest
+    [[nodiscard]] resource_result<std::unique_ptr<fhir_resource>> update(
+        const std::string& id,
+        std::unique_ptr<fhir_resource> resource) override;
+
+    // Search for ServiceRequests
+    // Supported parameters: _id, patient, status, code
+    [[nodiscard]] resource_result<search_result> search(
+        const std::map<std::string, std::string>& params,
+        const pagination_params& pagination) override;
+
+    // Get supported search parameters
+    [[nodiscard]] std::map<std::string, std::string>
+    supported_search_params() const override;
+
+private:
+    std::shared_ptr<cache::patient_cache> patient_cache_;
+    std::shared_ptr<mapping::fhir_dicom_mapper> mapper_;
+    std::shared_ptr<mwl_storage> storage_;
+};
+
+/**
+ * @brief MWL storage interface for ServiceRequest handler
+ */
+class mwl_storage {
+public:
+    virtual ~mwl_storage() = default;
+
+    virtual bool store(const std::string& id,
+                       const mapping::mwl_item& item) = 0;
+    [[nodiscard]] virtual std::optional<mapping::mwl_item> get(
+        const std::string& id) const = 0;
+    virtual bool update(const std::string& id,
+                        const mapping::mwl_item& item) = 0;
+    virtual bool remove(const std::string& id) = 0;
+    [[nodiscard]] virtual std::vector<std::string> keys() const = 0;
+};
+
+/**
+ * @brief In-memory MWL storage implementation
+ */
+class in_memory_mwl_storage : public mwl_storage {
+    // Thread-safe implementation using std::shared_mutex
+};
 
 } // namespace pacs::bridge::fhir
 ```
