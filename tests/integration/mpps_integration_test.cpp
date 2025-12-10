@@ -45,7 +45,11 @@ bool test_mpps_in_progress_basic() {
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
 
     // Wait for server to be ready
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     // Create MPPS bridge simulator
     mpps_bridge_simulator bridge(ris_port);
@@ -99,7 +103,11 @@ bool test_mpps_in_progress_with_patient_data() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
 
@@ -164,7 +172,11 @@ bool test_mpps_completion_basic() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
     auto event = mpps_event_generator::create_sample_event();
@@ -207,7 +219,11 @@ bool test_mpps_complete_workflow() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
     auto event = mpps_event_generator::create_sample_event();
@@ -274,7 +290,11 @@ bool test_mpps_discontinuation_basic() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
     auto event = mpps_event_generator::create_sample_event();
@@ -316,7 +336,11 @@ bool test_mpps_discontinuation_after_start() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
     auto event = mpps_event_generator::create_sample_event();
@@ -397,7 +421,11 @@ bool test_mpps_slow_ris_response() {
 
     mock_ris_server ris(ris_config);
     INTEGRATION_TEST_ASSERT(ris.start(), "Failed to start mock RIS server");
-    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    INTEGRATION_TEST_ASSERT(
+        integration_test_fixture::wait_for(
+            [&ris]() { return ris.is_running(); },
+            std::chrono::milliseconds{1000}),
+        "RIS server should start");
 
     mpps_bridge_simulator bridge(ris_port);
     auto event = mpps_event_generator::create_sample_event();
