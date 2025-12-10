@@ -11,6 +11,7 @@
  *   - Component reload callbacks
  *   - Validation before applying changes
  *   - File change watching (optional)
+ *   - C++20 Concepts for callback type safety (Issue #70)
  *
  * Reloadable configuration items:
  *   - Routing rules
@@ -43,14 +44,17 @@
  * ```
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/39
+ * @see https://github.com/kcenon/pacs_bridge/issues/70
  * @see docs/PRD.md - FR-5.1.4, NFR-5.4
  */
 
 #include "bridge_config.h"
 #include "config_loader.h"
+#include "pacs/bridge/concepts/bridge_concepts.h"
 
 #include <atomic>
 #include <chrono>
+#include <concepts>
 #include <expected>
 #include <filesystem>
 #include <functional>
@@ -283,6 +287,23 @@ public:
      * @return Handle for unregistering the callback
      */
     size_t on_reload(reload_callback_with_diff callback);
+
+    /**
+     * @brief Register a callback for configuration reload (concept-constrained)
+     *
+     * Template version using C++20 Concepts for compile-time validation.
+     * Provides clearer error messages when callback signature is incorrect.
+     *
+     * @tparam Callback Type satisfying concepts::ConfigCallback<bridge_config>
+     * @param callback Function to call on reload
+     * @return Handle for unregistering the callback
+     *
+     * @see concepts::ConfigCallback
+     */
+    template <concepts::ConfigCallback<bridge_config> Callback>
+    size_t on_reload_v2(Callback&& callback) {
+        return on_reload(reload_callback(std::forward<Callback>(callback)));
+    }
 
     /**
      * @brief Unregister a reload callback
