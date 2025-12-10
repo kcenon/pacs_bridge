@@ -296,9 +296,9 @@ TEST_F(QueueOperationsTest, EnqueueWithMetadata) {
 }
 
 TEST_F(QueueOperationsTest, EnqueueWithPriority) {
-    queue_->enqueue("RIS", "LOW", 100);
-    queue_->enqueue("RIS", "HIGH", -10);
-    queue_->enqueue("RIS", "NORMAL", 0);
+    (void)queue_->enqueue("RIS", "LOW", 100);
+    (void)queue_->enqueue("RIS", "HIGH", -10);
+    (void)queue_->enqueue("RIS", "NORMAL", 0);
 
     EXPECT_EQ(queue_->queue_depth(), 3u);
 
@@ -329,7 +329,7 @@ TEST_F(QueueOperationsTest, DequeueEmpty) {
 }
 
 TEST_F(QueueOperationsTest, DequeueBasic) {
-    queue_->enqueue("RIS", "TEST_PAYLOAD");
+    (void)queue_->enqueue("RIS", "TEST_PAYLOAD");
 
     auto msg = queue_->dequeue();
     ASSERT_TRUE(msg.has_value());
@@ -340,9 +340,9 @@ TEST_F(QueueOperationsTest, DequeueBasic) {
 }
 
 TEST_F(QueueOperationsTest, DequeueByDestination) {
-    queue_->enqueue("RIS", "RIS_MESSAGE");
-    queue_->enqueue("PACS", "PACS_MESSAGE");
-    queue_->enqueue("RIS", "RIS_MESSAGE_2");
+    (void)queue_->enqueue("RIS", "RIS_MESSAGE");
+    (void)queue_->enqueue("PACS", "PACS_MESSAGE");
+    (void)queue_->enqueue("RIS", "RIS_MESSAGE_2");
 
     auto msg = queue_->dequeue("PACS");
     ASSERT_TRUE(msg.has_value());
@@ -355,7 +355,7 @@ TEST_F(QueueOperationsTest, DequeueByDestination) {
 
 TEST_F(QueueOperationsTest, DequeueBatch) {
     for (int i = 0; i < 5; ++i) {
-        queue_->enqueue("RIS", "MSG_" + std::to_string(i));
+        (void)queue_->enqueue("RIS", "MSG_" + std::to_string(i));
     }
 
     auto batch = queue_->dequeue_batch(3);
@@ -406,8 +406,7 @@ TEST_F(QueueOperationsTest, NackMessage) {
 TEST_F(QueueOperationsTest, NackMaxRetries) {
     auto config = queue_config_builder::create()
                       .database(test_db_path_ + "_retry")
-                      .max_retry_count(2)
-                      .retry_policy(2, std::chrono::milliseconds{1}, 1.0)
+                      .retry_policy(2, std::chrono::seconds{1}, 1.0)
                       .build();
 
     queue_manager queue(config);
@@ -422,7 +421,7 @@ TEST_F(QueueOperationsTest, NackMaxRetries) {
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
         auto msg = queue.dequeue();
         if (msg) {
-            queue.nack(msg->id, "Failed attempt " + std::to_string(i + 1));
+            (void)queue.nack(msg->id, "Failed attempt " + std::to_string(i + 1));
         }
     }
 
@@ -430,7 +429,7 @@ TEST_F(QueueOperationsTest, NackMaxRetries) {
     std::this_thread::sleep_for(std::chrono::milliseconds{10});
     auto msg = queue.dequeue();
     if (msg) {
-        queue.nack(msg->id, "Final failure");
+        (void)queue.nack(msg->id, "Final failure");
     }
 
     // Check dead letter queue
@@ -469,7 +468,7 @@ TEST_F(DeadLetterTest, GetDeadLetters) {
     auto msg = queue_->dequeue();
     ASSERT_TRUE(msg.has_value());
 
-    queue_->dead_letter(msg->id, "Test reason");
+    (void)queue_->dead_letter(msg->id, "Test reason");
 
     auto dead_letters = queue_->get_dead_letters();
     ASSERT_EQ(dead_letters.size(), 1u);
@@ -484,7 +483,7 @@ TEST_F(DeadLetterTest, RetryDeadLetter) {
     std::string msg_id = *enqueue_result;
 
     auto msg = queue_->dequeue();
-    queue_->dead_letter(msg->id, "Test reason");
+    (void)queue_->dead_letter(msg->id, "Test reason");
 
     EXPECT_EQ(queue_->dead_letter_count(), 1u);
     EXPECT_EQ(queue_->queue_depth(), 0u);
@@ -507,7 +506,7 @@ TEST_F(DeadLetterTest, DeleteDeadLetter) {
     ASSERT_EXPECTED_OK(enqueue_result);
 
     auto msg = queue_->dequeue();
-    queue_->dead_letter(msg->id, "Test reason");
+    (void)queue_->dead_letter(msg->id, "Test reason");
 
     EXPECT_EQ(queue_->dead_letter_count(), 1u);
 
@@ -522,7 +521,7 @@ TEST_F(DeadLetterTest, PurgeDeadLetters) {
     for (int i = 0; i < 5; ++i) {
         auto result = queue_->enqueue("RIS", "PAYLOAD_" + std::to_string(i));
         auto msg = queue_->dequeue();
-        queue_->dead_letter(msg->id, "Reason " + std::to_string(i));
+        (void)queue_->dead_letter(msg->id, "Reason " + std::to_string(i));
     }
 
     EXPECT_EQ(queue_->dead_letter_count(), 5u);
@@ -543,7 +542,7 @@ TEST_F(DeadLetterTest, DeadLetterCallback) {
 
     auto enqueue_result = queue_->enqueue("RIS", "TEST_PAYLOAD");
     auto msg = queue_->dequeue();
-    queue_->dead_letter(msg->id, "Callback test");
+    (void)queue_->dead_letter(msg->id, "Callback test");
 
     EXPECT_TRUE(callback_called);
     EXPECT_EQ(received_entry.message.payload, "TEST_PAYLOAD");
@@ -566,8 +565,8 @@ TEST_F(StatisticsTest, InitialStatistics) {
 }
 
 TEST_F(StatisticsTest, EnqueueUpdatesStats) {
-    queue_->enqueue("RIS", "PAYLOAD1");
-    queue_->enqueue("RIS", "PAYLOAD2");
+    (void)queue_->enqueue("RIS", "PAYLOAD1");
+    (void)queue_->enqueue("RIS", "PAYLOAD2");
 
     auto stats = queue_->get_statistics();
     EXPECT_EQ(stats.total_enqueued, 2u);
@@ -575,9 +574,9 @@ TEST_F(StatisticsTest, EnqueueUpdatesStats) {
 }
 
 TEST_F(StatisticsTest, AckUpdatesStats) {
-    queue_->enqueue("RIS", "PAYLOAD");
+    (void)queue_->enqueue("RIS", "PAYLOAD");
     auto msg = queue_->dequeue();
-    queue_->ack(msg->id);
+    (void)queue_->ack(msg->id);
 
     auto stats = queue_->get_statistics();
     EXPECT_EQ(stats.total_delivered, 1u);
@@ -585,9 +584,9 @@ TEST_F(StatisticsTest, AckUpdatesStats) {
 }
 
 TEST_F(StatisticsTest, DeadLetterUpdatesStats) {
-    queue_->enqueue("RIS", "PAYLOAD");
+    (void)queue_->enqueue("RIS", "PAYLOAD");
     auto msg = queue_->dequeue();
-    queue_->dead_letter(msg->id, "Test");
+    (void)queue_->dead_letter(msg->id, "Test");
 
     auto stats = queue_->get_statistics();
     EXPECT_EQ(stats.total_dead_lettered, 1u);
@@ -595,9 +594,9 @@ TEST_F(StatisticsTest, DeadLetterUpdatesStats) {
 }
 
 TEST_F(StatisticsTest, DepthByDestination) {
-    queue_->enqueue("RIS", "RIS_1");
-    queue_->enqueue("RIS", "RIS_2");
-    queue_->enqueue("PACS", "PACS_1");
+    (void)queue_->enqueue("RIS", "RIS_1");
+    (void)queue_->enqueue("RIS", "RIS_2");
+    (void)queue_->enqueue("PACS", "PACS_1");
 
     auto stats = queue_->get_statistics();
 
@@ -619,7 +618,7 @@ TEST_F(StatisticsTest, DepthByDestination) {
 }
 
 TEST_F(StatisticsTest, ResetStatistics) {
-    queue_->enqueue("RIS", "PAYLOAD");
+    (void)queue_->enqueue("RIS", "PAYLOAD");
     queue_->reset_statistics();
 
     auto stats = queue_->get_statistics();
@@ -635,9 +634,9 @@ class QueueInspectionTest : public QueueOperationsTest {};
 TEST_F(QueueInspectionTest, QueueDepth) {
     EXPECT_EQ(queue_->queue_depth(), 0u);
 
-    queue_->enqueue("RIS", "MSG1");
-    queue_->enqueue("RIS", "MSG2");
-    queue_->enqueue("PACS", "MSG3");
+    (void)queue_->enqueue("RIS", "MSG1");
+    (void)queue_->enqueue("RIS", "MSG2");
+    (void)queue_->enqueue("PACS", "MSG3");
 
     EXPECT_EQ(queue_->queue_depth(), 3u);
     EXPECT_EQ(queue_->queue_depth("RIS"), 2u);
@@ -646,9 +645,9 @@ TEST_F(QueueInspectionTest, QueueDepth) {
 }
 
 TEST_F(QueueInspectionTest, GetDestinations) {
-    queue_->enqueue("RIS", "MSG1");
-    queue_->enqueue("PACS", "MSG2");
-    queue_->enqueue("EMR", "MSG3");
+    (void)queue_->enqueue("RIS", "MSG1");
+    (void)queue_->enqueue("PACS", "MSG2");
+    (void)queue_->enqueue("EMR", "MSG3");
 
     auto destinations = queue_->destinations();
     EXPECT_EQ(destinations.size(), 3u);
@@ -658,9 +657,9 @@ TEST_F(QueueInspectionTest, GetDestinations) {
 }
 
 TEST_F(QueueInspectionTest, GetPending) {
-    queue_->enqueue("RIS", "MSG1");
-    queue_->enqueue("RIS", "MSG2");
-    queue_->enqueue("PACS", "MSG3");
+    (void)queue_->enqueue("RIS", "MSG1");
+    (void)queue_->enqueue("RIS", "MSG2");
+    (void)queue_->enqueue("PACS", "MSG3");
 
     auto pending = queue_->get_pending("RIS", 10);
     EXPECT_EQ(pending.size(), 2u);
@@ -704,8 +703,8 @@ TEST_F(PersistenceTest, MessagesSurviveRestart) {
         queue_manager queue(config);
         ASSERT_EXPECTED_OK(queue.start());
 
-        queue.enqueue("RIS", "PERSISTENT_MSG_1");
-        queue.enqueue("RIS", "PERSISTENT_MSG_2");
+        (void)queue.enqueue("RIS", "PERSISTENT_MSG_1");
+        (void)queue.enqueue("RIS", "PERSISTENT_MSG_2");
 
         EXPECT_EQ(queue.queue_depth(), 2u);
         queue.stop();
@@ -787,7 +786,7 @@ TEST_F(PersistenceTest, DeadLettersSurviveRestart) {
         msg_id = *result;
 
         auto msg = queue.dequeue();
-        queue.dead_letter(msg->id, "Test persistence");
+        (void)queue.dead_letter(msg->id, "Test persistence");
 
         EXPECT_EQ(queue.dead_letter_count(), 1u);
         queue.stop();
@@ -820,9 +819,9 @@ class MaintenanceTest : public QueueOperationsTest {};
 TEST_F(MaintenanceTest, Compact) {
     // Enqueue and ack some messages to create fragmentation
     for (int i = 0; i < 10; ++i) {
-        auto result = queue_->enqueue("RIS", "MSG_" + std::to_string(i));
+        (void)queue_->enqueue("RIS", "MSG_" + std::to_string(i));
         auto msg = queue_->dequeue();
-        queue_->ack(msg->id);
+        (void)queue_->ack(msg->id);
     }
 
     // Compact should not throw
