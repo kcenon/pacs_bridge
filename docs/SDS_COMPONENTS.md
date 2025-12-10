@@ -393,8 +393,52 @@ private:
 
 **Traces to:** FR-1.1.4, FR-1.2
 
+**Status:** Implemented (Issue #11)
+
 ```cpp
 namespace pacs::bridge::hl7 {
+
+/**
+ * @brief Type of validation issue
+ */
+enum class validation_issue_type {
+    missing_segment,
+    missing_field,
+    invalid_field_value,
+    invalid_segment_order,
+    unexpected_segment,
+    conditional_failed
+};
+
+/**
+ * @brief Detailed validation issue information
+ */
+struct validator_issue {
+    validation_severity severity;
+    validation_issue_type type;
+    std::string location;    // e.g., "MSH.9" or "PID segment"
+    std::string message;
+    hl7_error code;
+};
+
+/**
+ * @brief Result of message validation
+ */
+struct validator_result {
+    bool valid = true;
+    message_type type;
+    std::string trigger_event;
+    std::vector<validator_issue> issues;
+
+    void add_error(validation_issue_type type, std::string_view location,
+                   std::string_view msg);
+    void add_warning(validation_issue_type type, std::string_view location,
+                     std::string_view msg);
+    [[nodiscard]] bool has_errors() const noexcept;
+    [[nodiscard]] size_t error_count() const noexcept;
+    [[nodiscard]] size_t warning_count() const noexcept;
+    [[nodiscard]] std::string summary() const;
+};
 
 /**
  * @brief Message type-specific validation
@@ -402,48 +446,48 @@ namespace pacs::bridge::hl7 {
 class hl7_validator {
 public:
     /**
-     * @brief Validate message structure
-     * @param message Parsed HL7 message
-     * @return Validation result with details
+     * @brief Validate message with auto-detected type from MSH-9
      */
-    [[nodiscard]] static Result<void> validate(const hl7_message& message);
+    [[nodiscard]] static validator_result validate(const hl7_message& message);
 
     /**
-     * @brief Validate ADT message
+     * @brief Validate ADT message (A01, A04, A08, A40)
+     * Required: MSH, EVN, PID; PID-3, PID-5
      */
-    [[nodiscard]] static Result<void> validate_adt(const hl7_message& message);
+    [[nodiscard]] static validator_result validate_adt(const hl7_message& message);
 
     /**
-     * @brief Validate ORM message
+     * @brief Validate ORM message (O01)
+     * Required: MSH, PID, ORC, OBR; ORC-1, ORC-2/ORC-3, OBR-4
      */
-    [[nodiscard]] static Result<void> validate_orm(const hl7_message& message);
+    [[nodiscard]] static validator_result validate_orm(const hl7_message& message);
 
     /**
-     * @brief Validate ORU message
+     * @brief Validate ORU message (R01)
+     * Required: MSH, PID, OBR, OBX; OBR-25
      */
-    [[nodiscard]] static Result<void> validate_oru(const hl7_message& message);
+    [[nodiscard]] static validator_result validate_oru(const hl7_message& message);
 
     /**
-     * @brief Validate SIU message
+     * @brief Validate SIU message (S12-S15)
+     * Required: MSH, SCH, PID; SCH-1
      */
-    [[nodiscard]] static Result<void> validate_siu(const hl7_message& message);
+    [[nodiscard]] static validator_result validate_siu(const hl7_message& message);
 
-private:
-    static Result<void> check_required_segments(
-        const hl7_message& message,
-        const std::vector<std::string>& required);
+    /**
+     * @brief Validate ACK message
+     * Required: MSH, MSA; MSA-1 (valid ack code), MSA-2
+     */
+    [[nodiscard]] static validator_result validate_ack(const hl7_message& message);
 
-    static Result<void> check_required_fields(
-        const hl7_segment& segment,
-        const std::vector<int>& required_fields);
-};
-
-/**
- * @brief Validation configuration for message types
- */
-struct validation_rules {
-    std::vector<std::string> required_segments;
-    std::map<std::string, std::vector<int>> required_fields;
+    // Helper functions
+    static void validate_msh(const hl7_message& message, validator_result& result);
+    static void validate_pid(const hl7_message& message, validator_result& result,
+                             bool require_patient_name = true);
+    static bool check_segment(const hl7_message& message, std::string_view segment_id,
+                              validator_result& result, bool required = true);
+    static bool check_field(const hl7_message& message, std::string_view path,
+                            validator_result& result, bool required = true);
 };
 
 } // namespace pacs::bridge::hl7
