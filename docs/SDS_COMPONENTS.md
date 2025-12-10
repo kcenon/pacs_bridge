@@ -1001,6 +1001,143 @@ private:
 } // namespace pacs::bridge::hl7
 ```
 
+### DES-HL7-007: siu_handler
+
+**Traces to:** FR-1.2.4, SRS-HL7-005
+
+```cpp
+namespace pacs::bridge::hl7 {
+
+/**
+ * @brief SIU handler specific error codes
+ *
+ * Allocated range: -870 to -879
+ */
+enum class siu_error : int {
+    not_siu_message = -870,
+    unsupported_trigger_event = -871,
+    missing_required_field = -872,
+    appointment_not_found = -873,
+    mwl_create_failed = -874,
+    mwl_update_failed = -875,
+    mwl_cancel_failed = -876,
+    duplicate_appointment = -877,
+    invalid_appointment_data = -878,
+    processing_failed = -879
+};
+
+/**
+ * @brief SIU trigger events
+ */
+enum class siu_trigger_event {
+    s12_new_appointment,    // Create MWL entry
+    s13_rescheduled,        // Update MWL timing
+    s14_modification,       // Update MWL details
+    s15_cancellation,       // Cancel MWL entry
+    unknown
+};
+
+/**
+ * @brief Appointment status codes (SCH-25)
+ */
+enum class appointment_status {
+    pending, booked, arrived, started, complete, cancelled, no_show, unknown
+};
+
+/**
+ * @brief SIU handler configuration
+ */
+struct siu_handler_config {
+    bool allow_s12_update = false;
+    bool allow_reschedule_create = false;
+    bool auto_generate_study_uid = true;
+    bool validate_appointment_data = true;
+    std::vector<std::string> required_fields = {
+        "patient_id", "patient_name", "appointment_id"};
+    bool detailed_ack = true;
+    bool audit_logging = true;
+    std::string ack_sending_application = "PACS_BRIDGE";
+    std::string ack_sending_facility = "RADIOLOGY";
+    std::string study_uid_root = "1.2.840.10008.5.1.4";
+};
+
+/**
+ * @brief SIU message handler for appointment-based MWL management
+ *
+ * Processes SIU (Scheduling Information Unsolicited) messages to create,
+ * update, and cancel Modality Worklist entries based on appointment data.
+ */
+class siu_handler {
+public:
+    // Callback types
+    using appointment_created_callback =
+        std::function<void(const appointment_info&, const mapping::mwl_item&)>;
+    using appointment_cancelled_callback =
+        std::function<void(const std::string&, const std::string&)>;
+
+    // Construction
+    explicit siu_handler(std::shared_ptr<pacs_adapter::mwl_client> mwl_client);
+    siu_handler(std::shared_ptr<pacs_adapter::mwl_client> mwl_client,
+                const siu_handler_config& config);
+    siu_handler(std::shared_ptr<pacs_adapter::mwl_client> mwl_client,
+                std::shared_ptr<mapping::hl7_dicom_mapper> mapper,
+                const siu_handler_config& config);
+    ~siu_handler();
+
+    // Message Handling
+    [[nodiscard]] std::expected<siu_result, siu_error> handle(
+        const hl7_message& message);
+    [[nodiscard]] bool can_handle(const hl7_message& message) const noexcept;
+    [[nodiscard]] std::vector<std::string> supported_triggers() const;
+
+    // Individual trigger handlers
+    [[nodiscard]] std::expected<siu_result, siu_error> handle_s12(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<siu_result, siu_error> handle_s13(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<siu_result, siu_error> handle_s14(
+        const hl7_message& message);
+    [[nodiscard]] std::expected<siu_result, siu_error> handle_s15(
+        const hl7_message& message);
+
+    // Utility
+    [[nodiscard]] std::expected<appointment_info, siu_error>
+    extract_appointment_info(const hl7_message& message) const;
+    [[nodiscard]] hl7_message generate_ack(
+        const hl7_message& original, bool success,
+        std::string_view error_code = "",
+        std::string_view error_message = "") const;
+
+    // Configuration
+    [[nodiscard]] const siu_handler_config& config() const noexcept;
+    void set_config(const siu_handler_config& config);
+
+    // Statistics
+    struct statistics {
+        size_t total_processed = 0;
+        size_t success_count = 0;
+        size_t failure_count = 0;
+        size_t s12_count = 0;
+        size_t s13_count = 0;
+        size_t s14_count = 0;
+        size_t s15_count = 0;
+        size_t entries_created = 0;
+        size_t entries_updated = 0;
+        size_t entries_cancelled = 0;
+        double avg_processing_ms = 0.0;
+    };
+
+    [[nodiscard]] statistics get_statistics() const;
+    void reset_statistics();
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::hl7
+```
+
 ---
 
 ## 2. MLLP Transport Module
