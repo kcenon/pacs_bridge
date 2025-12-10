@@ -126,6 +126,41 @@ else()
 endif()
 
 # =============================================================================
+# SQLite (Required for queue_manager persistence)
+# =============================================================================
+
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    message(STATUS "Found SQLite3: ${SQLite3_VERSION}")
+    set(PACS_BRIDGE_HAS_SQLITE TRUE CACHE BOOL "SQLite3 is available" FORCE)
+else()
+    # Try pkg-config on Unix systems
+    if(UNIX)
+        find_package(PkgConfig QUIET)
+        if(PKG_CONFIG_FOUND)
+            pkg_check_modules(SQLITE3 sqlite3)
+            if(SQLITE3_FOUND)
+                message(STATUS "Found SQLite3 via pkg-config: ${SQLITE3_VERSION}")
+                set(PACS_BRIDGE_HAS_SQLITE TRUE CACHE BOOL "SQLite3 is available" FORCE)
+                # Create imported target for consistency
+                if(NOT TARGET SQLite::SQLite3)
+                    add_library(SQLite::SQLite3 INTERFACE IMPORTED)
+                    set_target_properties(SQLite::SQLite3 PROPERTIES
+                        INTERFACE_INCLUDE_DIRECTORIES "${SQLITE3_INCLUDE_DIRS}"
+                        INTERFACE_LINK_LIBRARIES "${SQLITE3_LIBRARIES}"
+                    )
+                endif()
+            endif()
+        endif()
+    endif()
+
+    if(NOT PACS_BRIDGE_HAS_SQLITE)
+        message(STATUS "SQLite3 not found. Queue persistence will be disabled.")
+        set(PACS_BRIDGE_HAS_SQLITE FALSE CACHE BOOL "SQLite3 is available" FORCE)
+    endif()
+endif()
+
+# =============================================================================
 # OpenSSL (Optional, for TLS support)
 # =============================================================================
 
@@ -193,6 +228,16 @@ else()
             PACS_BRIDGE_HAS_PACS_SYSTEM
         )
     endif()
+endif()
+
+# Add SQLite if available
+if(PACS_BRIDGE_HAS_SQLITE)
+    if(TARGET SQLite::SQLite3)
+        target_link_libraries(pacs_bridge_dependencies INTERFACE SQLite::SQLite3)
+    endif()
+    target_compile_definitions(pacs_bridge_dependencies INTERFACE
+        PACS_BRIDGE_HAS_SQLITE
+    )
 endif()
 
 # Add OpenSSL if available
