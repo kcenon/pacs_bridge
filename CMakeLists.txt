@@ -316,6 +316,8 @@ endif()
 # See: https://github.com/kcenon/pacs_bridge/issues/104
 # See: https://github.com/kcenon/pacs_bridge/issues/105
 # See: https://github.com/kcenon/pacs_bridge/issues/106
+# See: https://github.com/kcenon/pacs_bridge/issues/107
+# See: https://github.com/kcenon/pacs_bridge/issues/121
 list(APPEND PACS_BRIDGE_SOURCES
     src/emr/emr_types.cpp
     src/emr/fhir_bundle.cpp
@@ -328,6 +330,8 @@ list(APPEND PACS_BRIDGE_SOURCES
     src/emr/diagnostic_report_builder.cpp
     src/emr/result_tracker.cpp
     src/emr/encounter_context.cpp
+    src/emr/emr_adapter.cpp
+    src/emr/adapters/generic_fhir_adapter.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/emr/emr_types.h
@@ -342,6 +346,8 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/emr/diagnostic_report_builder.h
     include/pacs/bridge/emr/result_tracker.h
     include/pacs/bridge/emr/encounter_context.h
+    include/pacs/bridge/emr/emr_adapter.h
+    include/pacs/bridge/emr/adapters/generic_fhir_adapter.h
 )
 
 # =============================================================================
