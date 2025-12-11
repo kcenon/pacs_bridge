@@ -4,6 +4,7 @@
 # See: https://github.com/kcenon/pacs_bridge/issues/102
 # See: https://github.com/kcenon/pacs_bridge/issues/104
 # See: https://github.com/kcenon/pacs_bridge/issues/105
+# See: https://github.com/kcenon/pacs_bridge/issues/106
 
 add_library(pacs_bridge_emr STATIC
     emr_types.cpp
@@ -16,6 +17,7 @@ add_library(pacs_bridge_emr STATIC
     result_poster.cpp
     diagnostic_report_builder.cpp
     result_tracker.cpp
+    encounter_context.cpp
 )
 
 target_include_directories(pacs_bridge_emr PUBLIC

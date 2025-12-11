@@ -395,7 +395,7 @@ if(BRIDGE_BUILD_FHIR)
 endif()
 
 # =============================================================================
-# Phase 5: EMR Client Tests (Issue #102, #104, #105)
+# Phase 5: EMR Client Tests (Issue #102, #104, #105, #106)
 # =============================================================================
 
 # FHIR R4 Client Tests (Issue #102)
@@ -406,6 +406,9 @@ add_gtest_test(patient_lookup_test "unit;emr;patient;phase5")
 
 # Result Poster Tests (Issue #105)
 add_gtest_test(result_poster_test "unit;emr;result;phase5")
+
+# Encounter Context Tests (Issue #106, #120)
+add_gtest_test(encounter_context_test "unit;emr;encounter;phase5")
 
 # =============================================================================
 # Test Summary
@@ -469,5 +472,6 @@ message(STATUS "Phase 5 EMR Client Tests:")
 message(STATUS "  - fhir_client_test")
 message(STATUS "  - patient_lookup_test")
 message(STATUS "  - result_poster_test")
+message(STATUS "  - encounter_context_test")
 message(STATUS "==========================")
 message(STATUS "")
