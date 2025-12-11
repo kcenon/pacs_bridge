@@ -2,12 +2,16 @@
 #
 # Provides FHIR R4 HTTP client functionality for EMR integration.
 # See: https://github.com/kcenon/pacs_bridge/issues/102
+# See: https://github.com/kcenon/pacs_bridge/issues/104
 
 add_library(pacs_bridge_emr STATIC
     emr_types.cpp
     fhir_bundle.cpp
     http_client_adapter.cpp
     fhir_client.cpp
+    patient_lookup.cpp
+    fhir_patient_parser.cpp
+    patient_matcher.cpp
 )
 
 target_include_directories(pacs_bridge_emr PUBLIC
