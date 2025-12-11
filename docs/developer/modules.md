@@ -28,6 +28,7 @@ pacs_bridge/
 │   ├── protocol/hl7/         # HL7 message handling
 │   ├── mllp/                 # MLLP transport
 │   ├── fhir/                 # FHIR gateway
+│   ├── emr/                  # EMR client integration
 │   ├── mapping/              # Protocol translation
 │   ├── router/               # Message routing
 │   ├── pacs_adapter/         # PACS integration
@@ -203,6 +204,106 @@ auto result = client.send(hl7_message);
 | `/fhir/r4/Patient/{id}` | GET, PUT | Patient |
 | `/fhir/r4/ServiceRequest` | GET, POST | ServiceRequest |
 | `/fhir/r4/ImagingStudy` | GET | ImagingStudy |
+
+### EMR Client Module (`emr/`)
+
+**Purpose:** Client-side integration with external EMR/FHIR servers.
+
+**Key Classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `fhir_client` | FHIR R4 REST client |
+| `patient_lookup_provider` | Patient demographics lookup |
+| `result_poster` | Post DiagnosticReport to EMR |
+| `encounter_context_provider` | Encounter/visit context retrieval |
+
+**Key Headers:**
+
+```cpp
+#include <pacs/bridge/emr/fhir_client.h>
+#include <pacs/bridge/emr/patient_lookup.h>
+#include <pacs/bridge/emr/result_poster.h>
+#include <pacs/bridge/emr/encounter_context.h>
+```
+
+**Encounter Context Provider:**
+
+The encounter context provider retrieves visit/encounter information from EMR systems via FHIR API. This enables linking imaging studies with patient visits for proper billing and clinical context.
+
+**Encounter Status Types:**
+- `planned` - Encounter is being planned
+- `arrived` - Patient has arrived
+- `triaged` - Patient is triaged
+- `in_progress` - Encounter is active
+- `on_leave` - Patient temporarily away
+- `finished` - Encounter complete
+- `cancelled` - Encounter cancelled
+
+**Encounter Classes:**
+- `inpatient` (IMP) - Inpatient admission
+- `outpatient` (AMB) - Ambulatory/outpatient
+- `emergency` (EMER) - Emergency visit
+- `home_health` (HH) - Home health
+- `virtual_visit` (VR) - Virtual/telehealth
+- `preadmission` (PRENC) - Pre-admission
+- `short_stay` (SS) - Observation/short stay
+
+**Usage Example:**
+
+```cpp
+// Configure encounter context provider
+encounter_context_config config;
+config.client = fhir_client;
+config.include_location = true;
+config.include_participants = true;
+config.cache_ttl = std::chrono::seconds{300};
+
+encounter_context_provider provider(config);
+
+// Get encounter by FHIR ID
+auto result = provider.get_encounter("enc-12345");
+if (auto* encounter = std::get_if<encounter_info>(&result)) {
+    std::cout << "Visit: " << encounter->visit_number << std::endl;
+    std::cout << "Status: " << to_string(encounter->status) << std::endl;
+
+    if (auto location = encounter->current_location()) {
+        std::cout << "Location: " << location->display << std::endl;
+    }
+}
+
+// Find active encounter for patient
+auto active_result = provider.find_active_encounter("patient-123");
+if (auto* active = std::get_if<std::optional<encounter_info>>(&active_result)) {
+    if (active->has_value()) {
+        std::cout << "Active encounter: " << (*active)->id << std::endl;
+    }
+}
+
+// Find encounter by visit number
+auto visit_result = provider.find_by_visit_number("V2025001234");
+```
+
+**Error Handling:**
+
+```cpp
+auto result = provider.get_encounter("invalid-id");
+if (auto* error = std::get_if<encounter_error>(&result)) {
+    std::cerr << "Error: " << to_string(*error) << std::endl;
+    // Handle specific errors
+    switch (*error) {
+        case encounter_error::not_found:
+            // Encounter doesn't exist
+            break;
+        case encounter_error::query_failed:
+            // FHIR query failed
+            break;
+        case encounter_error::multiple_active:
+            // Ambiguous - multiple active encounters
+            break;
+    }
+}
+```
 
 ---
 
