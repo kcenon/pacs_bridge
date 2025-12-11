@@ -1,6 +1,6 @@
 # PACS Bridge Verification Report
 
-> **Report Version:** 1.0.0
+> **Report Version:** 0.1.0.0
 > **Report Date:** 2025-12-07
 > **Language:** **English** | [한국어](VERIFICATION_REPORT_KO.md)
 > **Status:** Pre-Implementation
@@ -560,6 +560,6 @@ The PACS Bridge project has successfully completed Phase 0 (Documentation) with:
 
 ---
 
-*Report Version: 1.0.0*
+*Report Version: 0.1.0.0*
 *Generated: 2025-12-07*
 *Verified by: kcenon@naver.com*

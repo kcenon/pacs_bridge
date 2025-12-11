@@ -1,6 +1,6 @@
 # SDS - Component Designs
 
-> **Version:** 1.6.0
+> **Version:** 0.1.6.0
 > **Parent Document:** [SDS.md](SDS.md)
 > **Last Updated:** 2025-12-10
 
@@ -5153,7 +5153,7 @@ auto job_queue = thread_system::create_lockfree_queue<hl7_message>();
 
 ---
 
-*Document Version: 1.4.0*
+*Document Version: 0.1.4.0*
 *Created: 2025-12-07*
 *Updated: 2025-12-07 - Added Performance Module (Section 12)*
 *Author: kcenon@naver.com*

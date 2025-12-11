@@ -1,6 +1,6 @@
 # Product Requirements Document - PACS Bridge
 
-> **Version:** 1.0.0
+> **Version:** 0.1.0.0
 > **Last Updated:** 2025-12-07
 > **Language:** **English** | [한국어](PRD_KO.md)
 
@@ -752,6 +752,6 @@ logging:
 
 ---
 
-*Document Version: 1.0.0*
+*Document Version: 0.1.0.0*
 *Created: 2025-12-07*
 *Author: kcenon@naver.com*

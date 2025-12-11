@@ -1,6 +1,6 @@
 # Error Codes Reference
 
-> **Version:** 1.0.0
+> **Version:** 0.1.0.0
 > **Last Updated:** 2025-12-10
 
 ---

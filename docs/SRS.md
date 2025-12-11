@@ -1,6 +1,6 @@
 # Software Requirements Specification - PACS Bridge
 
-> **Version:** 1.0.0
+> **Version:** 0.1.0.0
 > **Last Updated:** 2025-12-07
 > **Language:** **English** | [한국어](SRS_KO.md)
 > **Standard:** IEEE 830-1998 based
@@ -1223,6 +1223,6 @@ pacs_system Integration Errors (-980 to -999):
 
 ---
 
-*Document Version: 1.0.0*
+*Document Version: 0.1.0.0*
 *Created: 2025-12-07*
 *Author: kcenon@naver.com*

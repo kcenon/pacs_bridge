@@ -1,6 +1,6 @@
 # PACS Bridge Validation Report
 
-> **Report Version:** 1.0.0
+> **Report Version:** 0.1.0.0
 > **Report Date:** 2025-12-07
 > **Language:** **English** | [한국어](VALIDATION_REPORT_KO.md)
 > **Status:** Pre-Implementation Phase (Planned Validation)
@@ -1166,6 +1166,6 @@ PACS Bridge has a comprehensive validation plan aligned with pacs_system:
 
 ---
 
-*Report Version: 1.0.0*
+*Report Version: 0.1.0.0*
 *Created: 2025-12-07*
 *Validator: kcenon@naver.com*
