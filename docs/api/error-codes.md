@@ -15,6 +15,9 @@
 - [Queue Errors](#queue-errors)
 - [PACS Errors](#pacs-errors)
 - [Security Errors](#security-errors)
+- [EMR Client Errors](#emr-client-errors)
+- [Result Posting Errors](#result-posting-errors)
+- [Encounter Context Errors](#encounter-context-errors)
 - [Resolution Steps](#resolution-steps)
 
 ---
@@ -885,6 +888,141 @@ Result posting errors occur when posting DiagnosticReport resources to EMR syste
 1. Check tracker configuration
 2. Verify memory limits
 3. Review cleanup settings
+
+---
+
+## Encounter Context Errors
+
+Encounter context errors occur when retrieving visit/encounter information from EMR systems.
+Error code range: -1080 to -1099
+
+### PACS-1080: Encounter Not Found
+
+**Description:** Encounter not found in EMR.
+
+**Cause:** Invalid encounter ID or resource deleted.
+
+**Resolution:**
+1. Verify encounter ID is correct
+2. Check if encounter was archived
+3. Query EMR system directly
+
+---
+
+### PACS-1081: Encounter Query Failed
+
+**Description:** Encounter query failed.
+
+**Cause:** FHIR client error or network issue.
+
+**Resolution:**
+1. Check FHIR client connectivity
+2. Verify EMR server is available
+3. Review authentication credentials
+
+---
+
+### PACS-1082: Multiple Active Encounters
+
+**Description:** Multiple active encounters found for patient.
+
+**Cause:** Patient has multiple concurrent visits.
+
+**Resolution:**
+1. Query with specific encounter ID
+2. Use visit number for disambiguation
+3. Contact admissions to resolve
+
+---
+
+### PACS-1083: Encounter Ended
+
+**Description:** Encounter has already ended.
+
+**Cause:** Attempting operation on closed encounter.
+
+**Resolution:**
+1. Verify encounter status before operation
+2. Use `find_encounters()` to find active encounters
+3. Create new encounter if needed
+
+---
+
+### PACS-1084: Invalid Encounter Data
+
+**Description:** Invalid encounter data in response.
+
+**Cause:** EMR returned malformed data.
+
+**Resolution:**
+1. Check EMR FHIR compliance
+2. Review response format
+3. Contact EMR vendor
+
+---
+
+### PACS-1085: Visit Number Not Found
+
+**Description:** Visit number not found.
+
+**Cause:** Invalid visit/account number.
+
+**Resolution:**
+1. Verify visit number format
+2. Check identifier system URI
+3. Query by patient ID instead
+
+---
+
+### PACS-1086: Invalid Encounter Status
+
+**Description:** Invalid encounter status value.
+
+**Cause:** Unknown status in response.
+
+**Resolution:**
+1. Check FHIR EncounterStatus values
+2. Review EMR configuration
+3. Update status mapping
+
+---
+
+### PACS-1087: Location Not Found
+
+**Description:** Location not found for encounter.
+
+**Cause:** Location reference invalid.
+
+**Resolution:**
+1. Verify location exists in EMR
+2. Check include_location configuration
+3. Location may be optional
+
+---
+
+### PACS-1088: Practitioner Not Found
+
+**Description:** Practitioner not found for encounter.
+
+**Cause:** Practitioner reference invalid.
+
+**Resolution:**
+1. Verify practitioner exists in EMR
+2. Check include_participants configuration
+3. Practitioner may be optional
+
+---
+
+### PACS-1089: Encounter Parse Failed
+
+**Description:** Encounter data parsing failed.
+
+**Cause:** JSON parsing error or missing fields.
+
+**Resolution:**
+1. Check response format
+2. Verify JSON structure
+3. Review required fields
 
 ---
 
