@@ -314,6 +314,7 @@ endif()
 # EMR Client Module (Phase 5) - FHIR R4 Client for external EMR systems
 # See: https://github.com/kcenon/pacs_bridge/issues/102
 # See: https://github.com/kcenon/pacs_bridge/issues/104
+# See: https://github.com/kcenon/pacs_bridge/issues/105
 list(APPEND PACS_BRIDGE_SOURCES
     src/emr/emr_types.cpp
     src/emr/fhir_bundle.cpp
@@ -322,6 +323,9 @@ list(APPEND PACS_BRIDGE_SOURCES
     src/emr/patient_lookup.cpp
     src/emr/fhir_patient_parser.cpp
     src/emr/patient_matcher.cpp
+    src/emr/result_poster.cpp
+    src/emr/diagnostic_report_builder.cpp
+    src/emr/result_tracker.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/emr/emr_types.h
@@ -332,6 +336,9 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/emr/patient_record.h
     include/pacs/bridge/emr/patient_lookup.h
     include/pacs/bridge/emr/patient_matcher.h
+    include/pacs/bridge/emr/result_poster.h
+    include/pacs/bridge/emr/diagnostic_report_builder.h
+    include/pacs/bridge/emr/result_tracker.h
 )
 
 # =============================================================================
