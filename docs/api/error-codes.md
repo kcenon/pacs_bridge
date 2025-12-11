@@ -755,6 +755,139 @@ EMR Client errors occur when communicating with external EMR/FHIR servers.
 
 ---
 
+## Result Posting Errors
+
+Result posting errors occur when posting DiagnosticReport resources to EMR systems.
+
+### PACS-1060: Result Post Failed
+
+**Description:** Failed to post result to EMR.
+
+**Cause:** Network error, server unavailable, or authentication failure.
+
+**Resolution:**
+1. Verify EMR server connectivity
+2. Check authentication credentials
+3. Review EMR server logs
+
+---
+
+### PACS-1061: Result Update Failed
+
+**Description:** Failed to update existing result.
+
+**Cause:** Resource not found, conflict, or authorization error.
+
+**Resolution:**
+1. Verify report ID exists
+2. Check ETag for optimistic locking
+3. Review authorization permissions
+
+---
+
+### PACS-1062: Duplicate Result Detected
+
+**Description:** A result for this study already exists.
+
+**Cause:** Duplicate posting attempt.
+
+**Resolution:**
+1. This is expected behavior - duplicate prevention working
+2. Use update operation if status change needed
+3. Check result tracking for existing entry
+
+---
+
+### PACS-1063: Invalid Result Data
+
+**Description:** Study result data is invalid.
+
+**Cause:** Missing required fields in study_result.
+
+**Resolution:**
+1. Ensure study_instance_uid is set
+2. Ensure patient_id is set
+3. Ensure modality and study_datetime are set
+
+---
+
+### PACS-1064: EMR Rejected Result
+
+**Description:** EMR rejected the DiagnosticReport.
+
+**Cause:** Resource validation failed or business rule violation.
+
+**Resolution:**
+1. Check OperationOutcome for details
+2. Verify FHIR resource format
+3. Review EMR validation rules
+
+---
+
+### PACS-1065: Result Not Found
+
+**Description:** Result not found for update.
+
+**Cause:** Invalid report ID or resource deleted.
+
+**Resolution:**
+1. Verify report ID is correct
+2. Check if resource was deleted
+3. Post as new result if appropriate
+
+---
+
+### PACS-1066: Invalid Status Transition
+
+**Description:** Invalid status transition.
+
+**Cause:** Attempted invalid status change (e.g., final -> registered).
+
+**Resolution:**
+1. Check allowed status transitions
+2. Use `amended` or `corrected` for post-final changes
+
+---
+
+### PACS-1067: Missing Reference
+
+**Description:** Missing required reference (patient, study, etc.).
+
+**Cause:** Required FHIR reference not provided.
+
+**Resolution:**
+1. Ensure patient_reference or patient_id is set
+2. Use auto_lookup_patient option if needed
+3. Verify all required references
+
+---
+
+### PACS-1068: DiagnosticReport Build Failed
+
+**Description:** Failed to build DiagnosticReport resource.
+
+**Cause:** Builder validation failed.
+
+**Resolution:**
+1. Check status, code, and subject are set
+2. Review validation errors
+3. Verify all required fields
+
+---
+
+### PACS-1069: Tracker Error
+
+**Description:** Result tracker operation failed.
+
+**Cause:** Internal tracking error.
+
+**Resolution:**
+1. Check tracker configuration
+2. Verify memory limits
+3. Review cleanup settings
+
+---
+
 ## Resolution Steps
 
 ### General Troubleshooting
