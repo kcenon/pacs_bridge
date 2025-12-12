@@ -1,0 +1,75 @@
+# Docker Compose configuration for EMR integration tests
+#
+# Usage:
+#   docker-compose -f tests/docker-compose.test.yml up -d
+#   # Run tests
+#   docker-compose -f tests/docker-compose.test.yml down
+#
+# Services:
+#   - hapi-fhir: HAPI FHIR R4 server for EMR integration testing
+#   - mock-oauth2: Mock OAuth2 server for authentication testing
+#
+# @see https://github.com/kcenon/pacs_bridge/issues/123
+
+version: '3.8'
+
+services:
+  # HAPI FHIR R4 Server
+  # Provides a fully compliant FHIR R4 server for testing
+  hapi-fhir:
+    image: hapiproject/hapi:latest
+    container_name: pacs-bridge-test-hapi-fhir
+    ports:
+      - "8080:8080"
+    environment:
+      # Server configuration
+      - hapi.fhir.server_address=http://localhost:8080/fhir
+      - hapi.fhir.fhir_version=R4
+      - hapi.fhir.allow_multiple_delete=true
+      - hapi.fhir.allow_external_references=true
+      - hapi.fhir.reuse_cached_search_results_millis=60000
+      # Validation settings (relaxed for testing)
+      - hapi.fhir.validation.enabled=false
+      # Logging
+      - hapi.fhir.narratives_enabled=false
+      # JVM settings for faster startup
+      - JAVA_TOOL_OPTIONS=-Xmx1g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/fhir/metadata"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - test-network
+    volumes:
+      - hapi-fhir-data:/app/target
+
+  # Mock OAuth2 Server (optional)
+  # Provides OAuth2 endpoints for authentication testing
+  mock-oauth2:
+    image: ghcr.io/navikt/mock-oauth2-server:0.5.6
+    container_name: pacs-bridge-test-mock-oauth2
+    ports:
+      - "8081:8080"
+    environment:
+      - SERVER_PORT=8080
+      - LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/.well-known/openid-configuration"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - test-network
+    profiles:
+      - oauth2
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  hapi-fhir-data:
+    driver: local

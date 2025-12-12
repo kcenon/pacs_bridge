@@ -414,6 +414,16 @@ add_gtest_test(encounter_context_test "unit;emr;encounter;phase5")
 add_gtest_test(emr_adapter_test "unit;emr;adapter;phase5")
 
 # =============================================================================
+# Phase 5: EMR E2E Integration Tests (Issue #123)
+# =============================================================================
+
+# EMR E2E Integration Tests (full workflow tests)
+add_integration_test(emr_e2e_test "integration;emr;e2e;phase5" 300)
+
+# HAPI FHIR Integration Tests (requires HAPI FHIR server)
+add_integration_test(hapi_fhir_test "integration;emr;hapi;phase5" 300)
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -477,5 +487,9 @@ message(STATUS "  - patient_lookup_test")
 message(STATUS "  - result_poster_test")
 message(STATUS "  - encounter_context_test")
 message(STATUS "  - emr_adapter_test")
+message(STATUS "")
+message(STATUS "Phase 5 EMR Integration Tests:")
+message(STATUS "  - emr_e2e_test")
+message(STATUS "  - hapi_fhir_test")
 message(STATUS "==========================")
 message(STATUS "")
