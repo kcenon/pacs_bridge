@@ -16,13 +16,14 @@ version: '3.8'
 services:
   # HAPI FHIR R4 Server
   # Provides a fully compliant FHIR R4 server for testing
+  # Use specific version for stability (latest can cause inconsistent test results)
   hapi-fhir:
-    image: hapiproject/hapi:latest
+    image: hapiproject/hapi:v7.6.0
     container_name: pacs-bridge-test-hapi-fhir
     ports:
       - "8080:8080"
     environment:
-      # Server configuration
+      # Server configuration (use underscores, HAPI converts to dots)
       - hapi.fhir.server_address=http://localhost:8080/fhir
       - hapi.fhir.fhir_version=R4
       - hapi.fhir.allow_multiple_delete=true
@@ -32,14 +33,14 @@ services:
       - hapi.fhir.validation.enabled=false
       # Logging
       - hapi.fhir.narratives_enabled=false
-      # JVM settings for faster startup
-      - JAVA_TOOL_OPTIONS=-Xmx1g
+      # JVM settings for faster startup and memory management
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx1g
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/fhir/metadata"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/fhir/metadata"]
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
     networks:
       - test-network
     volumes:

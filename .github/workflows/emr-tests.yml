@@ -156,21 +156,25 @@ jobs:
 
     services:
       # HAPI FHIR R4 Server for integration testing
+      # Use specific version for stability (latest can break CI)
       hapi-fhir:
-        image: hapiproject/hapi:latest
+        image: hapiproject/hapi:v7.6.0
         ports:
           - 8080:8080
         env:
-          hapi.fhir.server_address: http://localhost:8080/fhir
-          hapi.fhir.fhir_version: R4
-          hapi.fhir.allow_multiple_delete: true
-          hapi.fhir.validation.enabled: false
+          # Environment variables use underscores, HAPI converts to dots
+          hapi_fhir_server_address: http://localhost:8080/fhir
+          hapi_fhir_fhir_version: R4
+          hapi_fhir_allow_multiple_delete: "true"
+          hapi_fhir_validation_enabled: "false"
+          # Reduce startup memory requirements
+          JAVA_OPTS: -Xms256m -Xmx1024m
         options: >-
-          --health-cmd "curl -f http://localhost:8080/fhir/metadata || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 60s
+          --health-cmd "curl -sf http://localhost:8080/fhir/metadata > /dev/null || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 12
+          --health-start-period 120s
 
     steps:
     - name: Checkout pacs_bridge
