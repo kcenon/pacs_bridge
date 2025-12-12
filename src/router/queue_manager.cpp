@@ -5,6 +5,8 @@
 
 #include "pacs/bridge/router/queue_manager.h"
 
+#include "pacs/bridge/monitoring/bridge_metrics.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -320,14 +322,41 @@ public:
     }
 
     void cleanup_loop() {
+        // Queue depth update interval (5 seconds as per issue requirement)
+        constexpr auto metrics_update_interval = std::chrono::seconds{5};
+        auto last_cleanup = std::chrono::steady_clock::now();
+
         while (cleanup_running_) {
             std::unique_lock<std::mutex> lock(cleanup_mutex_);
-            cleanup_cv_.wait_for(lock, config_.cleanup_interval,
+            cleanup_cv_.wait_for(lock, metrics_update_interval,
                                   [this]() { return !cleanup_running_.load(); });
 
             if (!cleanup_running_) break;
 
-            cleanup_expired_internal();
+            // Update queue depth metrics for each destination
+            update_queue_depth_metrics();
+
+            // Check if cleanup interval has passed
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_cleanup >= config_.cleanup_interval) {
+                cleanup_expired_internal();
+                last_cleanup = now;
+            }
+        }
+    }
+
+    void update_queue_depth_metrics() {
+        auto destinations = destinations_internal();
+        auto& metrics = monitoring::bridge_metrics_collector::instance();
+
+        // Update total queue depth
+        size_t total_depth = queue_depth_internal("");
+        metrics.set_queue_depth("total", total_depth);
+
+        // Update depth per destination
+        for (const auto& dest : destinations) {
+            size_t depth = queue_depth_internal(dest);
+            metrics.set_queue_depth(dest, depth);
         }
     }
 
@@ -466,6 +495,10 @@ public:
             stats_.pending_count++;
         }
 
+        // Record metrics
+        monitoring::bridge_metrics_collector::instance().record_message_enqueued(
+            std::string(destination));
+
         // Notify workers
         worker_cv_.notify_one();
 
@@ -562,6 +595,15 @@ public:
     }
 
     std::expected<void, queue_error> ack_internal(std::string_view message_id) {
+        // Get message destination before deletion for metrics
+        std::string destination;
+        {
+            auto msg = get_message_internal(std::string(message_id));
+            if (msg) {
+                destination = msg->destination;
+            }
+        }
+
         std::unique_lock<std::shared_mutex> lock(db_mutex_);
         if (!db_) {
             return std::unexpected(queue_error::not_running);
@@ -595,6 +637,12 @@ public:
             if (stats_.processing_count > 0) stats_.processing_count--;
         }
 
+        // Record metrics
+        if (!destination.empty()) {
+            monitoring::bridge_metrics_collector::instance().record_message_delivered(
+                destination);
+        }
+
         return {};
     }
 
@@ -605,6 +653,10 @@ public:
         if (!msg) {
             return std::unexpected(queue_error::message_not_found);
         }
+
+        // Record delivery failure metric
+        monitoring::bridge_metrics_collector::instance().record_delivery_failure(
+            msg->destination);
 
         // Check if max retries exceeded
         if (static_cast<size_t>(msg->attempt_count) >= config_.max_retry_count) {
@@ -736,6 +788,10 @@ public:
             if (stats_.processing_count > 0) stats_.processing_count--;
             stats_.dead_letter_count++;
         }
+
+        // Record dead letter metric
+        monitoring::bridge_metrics_collector::instance().record_dead_letter(
+            msg->destination);
 
         // Notify callback
         if (dead_letter_callback_) {
