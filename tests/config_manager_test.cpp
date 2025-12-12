@@ -77,12 +77,26 @@ public:
     [[nodiscard]] const std::filesystem::path& path() const { return path_; }
 
     void update(const std::string& content) {
-        // Wait a bit to ensure file modification time changes
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        // Get original modification time
+        auto original_mtime = std::filesystem::last_write_time(path_);
 
+        // Write new content
         std::ofstream file(path_);
         file << content;
         file.close();
+
+        // Wait for file modification time to change using yield-based polling
+        // This handles filesystem timestamp resolution differences across platforms
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (std::filesystem::last_write_time(path_) == original_mtime) {
+            if (std::chrono::steady_clock::now() >= deadline) {
+                // Force mtime update by touching the file
+                std::filesystem::last_write_time(path_,
+                    std::filesystem::file_time_type::clock::now());
+                break;
+            }
+            std::this_thread::yield();
+        }
     }
 
 private:
