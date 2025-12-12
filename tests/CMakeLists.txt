@@ -370,6 +370,9 @@ add_integration_test(failover_test "integration;failover;phase2")
 # Stress Tests (high volume)
 add_integration_test(stress_test "integration;stress;phase2" 600)
 
+# Monitoring Integration Tests (Issue #90)
+add_integration_test(monitoring_integration_test "integration;monitoring;metrics;phase4" 180)
+
 # =============================================================================
 # Phase 3: FHIR Gateway Tests (Issue #31)
 # =============================================================================
@@ -470,6 +473,9 @@ if(PACS_BRIDGE_HAS_SQLITE)
 endif()
 message(STATUS "  - failover_test")
 message(STATUS "  - stress_test")
+message(STATUS "")
+message(STATUS "Phase 4 Integration Tests:")
+message(STATUS "  - monitoring_integration_test")
 if(BRIDGE_BUILD_FHIR)
     message(STATUS "")
     message(STATUS "Phase 3 FHIR Tests:")
