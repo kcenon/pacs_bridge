@@ -6,7 +6,7 @@
 # This directory contains example configuration files:
 #   - config/config.yaml           : Complete reference configuration
 #   - config/config-minimal.yaml   : Minimal setup configuration
-#   - config/config-production.yaml: Production-ready configuration
+#   - config/config-production.yaml: Deployment configuration
 #
 # Note: Example executables will be added in future phases.
 # Current focus is on configuration examples for deployment.
