@@ -158,6 +158,8 @@ jobs:
       # HAPI FHIR R4 Server for integration testing
       # Use specific version for stability (latest can break CI)
       # Note: HAPI FHIR requires significant startup time (60-90s) for Spring Boot initialization
+      # Note: No health check here because the distroless image lacks curl/wget
+      #       We use external health check in "Wait for HAPI FHIR" step instead
       hapi-fhir:
         image: hapiproject/hapi:v7.6.0
         ports:
@@ -171,12 +173,6 @@ jobs:
           hapi_fhir_narratives_enabled: "false"
           # JVM settings - use JAVA_TOOL_OPTIONS (not JAVA_OPTS) for Docker
           JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
-        options: >-
-          --health-cmd "curl -sf http://localhost:8080/fhir/metadata > /dev/null || exit 1"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 24
-          --health-start-period 120s
 
     steps:
     - name: Checkout pacs_bridge
