@@ -258,13 +258,13 @@ public:
         result.study_instance_uid =
             "1.2.840.113619.2.55.3.2024011510001234";
         result.patient_id = "MRN-12345678";
-        result.patient_name = "SMITH^JOHN^A";
+        result.patient_reference = "Patient/patient-001";
         result.accession_number = "ACC-2024-001234";
         result.modality = "DX";
         result.study_description = "Chest X-ray PA and Lateral";
         result.study_datetime = "2024-01-15T10:00:00Z";
         result.performing_physician = "Dr. Robert Chen";
-        result.report_text = "No acute cardiopulmonary abnormality.";
+        result.conclusion = "No acute cardiopulmonary abnormality.";
         result.status = result_status::final_report;
         return result;
     }
@@ -310,24 +310,24 @@ bool test_full_workflow_mpps_to_emr() {
 
     // Step 3: Build DiagnosticReport
     diagnostic_report_builder builder;
-    builder.set_patient_reference("Patient/patient-001")
-        .set_status(result_status::final_report)
-        .set_code("36643-5", "http://loinc.org", "Chest X-ray 2 Views")
-        .set_conclusion(study_result.report_text)
-        .set_effective_datetime(study_result.study_datetime);
+    builder.subject("Patient/patient-001")
+        .status(result_status::final_report)
+        .code_loinc("36643-5", "Chest X-ray 2 Views")
+        .conclusion(study_result.conclusion.value_or(""))
+        .effective_datetime(study_result.study_datetime);
 
     auto report_json = builder.build();
-    E2E_TEST_ASSERT(!report_json.empty(),
+    E2E_TEST_ASSERT(report_json.has_value(),
                     "DiagnosticReport JSON should not be empty");
-    E2E_TEST_ASSERT(report_json.find("DiagnosticReport") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("DiagnosticReport") != std::string::npos,
                     "Should contain DiagnosticReport resource type");
 
     // Step 4: Verify report content
-    E2E_TEST_ASSERT(report_json.find("Patient/patient-001") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("Patient/patient-001") != std::string::npos,
                     "Report should reference patient");
-    E2E_TEST_ASSERT(report_json.find("final") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("final") != std::string::npos,
                     "Report should have final status");
-    E2E_TEST_ASSERT(report_json.find("36643-5") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("36643-5") != std::string::npos,
                     "Report should have LOINC code");
 
     return true;
@@ -363,10 +363,10 @@ bool test_patient_lookup_to_mwl_creation() {
     patient_name name;
     name.family = "Smith";
     name.given = {"John", "Andrew"};
-    name.use = name_use::official;
+    name.use = "official";
     patient.names.push_back(name);
 
-    patient.gender = gender_type::male;
+    patient.sex = "male";
     patient.birth_date = "1985-07-15";
     patient.active = true;
 
@@ -379,15 +379,15 @@ bool test_patient_lookup_to_mwl_creation() {
     // Verify patient record is valid for MWL
     E2E_TEST_ASSERT(!patient.mrn.empty(), "Patient should have MRN");
     E2E_TEST_ASSERT(!patient.names.empty(), "Patient should have name");
-    E2E_TEST_ASSERT(patient.names[0].family == "Smith",
+    E2E_TEST_ASSERT(patient.names[0].family.value_or("") == "Smith",
                     "Patient family name should be Smith");
     E2E_TEST_ASSERT(patient.active, "Patient should be active");
 
     // Verify patient can be used for MWL entry
-    auto official_name = patient.get_official_name();
-    E2E_TEST_ASSERT(official_name.has_value(),
+    auto official_name_ptr = patient.official_name();
+    E2E_TEST_ASSERT(official_name_ptr != nullptr,
                     "Patient should have official name");
-    E2E_TEST_ASSERT(official_name->family == "Smith",
+    E2E_TEST_ASSERT(official_name_ptr->family.value_or("") == "Smith",
                     "Official name should be Smith");
 
     return true;
@@ -412,27 +412,27 @@ bool test_result_posting_workflow() {
 
     // Build DiagnosticReport
     diagnostic_report_builder builder;
-    builder.set_patient_reference("Patient/patient-001")
-        .set_encounter_reference("Encounter/enc-001")
-        .set_status(study_result.status)
-        .set_code("36643-5", "http://loinc.org", "Chest X-ray 2 Views")
-        .set_conclusion(study_result.report_text)
-        .set_effective_datetime(study_result.study_datetime)
-        .set_issued_datetime(study_result.study_datetime)
-        .add_performer("Practitioner/prac-rad-001",
-                       study_result.performing_physician)
-        .add_imaging_study_reference("ImagingStudy/img-study-001")
-        .add_based_on_reference("ServiceRequest/sr-001");
+    builder.subject("Patient/patient-001")
+        .encounter("Encounter/enc-001")
+        .status(study_result.status)
+        .code_loinc("36643-5", "Chest X-ray 2 Views")
+        .conclusion(study_result.conclusion.value_or(""))
+        .effective_datetime(study_result.study_datetime)
+        .issued(study_result.study_datetime)
+        .performer("Practitioner/prac-rad-001",
+                   study_result.performing_physician.value_or(""))
+        .imaging_study("ImagingStudy/img-study-001")
+        .based_on("ServiceRequest/sr-001");
 
     auto report_json = builder.build();
-    E2E_TEST_ASSERT(!report_json.empty(), "Report should be generated");
+    E2E_TEST_ASSERT(report_json.has_value(), "Report should be generated");
 
     // Verify report structure
-    E2E_TEST_ASSERT(report_json.find("resourceType") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("resourceType") != std::string::npos,
                     "Should have resourceType");
-    E2E_TEST_ASSERT(report_json.find("subject") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("subject") != std::string::npos,
                     "Should have subject reference");
-    E2E_TEST_ASSERT(report_json.find("encounter") != std::string::npos,
+    E2E_TEST_ASSERT(report_json->find("encounter") != std::string::npos,
                     "Should have encounter reference");
 
     // Initialize result tracker
@@ -442,22 +442,22 @@ bool test_result_posting_workflow() {
 
     in_memory_result_tracker tracker(tracker_config);
 
-    // Track the posted result
-    result_tracking_entry entry;
-    entry.study_instance_uid = study_result.study_instance_uid;
-    entry.accession_number = study_result.accession_number;
-    entry.patient_id = study_result.patient_id;
-    entry.status = tracking_status::posted;
-    entry.posted_at = std::chrono::system_clock::now();
+    // Track the posted result using posted_result structure
+    posted_result posted;
+    posted.report_id = "report-test-001";
+    posted.study_instance_uid = study_result.study_instance_uid;
+    posted.accession_number = study_result.accession_number;
+    posted.status = result_status::final_report;
+    posted.posted_at = std::chrono::system_clock::now();
 
-    auto track_result = tracker.track(entry);
-    E2E_TEST_ASSERT(track_result.has_value(), "Should track result successfully");
+    auto track_result = tracker.track(posted);
+    E2E_TEST_ASSERT(track_result, "Should track result successfully");
 
     // Verify tracking
-    auto tracked = tracker.find_by_uid(study_result.study_instance_uid);
+    auto tracked = tracker.get_by_study_uid(study_result.study_instance_uid);
     E2E_TEST_ASSERT(tracked.has_value(), "Should find tracked result");
-    E2E_TEST_ASSERT(tracked->status == tracking_status::posted,
-                    "Status should be posted");
+    E2E_TEST_ASSERT(tracked->status == result_status::final_report,
+                    "Status should be final");
 
     return true;
 }
@@ -522,13 +522,13 @@ bool test_multi_system_integration() {
 
     // Step 5: Build and post result to EMR
     diagnostic_report_builder builder;
-    builder.set_patient_reference("Patient/patient-001")
-        .set_status(result_status::final_report)
-        .set_code("36643-5", "http://loinc.org", "Chest X-ray 2 Views")
-        .set_conclusion(study_result.report_text);
+    builder.subject("Patient/patient-001")
+        .status(result_status::final_report)
+        .code_loinc("36643-5", "Chest X-ray 2 Views")
+        .conclusion(study_result.conclusion.value_or(""));
 
     auto report_json = builder.build();
-    E2E_TEST_ASSERT(!report_json.empty(), "Report should be built");
+    E2E_TEST_ASSERT(report_json.has_value(), "Report should be built");
 
     // Step 6: Order status update for HIS
     std::string order_status = "COMPLETED";
@@ -567,13 +567,11 @@ bool test_result_posting_failure_handling() {
     // Create result with missing required fields
     study_result incomplete_result;
     incomplete_result.study_instance_uid = "1.2.3.4.5";
-    // Missing patient_id, accession_number, etc.
+    // Missing patient_id, modality, study_datetime, etc.
 
-    // Verify validation catches incomplete data
-    bool is_valid = !incomplete_result.patient_id.empty() &&
-                    !incomplete_result.accession_number.empty();
-
-    E2E_TEST_ASSERT(!is_valid, "Incomplete result should fail validation");
+    // Verify validation catches incomplete data using is_valid()
+    E2E_TEST_ASSERT(!incomplete_result.is_valid(),
+                    "Incomplete result should fail validation");
 
     return true;
 }
@@ -582,26 +580,24 @@ bool test_result_posting_failure_handling() {
  * @brief Test retry logic on transient failures
  */
 bool test_transient_failure_retry() {
-    // Simulate retry configuration
+    // Simulate retry configuration using actual retry_policy structure
     retry_policy policy;
-    policy.max_attempts = 3;
-    policy.initial_delay = std::chrono::milliseconds{100};
-    policy.max_delay = std::chrono::seconds{5};
+    policy.max_retries = 3;
+    policy.initial_backoff = std::chrono::milliseconds{100};
+    policy.max_backoff = std::chrono::milliseconds{5000};
     policy.backoff_multiplier = 2.0;
 
-    E2E_TEST_ASSERT(policy.max_attempts == 3, "Should have 3 retry attempts");
+    E2E_TEST_ASSERT(policy.max_retries == 3, "Should have 3 retry attempts");
     E2E_TEST_ASSERT(policy.backoff_multiplier == 2.0,
                     "Should use exponential backoff");
 
-    // Simulate retry delays
-    auto delay1 = policy.initial_delay;
-    auto delay2 = std::chrono::duration_cast<std::chrono::milliseconds>(
-        delay1 * policy.backoff_multiplier);
-    auto delay3 = std::chrono::duration_cast<std::chrono::milliseconds>(
-        delay2 * policy.backoff_multiplier);
+    // Verify backoff_for() calculates correct delays
+    auto delay0 = policy.backoff_for(0);  // initial_backoff
+    auto delay1 = policy.backoff_for(1);  // initial_backoff * multiplier
+    auto delay2 = policy.backoff_for(2);  // initial_backoff * multiplier^2
 
-    E2E_TEST_ASSERT(delay1 < delay2, "Delay should increase");
-    E2E_TEST_ASSERT(delay2 < delay3, "Delay should continue increasing");
+    E2E_TEST_ASSERT(delay0 < delay1, "Delay should increase");
+    E2E_TEST_ASSERT(delay1 < delay2, "Delay should continue increasing");
 
     return true;
 }

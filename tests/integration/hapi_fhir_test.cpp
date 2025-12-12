@@ -339,17 +339,17 @@ bool test_reads_patient_by_id() {
 bool test_posts_diagnostic_report() {
     SKIP_IF_NO_SERVER();
 
-    // Build DiagnosticReport
+    // Build DiagnosticReport using correct API
     diagnostic_report_builder builder;
-    builder.set_patient_reference("Patient/patient-001")
-        .set_status(result_status::final_report)
-        .set_code("36643-5", "http://loinc.org", "Chest X-ray 2 Views")
-        .set_conclusion("No acute findings.")
-        .set_effective_datetime("2024-01-15T10:00:00Z");
+    builder.subject("Patient/patient-001")
+        .status(result_status::final_report)
+        .code_loinc("36643-5", "Chest X-ray 2 Views")
+        .conclusion("No acute findings.")
+        .effective_datetime("2024-01-15T10:00:00Z");
 
     auto report_json = builder.build();
-    HAPI_TEST_ASSERT(!report_json.empty(), "Report should be built");
-    HAPI_TEST_ASSERT(report_json.find("DiagnosticReport") != std::string::npos,
+    HAPI_TEST_ASSERT(report_json.has_value(), "Report should be built");
+    HAPI_TEST_ASSERT(report_json->find("DiagnosticReport") != std::string::npos,
                      "Should be DiagnosticReport");
 
     // In real implementation:
@@ -406,23 +406,16 @@ bool test_searches_diagnostic_reports() {
 bool test_batch_bundle_operation() {
     SKIP_IF_NO_SERVER();
 
-    // Create batch bundle
-    fhir_bundle bundle;
-    bundle.set_type(bundle_type::batch);
+    // Create batch bundle using bundle_builder
+    bundle_builder builder(bundle_type::batch);
 
     // Add patient search request
-    bundle_entry patient_entry;
-    patient_entry.request.method = "GET";
-    patient_entry.request.url = "Patient?identifier=MRN-12345678";
-    bundle.add_entry(patient_entry);
+    builder.add_search("Patient?identifier=MRN-12345678");
 
     // Add encounter search request
-    bundle_entry encounter_entry;
-    encounter_entry.request.method = "GET";
-    encounter_entry.request.url = "Encounter?patient=Patient/patient-001";
-    bundle.add_entry(encounter_entry);
+    builder.add_search("Encounter?patient=Patient/patient-001");
 
-    auto bundle_json = bundle.to_json();
+    auto bundle_json = builder.to_json();
     HAPI_TEST_ASSERT(!bundle_json.empty(), "Bundle JSON should not be empty");
     HAPI_TEST_ASSERT(bundle_json.find("batch") != std::string::npos,
                      "Should be batch bundle");
@@ -441,14 +434,13 @@ bool test_batch_bundle_operation() {
 bool test_transaction_bundle_operation() {
     SKIP_IF_NO_SERVER();
 
-    // Create transaction bundle
-    fhir_bundle bundle;
-    bundle.set_type(bundle_type::transaction);
+    // Create transaction bundle using bundle_builder
+    bundle_builder builder(bundle_type::transaction);
 
     // In real implementation, add resources that should be
     // created atomically (all succeed or all fail)
 
-    auto bundle_json = bundle.to_json();
+    auto bundle_json = builder.to_json();
     HAPI_TEST_ASSERT(bundle_json.find("transaction") != std::string::npos,
                      "Should be transaction bundle");
 
@@ -503,9 +495,9 @@ bool test_handles_validation_error() {
 bool test_handles_server_error() {
     // This test doesn't require server - tests error handling code paths
 
-    // Verify error types are properly defined
-    HAPI_TEST_ASSERT(to_error_code(emr_error::server_error) == -1005,
-                     "Server error code should be -1005");
+    // Verify error types are properly defined (based on emr_types.h)
+    HAPI_TEST_ASSERT(to_error_code(emr_error::server_error) == -1006,
+                     "Server error code should be -1006");
     HAPI_TEST_ASSERT(to_error_code(emr_error::connection_failed) == -1000,
                      "Connection failed code should be -1000");
 
