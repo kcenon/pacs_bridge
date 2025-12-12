@@ -347,12 +347,38 @@ ctest --test-dir build --output-on-failure
 # Run specific test
 ./build/bin/hl7_test --gtest_filter="HL7ParserTest.*"
 
+# Run tests by label
+ctest --test-dir build -L "emr"           # EMR tests only
+ctest --test-dir build -L "integration"   # Integration tests
+ctest --test-dir build -L "phase5"        # Phase 5 (EMR) tests
+
 # Run with coverage
 cmake -B build -DBRIDGE_BUILD_TESTS=ON -DBRIDGE_ENABLE_COVERAGE=ON
 cmake --build build
 ctest --test-dir build
 lcov --capture --directory build --output-file coverage.info
 ```
+
+### EMR Integration Tests
+
+EMR integration tests require additional setup:
+
+```bash
+# Start HAPI FHIR server for integration tests
+docker-compose -f tests/docker-compose.test.yml up -d
+
+# Run EMR E2E tests with FHIR server
+PACS_BRIDGE_EMR_E2E_TESTS=1 \
+HAPI_FHIR_URL=http://localhost:8080/fhir \
+ctest --test-dir build -L "emr_integration"
+
+# Stop test infrastructure
+docker-compose -f tests/docker-compose.test.yml down
+```
+
+Test fixtures are located in `tests/fixtures/`:
+- `fhir_resources/`: FHIR R4 resource examples (Patient, DiagnosticReport, etc.)
+- `mock_responses/`: Mock EMR server responses (OAuth tokens, errors)
 
 ---
 
