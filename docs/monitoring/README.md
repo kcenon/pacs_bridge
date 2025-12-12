@@ -7,7 +7,20 @@ This directory contains monitoring configuration files for PACS Bridge.
 PACS Bridge exports Prometheus metrics via the `/metrics` HTTP endpoint.
 These metrics can be scraped by Prometheus and visualized in Grafana.
 
-## Metrics Endpoint
+The health server provides a lightweight HTTP server using BSD sockets for
+cross-platform TCP networking. It supports health check probes for Kubernetes
+and Prometheus metrics scraping.
+
+## HTTP Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health/live` | GET | Kubernetes liveness probe |
+| `/health/ready` | GET | Kubernetes readiness probe |
+| `/health/deep` | GET | Deep health check with component details |
+| `/metrics` | GET | Prometheus metrics endpoint |
+
+## Metrics Endpoint Configuration
 
 The metrics endpoint is integrated with the health server:
 
@@ -15,9 +28,12 @@ The metrics endpoint is integrated with the health server:
 monitoring:
   health:
     port: 8081
+    bind_address: 0.0.0.0
     base_path: /health
     enable_metrics_endpoint: true
     metrics_path: /metrics
+    max_connections: 100
+    connection_timeout_seconds: 30
 ```
 
 ## Available Metrics
@@ -129,21 +145,60 @@ cp prometheus/alerts.yml /etc/prometheus/rules/pacs_bridge_alerts.yml
 
 ## Usage in Code
 
-### Enabling Metrics Collection
+### Starting the HTTP Server
+
+```cpp
+#include <pacs/bridge/monitoring/health_checker.h>
+#include <pacs/bridge/monitoring/health_server.h>
+#include <pacs/bridge/monitoring/bridge_metrics.h>
+
+using namespace pacs::bridge::monitoring;
+
+// Create health checker with configuration
+health_config health_cfg;
+health_checker checker(health_cfg);
+
+// Configure health server
+health_server::config server_cfg;
+server_cfg.port = 8081;
+server_cfg.bind_address = "0.0.0.0";
+server_cfg.base_path = "/health";
+server_cfg.enable_metrics_endpoint = true;
+server_cfg.metrics_path = "/metrics";
+
+// Create and start server
+health_server server(checker, server_cfg);
+if (server.start()) {
+    std::cout << "Health server started at " << server.metrics_url() << std::endl;
+}
+
+// Server automatically integrates with bridge_metrics_collector
+// The /metrics endpoint returns Prometheus-formatted metrics
+```
+
+### Automatic Metrics Integration
+
+When the health server starts, it automatically configures the metrics provider
+to use `bridge_metrics_collector::get_prometheus_metrics()`. No manual setup
+is required for basic usage.
+
+To use a custom metrics provider:
+
+```cpp
+server.set_metrics_provider([]() {
+    return custom_metrics_function();
+});
+```
+
+### Manual Metrics Collection Setup
 
 ```cpp
 #include <pacs/bridge/monitoring/bridge_metrics.h>
 
 // Initialize metrics collector
 auto& metrics = pacs::bridge::monitoring::bridge_metrics_collector::instance();
-metrics.initialize("pacs_bridge", 9090);
-
-// Connect to health server
-health_server server(checker, config);
-server.set_metrics_provider([]() {
-    return pacs::bridge::monitoring::bridge_metrics_collector::instance()
-        .get_prometheus_metrics();
-});
+metrics.initialize("pacs_bridge", 0);  // Port 0 = HTTP disabled
+metrics.set_enabled(true);
 ```
 
 ### Recording Metrics
