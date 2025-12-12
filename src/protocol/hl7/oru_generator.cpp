@@ -6,7 +6,9 @@
  */
 
 #include "pacs/bridge/protocol/hl7/oru_generator.h"
+#include "pacs/bridge/monitoring/bridge_metrics.h"
 
+#include <chrono>
 #include <sstream>
 
 namespace pacs::bridge::hl7 {
@@ -271,7 +273,26 @@ std::expected<hl7_message, hl7_error> oru_generator::generate(
     const oru_study_info& study,
     std::string_view report_text,
     report_status status) const {
-    return pimpl_->generate(study, report_text, status);
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Get metrics collector instance
+    auto& metrics = monitoring::bridge_metrics_collector::instance();
+
+    auto result = pimpl_->generate(study, report_text, status);
+
+    // Record processing duration
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        end - start);
+    metrics.record_hl7_processing_duration("ORU", duration);
+
+    if (result) {
+        metrics.record_hl7_message_sent("ORU");
+    } else {
+        metrics.record_hl7_error("ORU", "generation_failed");
+    }
+
+    return result;
 }
 
 std::expected<hl7_message, hl7_error> oru_generator::generate_preliminary(

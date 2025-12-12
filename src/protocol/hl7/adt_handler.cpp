@@ -7,6 +7,7 @@
 
 #include "pacs/bridge/protocol/hl7/adt_handler.h"
 #include "pacs/bridge/protocol/hl7/hl7_parser.h"
+#include "pacs/bridge/monitoring/bridge_metrics.h"
 
 #include <chrono>
 #include <mutex>
@@ -34,15 +35,24 @@ public:
     std::expected<adt_result, adt_error> handle(const hl7_message& message) {
         std::lock_guard<std::mutex> lock(mutex_);
 
+        // Record message received metric
+        auto& metrics = monitoring::bridge_metrics_collector::instance();
+        metrics.record_hl7_message_received("ADT");
+
+        // Start processing timer
+        auto start_time = std::chrono::high_resolution_clock::now();
+
         // Check if ADT message
         auto header = message.header();
         if (header.type != message_type::ADT) {
+            metrics.record_hl7_error("ADT", "not_adt_message");
             return std::unexpected(adt_error::not_adt_message);
         }
 
         // Parse trigger event
         auto trigger = parse_adt_trigger(header.trigger_event);
         if (trigger == adt_trigger_event::unknown) {
+            metrics.record_hl7_error("ADT", "unsupported_trigger_event");
             return std::unexpected(adt_error::unsupported_trigger_event);
         }
 
@@ -69,14 +79,24 @@ public:
                 stats_.a40_count++;
                 break;
             default:
+                metrics.record_hl7_error("ADT", "unsupported_trigger_event");
                 return std::unexpected(adt_error::unsupported_trigger_event);
         }
+
+        // Record processing duration
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            end_time - start_time);
+        metrics.record_hl7_processing_duration("ADT", duration);
 
         // Update statistics based on result
         if (result) {
             stats_.success_count++;
+            // Record ACK sent
+            metrics.record_hl7_message_sent("ADT_ACK");
         } else {
             stats_.failure_count++;
+            metrics.record_hl7_error("ADT", "processing_failed");
         }
 
         return result;
