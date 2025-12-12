@@ -157,6 +157,7 @@ jobs:
     services:
       # HAPI FHIR R4 Server for integration testing
       # Use specific version for stability (latest can break CI)
+      # Note: HAPI FHIR requires significant startup time (60-90s) for Spring Boot initialization
       hapi-fhir:
         image: hapiproject/hapi:v7.6.0
         ports:
@@ -167,14 +168,14 @@ jobs:
           hapi_fhir_fhir_version: R4
           hapi_fhir_allow_multiple_delete: "true"
           hapi_fhir_validation_enabled: "false"
-          # Reduce startup memory requirements
-          JAVA_OPTS: -Xms256m -Xmx1024m
+          # Optimize JVM for faster startup and lower memory usage
+          JAVA_OPTS: -Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication
         options: >-
           --health-cmd "curl -sf http://localhost:8080/fhir/metadata > /dev/null || exit 1"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 12
-          --health-start-period 120s
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 180s
 
     steps:
     - name: Checkout pacs_bridge
@@ -210,21 +211,35 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt update
-        sudo apt install -y cmake build-essential ninja-build pkg-config
+        sudo apt install -y cmake build-essential ninja-build pkg-config jq
         sudo apt install -y libsqlite3-dev libssl-dev libfmt-dev
         sudo apt install -y libgtest-dev libgmock-dev
         sudo apt install -y nlohmann-json3-dev libcurl4-openssl-dev
 
     - name: Wait for HAPI FHIR to be ready
       run: |
-        echo "Waiting for HAPI FHIR server..."
-        timeout 120 bash -c 'until curl -sf http://localhost:8080/fhir/metadata > /dev/null; do sleep 5; done'
-        echo "HAPI FHIR server is ready"
+        echo "Waiting for HAPI FHIR server to be ready..."
+        echo "This may take 60-90 seconds for Spring Boot initialization"
+        MAX_ATTEMPTS=60
+        ATTEMPT=0
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          if curl -sf http://localhost:8080/fhir/metadata > /dev/null 2>&1; then
+            echo "HAPI FHIR server is ready after $((ATTEMPT * 5)) seconds"
+            exit 0
+          fi
+          ATTEMPT=$((ATTEMPT + 1))
+          echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - waiting 5s..."
+          sleep 5
+        done
+        echo "ERROR: HAPI FHIR server did not become ready in time"
+        exit 1
 
     - name: Verify HAPI FHIR Server
       run: |
-        echo "=== HAPI FHIR CapabilityStatement ==="
-        curl -s http://localhost:8080/fhir/metadata | head -50
+        echo "=== HAPI FHIR Server Info ==="
+        echo "Checking CapabilityStatement..."
+        curl -sf http://localhost:8080/fhir/metadata | jq -r '.fhirVersion, .software.name, .software.version' 2>/dev/null || \
+          curl -s http://localhost:8080/fhir/metadata | head -50
 
     - name: Configure CMake
       working-directory: pacs_bridge
