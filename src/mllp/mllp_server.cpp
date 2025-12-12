@@ -19,6 +19,8 @@
 
 #include "pacs/bridge/mllp/mllp_server.h"
 
+#include "pacs/bridge/monitoring/bridge_metrics.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -339,6 +341,11 @@ public:
         if (it != sessions_.end()) {
             auto session = std::move(it->second);
             sessions_.erase(it);
+
+            // Update metrics: decrement active connection count
+            monitoring::bridge_metrics_collector::instance()
+                .set_mllp_active_connections(sessions_.size());
+
             lock.unlock();
 
             // Notify disconnection
@@ -355,6 +362,11 @@ public:
         std::unique_lock lock(sessions_mutex_);
         auto sessions_copy = std::move(sessions_);
         sessions_.clear();
+
+        // Update metrics: all connections closed
+        monitoring::bridge_metrics_collector::instance()
+            .set_mllp_active_connections(0);
+
         lock.unlock();
 
         for (auto& [id, session] : sessions_copy) {
@@ -619,6 +631,11 @@ private:
             {
                 std::unique_lock lock(sessions_mutex_);
                 sessions_[session_id] = std::move(session);
+
+                // Update metrics: record new connection and active count
+                auto& metrics = monitoring::bridge_metrics_collector::instance();
+                metrics.record_mllp_connection();
+                metrics.set_mllp_active_connections(sessions_.size());
             }
 
             // Start session handler thread

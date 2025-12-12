@@ -19,6 +19,8 @@
 
 #include "pacs/bridge/mllp/mllp_client.h"
 
+#include "pacs/bridge/monitoring/bridge_metrics.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -177,6 +179,9 @@ public:
 
         connected_ = true;
         increment_stat(&stats_.connect_successes);
+
+        // Record metrics: new connection established
+        monitoring::bridge_metrics_collector::instance().record_mllp_connection();
 
         return {};
     }
