@@ -165,4 +165,10 @@ metrics.record_mwl_query_duration(duration);
 // Update queue metrics
 metrics.set_queue_depth("pacs_destination", queue.size());
 metrics.record_message_enqueued("pacs_destination");
+
+// MLLP connection metrics (automatically tracked by MLLP server/client)
+// Server: records on accept, updates active count on connect/disconnect
+// Client: records on successful connect
+metrics.record_mllp_connection();
+metrics.set_mllp_active_connections(active_count);
 ```
