@@ -856,7 +856,8 @@ public:
         std::shared_lock<std::shared_mutex> lock(db_mutex_);
         if (!db_) return 0;
 
-        std::string sql = "SELECT COUNT(*) FROM message_queue WHERE state != ?";
+        // Count only pending and retry_scheduled messages (not processing or delivered)
+        std::string sql = "SELECT COUNT(*) FROM message_queue WHERE state IN (?, ?)";
         if (!destination.empty()) {
             sql += " AND destination = ?";
         }
@@ -865,9 +866,10 @@ public:
         int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
         if (rc != SQLITE_OK) return 0;
 
-        sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::delivered));
+        sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::pending));
+        sqlite3_bind_int(stmt, 2, static_cast<int>(message_state::retry_scheduled));
         if (!destination.empty()) {
-            sqlite3_bind_text(stmt, 2, std::string(destination).c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_text(stmt, 3, std::string(destination).c_str(), -1, SQLITE_TRANSIENT);
         }
 
         size_t count = 0;
