@@ -275,6 +275,10 @@ add_bridge_test(health_check_test "unit;monitoring")
 # These tests work with the internal implementation regardless of monitoring_system availability
 add_gtest_test(bridge_metrics_test "unit;monitoring;metrics")
 
+# Prometheus Endpoint Tests (Issue #88)
+# Tests HTTP server, /metrics endpoint, and health endpoints via TCP
+add_bridge_test(prometheus_endpoint_test "unit;monitoring;prometheus;phase4")
+
 # =============================================================================
 # Performance Tests
 # =============================================================================
