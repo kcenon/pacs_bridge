@@ -217,7 +217,15 @@ metrics.record_hl7_message_received("ADT");
 metrics.record_mwl_entry_created();
 metrics.record_mwl_query_duration(duration);
 
-// Update queue metrics
+// Queue metrics are automatically tracked by queue_manager
+// The following operations are recorded:
+// - record_message_enqueued: on successful enqueue
+// - record_message_delivered: on successful ack
+// - record_delivery_failure: on nack
+// - record_dead_letter: when message moves to dead letter queue
+// - set_queue_depth: updated every 5 seconds per destination
+
+// For manual queue metrics (if not using queue_manager):
 metrics.set_queue_depth("pacs_destination", queue.size());
 metrics.record_message_enqueued("pacs_destination");
 
