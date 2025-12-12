@@ -11,6 +11,7 @@
 
 #include "pacs/bridge/protocol/hl7/orm_handler.h"
 #include "pacs/bridge/protocol/hl7/hl7_builder.h"
+#include "pacs/bridge/monitoring/bridge_metrics.h"
 
 #include <algorithm>
 #include <chrono>
@@ -134,6 +135,10 @@ orm_handler& orm_handler::operator=(orm_handler&&) noexcept = default;
 
 std::expected<orm_result, orm_error> orm_handler::handle(
     const hl7_message& message) {
+    // Record message received metric
+    auto& metrics = monitoring::bridge_metrics_collector::instance();
+    metrics.record_hl7_message_received("ORM");
+
     auto start = std::chrono::steady_clock::now();
     pimpl_->stats_.total_processed++;
 
@@ -141,6 +146,7 @@ std::expected<orm_result, orm_error> orm_handler::handle(
     auto header = message.header();
     if (header.type != message_type::ORM) {
         pimpl_->stats_.failure_count++;
+        metrics.record_hl7_error("ORM", "not_orm_message");
         return std::unexpected(orm_error::not_orm_message);
     }
 
@@ -148,6 +154,7 @@ std::expected<orm_result, orm_error> orm_handler::handle(
     auto order_info_result = extract_order_info(message);
     if (!order_info_result) {
         pimpl_->stats_.failure_count++;
+        metrics.record_hl7_error("ORM", "extraction_failed");
         return std::unexpected(order_info_result.error());
     }
 
@@ -158,6 +165,7 @@ std::expected<orm_result, orm_error> orm_handler::handle(
         auto errors = pimpl_->validate_order(order);
         if (!errors.empty()) {
             pimpl_->stats_.failure_count++;
+            metrics.record_hl7_error("ORM", "invalid_order_data");
             return std::unexpected(orm_error::invalid_order_data);
         }
     }
@@ -192,19 +200,28 @@ std::expected<orm_result, orm_error> orm_handler::handle(
 
         default:
             pimpl_->stats_.failure_count++;
+            metrics.record_hl7_error("ORM", "unsupported_order_control");
             return std::unexpected(orm_error::unsupported_order_control);
     }
 
-    // Update statistics
+    // Update statistics and record processing duration
     auto end = std::chrono::steady_clock::now();
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     pimpl_->update_processing_time(elapsed);
 
+    // Record processing duration metric (convert to nanoseconds)
+    auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        end - start);
+    metrics.record_hl7_processing_duration("ORM", duration_ns);
+
     if (result) {
         pimpl_->stats_.success_count++;
+        // Record ACK sent
+        metrics.record_hl7_message_sent("ORM_ACK");
     } else {
         pimpl_->stats_.failure_count++;
+        metrics.record_hl7_error("ORM", "processing_failed");
     }
 
     return result;

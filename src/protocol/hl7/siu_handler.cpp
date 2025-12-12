@@ -11,6 +11,7 @@
 
 #include "pacs/bridge/protocol/hl7/siu_handler.h"
 #include "pacs/bridge/protocol/hl7/hl7_builder.h"
+#include "pacs/bridge/monitoring/bridge_metrics.h"
 
 #include <algorithm>
 #include <chrono>
@@ -202,10 +203,15 @@ std::expected<siu_result, siu_error> siu_handler::handle(
     auto start = std::chrono::steady_clock::now();
     pimpl_->stats_.total_processed++;
 
+    // Get metrics collector instance
+    auto& metrics = monitoring::bridge_metrics_collector::instance();
+    metrics.record_hl7_message_received("SIU");
+
     // Validate message type
     auto header = message.header();
     if (header.type != message_type::SIU) {
         pimpl_->stats_.failure_count++;
+        metrics.record_hl7_error("SIU", "not_siu_message");
         return std::unexpected(siu_error::not_siu_message);
     }
 
@@ -213,6 +219,7 @@ std::expected<siu_result, siu_error> siu_handler::handle(
     auto appt_result = extract_appointment_info(message);
     if (!appt_result) {
         pimpl_->stats_.failure_count++;
+        metrics.record_hl7_error("SIU", "extraction_failed");
         return std::unexpected(appt_result.error());
     }
 
@@ -223,6 +230,7 @@ std::expected<siu_result, siu_error> siu_handler::handle(
         auto errors = pimpl_->validate_appointment(appt);
         if (!errors.empty()) {
             pimpl_->stats_.failure_count++;
+            metrics.record_hl7_error("SIU", "invalid_appointment_data");
             return std::unexpected(siu_error::invalid_appointment_data);
         }
     }
@@ -252,6 +260,7 @@ std::expected<siu_result, siu_error> siu_handler::handle(
 
         default:
             pimpl_->stats_.failure_count++;
+            metrics.record_hl7_error("SIU", "unsupported_trigger_event");
             return std::unexpected(siu_error::unsupported_trigger_event);
     }
 
@@ -261,10 +270,17 @@ std::expected<siu_result, siu_error> siu_handler::handle(
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     pimpl_->update_processing_time(elapsed);
 
+    // Record processing duration for metrics
+    auto duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        end - start);
+    metrics.record_hl7_processing_duration("SIU", duration_ns);
+
     if (result) {
         pimpl_->stats_.success_count++;
+        metrics.record_hl7_message_sent("SIU_ACK");
     } else {
         pimpl_->stats_.failure_count++;
+        metrics.record_hl7_error("SIU", "processing_failed");
     }
 
     return result;
