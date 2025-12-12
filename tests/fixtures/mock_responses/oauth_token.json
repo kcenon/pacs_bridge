@@ -1,0 +1,7 @@
+{
+  "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImVtci1rZXktMDAxIn0.eyJpc3MiOiJodHRwczovL2Vtci5leGFtcGxlLm9yZy9vYXV0aDIiLCJzdWIiOiJwYWNzLWJyaWRnZS1jbGllbnQiLCJhdWQiOiJodHRwczovL2Vtci5leGFtcGxlLm9yZy9maGlyL3I0IiwiaWF0IjoxNzA1MzIwMDAwLCJleHAiOjE3MDUzMjM2MDAsInNjb3BlIjoicGF0aWVudC8qLnJlYWQgcGF0aWVudC8qLndyaXRlIGVuY291bnRlci8qLnJlYWQgb2JzZXJ2YXRpb24vKi53cml0ZSBkaWFnbm9zdGljcmVwb3J0Lyoud3JpdGUifQ.fake_signature_for_testing",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2Vtci5leGFtcGxlLm9yZy9vYXV0aDIiLCJzdWIiOiJwYWNzLWJyaWRnZS1jbGllbnQiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTcwNTMyMDAwMCwiZXhwIjoxNzA1OTI0ODAwfQ.fake_refresh_signature",
+  "scope": "patient/*.read patient/*.write encounter/*.read observation/*.write diagnosticreport/*.write"
+}

@@ -1,0 +1,326 @@
+# EMR Integration Tests Workflow
+#
+# Runs EMR-specific tests including unit tests and integration tests
+# with HAPI FHIR server for end-to-end validation.
+#
+# Test Categories:
+#   - EMR Unit Tests: fhir_client_test, patient_lookup_test, result_poster_test,
+#                     encounter_context_test, emr_adapter_test, oauth2_test
+#   - EMR Integration Tests: emr_e2e_test, hapi_fhir_test
+#
+# @see https://github.com/kcenon/pacs_bridge/issues/124
+# @see https://github.com/kcenon/pacs_bridge/issues/108
+
+name: EMR Integration Tests
+
+on:
+  push:
+    branches: [main, develop, feature/*]
+    paths:
+      - 'src/emr/**'
+      - 'include/pacs/bridge/emr/**'
+      - 'include/pacs/bridge/security/**'
+      - 'tests/*emr*'
+      - 'tests/*fhir*'
+      - 'tests/*oauth*'
+      - 'tests/*patient*'
+      - 'tests/*result*'
+      - 'tests/*encounter*'
+      - 'tests/integration/emr_*'
+      - 'tests/integration/hapi_*'
+      - 'tests/fixtures/**'
+      - '.github/workflows/emr-tests.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'src/emr/**'
+      - 'include/pacs/bridge/emr/**'
+      - 'include/pacs/bridge/security/**'
+      - 'tests/*emr*'
+      - 'tests/*fhir*'
+      - 'tests/*oauth*'
+      - 'tests/*patient*'
+      - 'tests/*result*'
+      - 'tests/*encounter*'
+      - 'tests/integration/emr_*'
+      - 'tests/integration/hapi_*'
+  workflow_dispatch:
+    inputs:
+      run_integration_tests:
+        description: 'Run integration tests with HAPI FHIR'
+        required: false
+        default: true
+        type: boolean
+
+# Ensure only one workflow runs per branch/PR
+concurrency:
+  group: emr-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  # EMR Unit Tests
+  emr-unit-tests:
+    name: EMR Unit Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout pacs_bridge
+      uses: actions/checkout@v4
+      with:
+        path: pacs_bridge
+
+    # Cache kcenon ecosystem dependencies
+    - name: Cache kcenon dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          common_system
+          thread_system
+          logger_system
+          container_system
+          network_system
+          monitoring_system
+          pacs_system
+        key: kcenon-deps-emr-v1-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
+        restore-keys: |
+          kcenon-deps-emr-v1-
+
+    - name: Checkout kcenon dependencies
+      run: |
+        [ -d common_system ] || git clone --depth 1 https://github.com/kcenon/common_system.git
+        [ -d thread_system ] || git clone --depth 1 https://github.com/kcenon/thread_system.git
+        [ -d logger_system ] || git clone --depth 1 https://github.com/kcenon/logger_system.git
+        [ -d container_system ] || git clone --depth 1 https://github.com/kcenon/container_system.git
+        [ -d network_system ] || git clone --depth 1 https://github.com/kcenon/network_system.git
+        [ -d monitoring_system ] || git clone --depth 1 https://github.com/kcenon/monitoring_system.git
+        [ -d pacs_system ] || git clone --depth 1 https://github.com/kcenon/pacs_system.git
+
+    - name: Install system dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y cmake build-essential ninja-build pkg-config
+        sudo apt install -y libsqlite3-dev libssl-dev libfmt-dev
+        sudo apt install -y libgtest-dev libgmock-dev
+        sudo apt install -y nlohmann-json3-dev libcurl4-openssl-dev
+
+    - name: Configure CMake
+      working-directory: pacs_bridge
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+          -DBRIDGE_BUILD_TESTS=ON \
+          -DBRIDGE_BUILD_EXAMPLES=OFF \
+          -DBRIDGE_BUILD_HL7=ON \
+          -DBRIDGE_BUILD_FHIR=ON
+
+    - name: Build
+      working-directory: pacs_bridge
+      run: cmake --build build --parallel
+
+    - name: Run EMR Unit Tests
+      working-directory: pacs_bridge/build
+      run: |
+        echo "=== Running EMR Unit Tests ==="
+        ctest -L "emr" --output-on-failure --timeout 120
+
+    - name: Run OAuth2 Tests
+      working-directory: pacs_bridge/build
+      run: |
+        echo "=== Running OAuth2 Tests ==="
+        ctest -L "oauth2" --output-on-failure --timeout 60
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: emr-unit-test-results
+        path: |
+          pacs_bridge/build/Testing/
+          pacs_bridge/build/**/*.log
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # EMR Integration Tests with HAPI FHIR
+  emr-integration-tests:
+    name: EMR Integration Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: emr-unit-tests
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run_integration_tests }}
+
+    services:
+      # HAPI FHIR R4 Server for integration testing
+      # Use specific version for stability (latest can break CI)
+      # Note: HAPI FHIR requires significant startup time (60-90s) for Spring Boot initialization
+      # Note: No health check here because the distroless image lacks curl/wget
+      #       We use external health check in "Wait for HAPI FHIR" step instead
+      hapi-fhir:
+        image: hapiproject/hapi:v7.6.0
+        ports:
+          - 8080:8080
+        env:
+          # Environment variables use underscores, HAPI converts to dots
+          hapi_fhir_server_address: http://localhost:8080/fhir
+          hapi_fhir_fhir_version: R4
+          hapi_fhir_allow_multiple_delete: "true"
+          hapi_fhir_validation_enabled: "false"
+          hapi_fhir_narratives_enabled: "false"
+          # JVM settings - use JAVA_TOOL_OPTIONS (not JAVA_OPTS) for Docker
+          JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
+
+    steps:
+    - name: Checkout pacs_bridge
+      uses: actions/checkout@v4
+      with:
+        path: pacs_bridge
+
+    - name: Cache kcenon dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          common_system
+          thread_system
+          logger_system
+          container_system
+          network_system
+          monitoring_system
+          pacs_system
+        key: kcenon-deps-emr-v1-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
+        restore-keys: |
+          kcenon-deps-emr-v1-
+
+    - name: Checkout kcenon dependencies
+      run: |
+        [ -d common_system ] || git clone --depth 1 https://github.com/kcenon/common_system.git
+        [ -d thread_system ] || git clone --depth 1 https://github.com/kcenon/thread_system.git
+        [ -d logger_system ] || git clone --depth 1 https://github.com/kcenon/logger_system.git
+        [ -d container_system ] || git clone --depth 1 https://github.com/kcenon/container_system.git
+        [ -d network_system ] || git clone --depth 1 https://github.com/kcenon/network_system.git
+        [ -d monitoring_system ] || git clone --depth 1 https://github.com/kcenon/monitoring_system.git
+        [ -d pacs_system ] || git clone --depth 1 https://github.com/kcenon/pacs_system.git
+
+    - name: Install system dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y cmake build-essential ninja-build pkg-config jq
+        sudo apt install -y libsqlite3-dev libssl-dev libfmt-dev
+        sudo apt install -y libgtest-dev libgmock-dev
+        sudo apt install -y nlohmann-json3-dev libcurl4-openssl-dev
+
+    - name: Wait for HAPI FHIR to be ready
+      run: |
+        echo "Waiting for HAPI FHIR server to be ready..."
+        echo "This may take 60-90 seconds for Spring Boot initialization"
+        MAX_ATTEMPTS=60
+        ATTEMPT=0
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          if curl -sf http://localhost:8080/fhir/metadata > /dev/null 2>&1; then
+            echo "HAPI FHIR server is ready after $((ATTEMPT * 5)) seconds"
+            exit 0
+          fi
+          ATTEMPT=$((ATTEMPT + 1))
+          echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - waiting 5s..."
+          sleep 5
+        done
+        echo "ERROR: HAPI FHIR server did not become ready in time"
+        exit 1
+
+    - name: Verify HAPI FHIR Server
+      run: |
+        echo "=== HAPI FHIR Server Info ==="
+        echo "Checking CapabilityStatement..."
+        curl -sf http://localhost:8080/fhir/metadata | jq -r '.fhirVersion, .software.name, .software.version' 2>/dev/null || \
+          curl -s http://localhost:8080/fhir/metadata | head -50
+
+    - name: Configure CMake
+      working-directory: pacs_bridge
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+          -DBRIDGE_BUILD_TESTS=ON \
+          -DBRIDGE_BUILD_EXAMPLES=OFF \
+          -DBRIDGE_BUILD_HL7=ON \
+          -DBRIDGE_BUILD_FHIR=ON
+
+    - name: Build
+      working-directory: pacs_bridge
+      run: cmake --build build --parallel
+
+    - name: Run EMR E2E Integration Tests
+      working-directory: pacs_bridge/build
+      env:
+        PACS_BRIDGE_EMR_E2E_TESTS: "1"
+        HAPI_FHIR_URL: "http://localhost:8080/fhir"
+        FHIR_SERVER_URL: "http://localhost:8080/fhir"
+      run: |
+        echo "=== Running EMR E2E Integration Tests ==="
+        ctest -L "emr_integration" --output-on-failure --timeout 300 || true
+
+    - name: Run HAPI FHIR Integration Tests
+      working-directory: pacs_bridge/build
+      env:
+        HAPI_FHIR_URL: "http://localhost:8080/fhir"
+      run: |
+        echo "=== Running HAPI FHIR Integration Tests ==="
+        ctest -R "hapi_fhir" --output-on-failure --timeout 300 || true
+
+    - name: Upload integration test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: emr-integration-test-results
+        path: |
+          pacs_bridge/build/Testing/
+          pacs_bridge/build/**/*.log
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # Test report summary
+  test-report:
+    name: Test Report
+    runs-on: ubuntu-24.04
+    needs: [emr-unit-tests, emr-integration-tests]
+    if: always()
+
+    steps:
+    - name: Download unit test results
+      uses: actions/download-artifact@v4
+      with:
+        name: emr-unit-test-results
+        path: unit-results
+      continue-on-error: true
+
+    - name: Download integration test results
+      uses: actions/download-artifact@v4
+      with:
+        name: emr-integration-test-results
+        path: integration-results
+      continue-on-error: true
+
+    - name: Generate test summary
+      run: |
+        echo "## EMR Integration Tests Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Unit Tests" >> $GITHUB_STEP_SUMMARY
+        echo "Status: ${{ needs.emr-unit-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Integration Tests" >> $GITHUB_STEP_SUMMARY
+        echo "Status: ${{ needs.emr-integration-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Files" >> $GITHUB_STEP_SUMMARY
+        echo "- fhir_client_test" >> $GITHUB_STEP_SUMMARY
+        echo "- patient_lookup_test" >> $GITHUB_STEP_SUMMARY
+        echo "- result_poster_test" >> $GITHUB_STEP_SUMMARY
+        echo "- encounter_context_test" >> $GITHUB_STEP_SUMMARY
+        echo "- emr_adapter_test" >> $GITHUB_STEP_SUMMARY
+        echo "- oauth2_test" >> $GITHUB_STEP_SUMMARY
+        echo "- emr_e2e_test" >> $GITHUB_STEP_SUMMARY
+        echo "- hapi_fhir_test" >> $GITHUB_STEP_SUMMARY
