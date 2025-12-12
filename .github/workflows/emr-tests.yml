@@ -168,14 +168,15 @@ jobs:
           hapi_fhir_fhir_version: R4
           hapi_fhir_allow_multiple_delete: "true"
           hapi_fhir_validation_enabled: "false"
-          # Optimize JVM for faster startup and lower memory usage
-          JAVA_OPTS: -Xms512m -Xmx1024m -XX:+UseG1GC -XX:+UseStringDeduplication
+          hapi_fhir_narratives_enabled: "false"
+          # JVM settings - use JAVA_TOOL_OPTIONS (not JAVA_OPTS) for Docker
+          JAVA_TOOL_OPTIONS: -Xms256m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
         options: >-
           --health-cmd "curl -sf http://localhost:8080/fhir/metadata > /dev/null || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 30
-          --health-start-period 180s
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 24
+          --health-start-period 120s
 
     steps:
     - name: Checkout pacs_bridge

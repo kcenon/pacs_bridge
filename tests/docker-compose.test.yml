@@ -33,8 +33,8 @@ services:
       - hapi.fhir.validation.enabled=false
       # Logging
       - hapi.fhir.narratives_enabled=false
-      # JVM settings for faster startup and memory management
-      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx1g
+      # JVM settings - use JAVA_TOOL_OPTIONS (not JAVA_OPTS) for Docker
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx1024m -XX:+UseG1GC -XX:MaxGCPauseMillis=200
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/fhir/metadata"]
       interval: 15s
