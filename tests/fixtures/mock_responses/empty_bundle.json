@@ -1,0 +1,16 @@
+{
+  "resourceType": "Bundle",
+  "id": "bundle-empty-search",
+  "meta": {
+    "lastUpdated": "2024-01-15T10:30:00Z"
+  },
+  "type": "searchset",
+  "total": 0,
+  "link": [
+    {
+      "relation": "self",
+      "url": "http://emr.example.org/fhir/r4/Patient?identifier=MRN-99999999"
+    }
+  ],
+  "entry": []
+}
