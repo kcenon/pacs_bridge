@@ -4,6 +4,7 @@
  */
 
 #include "pacs/bridge/pacs_adapter/mwl_client.h"
+#include "pacs/bridge/monitoring/bridge_metrics.h"
 
 #include <algorithm>
 #include <atomic>
@@ -108,6 +109,9 @@ public:
         entries_.push_back(item);
         stats_.add_count++;
 
+        // Record metrics for entry creation
+        monitoring::bridge_metrics_collector::instance().record_mwl_entry_created();
+
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time);
 
@@ -149,6 +153,9 @@ public:
         update_mwl_item(*it, item);
         stats_.update_count++;
 
+        // Record metrics for entry update
+        monitoring::bridge_metrics_collector::instance().record_mwl_entry_updated();
+
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time);
 
@@ -187,6 +194,9 @@ public:
 
         entries_.erase(it);
         stats_.cancel_count++;
+
+        // Record metrics for entry cancellation
+        monitoring::bridge_metrics_collector::instance().record_mwl_entry_cancelled();
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time);
@@ -227,6 +237,12 @@ public:
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time);
+
+        // Record metrics for query duration (in nanoseconds)
+        auto elapsed_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - start_time);
+        monitoring::bridge_metrics_collector::instance().record_mwl_query_duration(
+            elapsed_ns);
 
         update_avg_operation_time(elapsed.count());
 
@@ -362,6 +378,10 @@ public:
                 it = entries_.erase(it);
                 cancelled++;
                 stats_.cancel_count++;
+
+                // Record metrics for each entry cancellation
+                monitoring::bridge_metrics_collector::instance()
+                    .record_mwl_entry_cancelled();
             } else {
                 ++it;
             }
