@@ -225,16 +225,19 @@ public:
     }
 
     /**
-     * @brief Wait for condition with timeout
+     * @brief Wait for condition with timeout using yield-based polling
+     *
+     * Uses std::this_thread::yield() instead of sleep_for for more
+     * responsive and deterministic test behavior.
      */
     static bool wait_for(std::function<bool()> condition,
                          std::chrono::milliseconds timeout) {
-        auto start = std::chrono::steady_clock::now();
+        auto deadline = std::chrono::steady_clock::now() + timeout;
         while (!condition()) {
-            if (std::chrono::steady_clock::now() - start > timeout) {
+            if (std::chrono::steady_clock::now() >= deadline) {
                 return false;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds{10});
+            std::this_thread::yield();
         }
         return true;
     }

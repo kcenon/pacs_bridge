@@ -20,6 +20,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace pacs::bridge::test {
@@ -269,6 +270,34 @@ MATCHER_P(StartsWithPrefix, prefix, "") {
  */
 MATCHER_P2(InRange, min_val, max_val, "") {
     return arg >= min_val && arg <= max_val;
+}
+
+// =============================================================================
+// Synchronization Utilities
+// =============================================================================
+
+/**
+ * @brief Wait for a condition using yield-based polling with timeout
+ *
+ * Provides responsive waiting that checks the condition frequently
+ * while being cooperative with other threads. Replaces sleep_for-based
+ * polling for more deterministic test behavior.
+ *
+ * @tparam Predicate Callable returning bool
+ * @param pred Predicate to wait for
+ * @param timeout Maximum wait time (default 2 seconds)
+ * @return true if condition met, false on timeout
+ */
+template <typename Predicate>
+bool wait_for(Predicate pred, std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!pred()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::yield();
+    }
+    return true;
 }
 
 // =============================================================================

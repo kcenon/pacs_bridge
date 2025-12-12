@@ -615,10 +615,10 @@ bool test_system_metrics_periodic_update() {
     auto& metrics = bridge_metrics_collector::instance();
     metrics.set_enabled(true);
 
-    // Simulate periodic updates
+    // Simulate periodic updates with yield between calls
     for (int i = 0; i < 5; i++) {
         metrics.update_system_metrics();
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::yield();  // Allow other threads to run
     }
 
     // Should not crash and should have valid output

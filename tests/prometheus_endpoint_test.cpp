@@ -72,6 +72,43 @@ namespace pacs::bridge::monitoring::test {
 constexpr uint16_t TEST_PORT = 19191;
 
 /**
+ * @brief Wait for a condition using yield-based polling with timeout
+ *
+ * Provides responsive waiting that checks the condition frequently
+ * while being cooperative with other threads.
+ *
+ * @param pred Predicate to wait for
+ * @param timeout Maximum wait time
+ * @return true if condition met, false on timeout
+ */
+template <typename Predicate>
+bool wait_for(Predicate pred, std::chrono::milliseconds timeout) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!pred()) {
+        if (std::chrono::steady_clock::now() >= deadline) {
+            return false;
+        }
+        std::this_thread::yield();
+    }
+    return true;
+}
+
+/**
+ * @brief Wait for server to be ready and accepting connections
+ *
+ * Uses yield-based polling to wait for the server to start accepting
+ * connections, with a safety timeout to prevent infinite waiting.
+ *
+ * @param server Reference to the health server
+ * @param timeout Maximum wait time (default 2 seconds)
+ * @return true if server is ready, false on timeout
+ */
+bool wait_for_server_ready(const health_server& server,
+                           std::chrono::milliseconds timeout = std::chrono::milliseconds(2000)) {
+    return wait_for([&server]() { return server.is_running(); }, timeout);
+}
+
+/**
  * @brief Send HTTP GET request and receive response
  *
  * @param port Server port
@@ -137,8 +174,8 @@ bool test_server_start_stop() {
     TEST_ASSERT(started, "Server should start successfully");
     TEST_ASSERT(server.is_running(), "Server should be running after start");
 
-    // Wait a bit for server to be ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     server.stop(true);
     TEST_ASSERT(!server.is_running(), "Server should not be running after stop");
@@ -156,8 +193,8 @@ bool test_server_double_start() {
     bool first_start = server.start();
     TEST_ASSERT(first_start, "First start should succeed");
 
-    // Wait for server to be ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     bool second_start = server.start();
     TEST_ASSERT(!second_start, "Second start should fail");
@@ -192,8 +229,8 @@ bool test_metrics_endpoint() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    // Wait for server to be ready
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     // Send HTTP request to metrics endpoint
     std::string response = http_get(cfg.port, "/metrics");
@@ -225,7 +262,8 @@ bool test_metrics_endpoint_custom_path() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     std::string response = http_get(cfg.port, "/prometheus/metrics");
 
@@ -251,7 +289,8 @@ bool test_liveness_endpoint() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     std::string response = http_get(cfg.port, "/health/live");
 
@@ -277,7 +316,8 @@ bool test_readiness_endpoint() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     std::string response = http_get(cfg.port, "/health/ready");
 
@@ -301,7 +341,8 @@ bool test_deep_health_endpoint() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     std::string response = http_get(cfg.port, "/health/deep");
 
@@ -324,7 +365,8 @@ bool test_not_found_endpoint() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     std::string response = http_get(cfg.port, "/nonexistent");
 
@@ -351,7 +393,8 @@ bool test_concurrent_requests() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     constexpr int num_threads = 5;
     constexpr int requests_per_thread = 3;
@@ -367,8 +410,8 @@ bool test_concurrent_requests() {
                 if (response.find("HTTP/1.1 200") != std::string::npos) {
                     successful_requests++;
                 }
-                // Small delay between requests
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                // Yield to allow other threads to run
+                std::this_thread::yield();
             }
         });
     }
@@ -399,7 +442,8 @@ bool test_server_statistics() {
     health_server server(checker, cfg);
     TEST_ASSERT(server.start(), "Server should start");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for server to be ready using yield-based polling
+    TEST_ASSERT(wait_for_server_ready(server), "Server should become ready");
 
     // Make some requests
     http_get(cfg.port, "/health/live");
@@ -407,7 +451,11 @@ bool test_server_statistics() {
     http_get(cfg.port, "/metrics");
     http_get(cfg.port, "/nonexistent");
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // Wait for statistics to be updated
+    TEST_ASSERT(wait_for([&server]() {
+        auto s = server.get_statistics();
+        return s.total_requests >= 4;
+    }, std::chrono::milliseconds(2000)), "Statistics should be updated");
 
     auto stats = server.get_statistics();
 
