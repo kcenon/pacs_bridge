@@ -280,6 +280,14 @@ add_gtest_test(bridge_metrics_test "unit;monitoring;metrics")
 add_bridge_test(prometheus_endpoint_test "unit;monitoring;prometheus;phase4")
 
 # =============================================================================
+# Distributed Tracing Tests (Issue #144)
+# =============================================================================
+
+# Trace Manager Tests
+# Tests trace context, span creation, W3C traceparent format
+add_gtest_test(trace_manager_test "unit;tracing;phase4")
+
+# =============================================================================
 # Performance Tests
 # =============================================================================
 
