@@ -298,6 +298,21 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/pacs_adapter/mpps_handler.h
 )
 
+# Messaging Patterns (messaging_system Integration)
+# See: https://github.com/kcenon/pacs_bridge/issues/146
+list(APPEND PACS_BRIDGE_SOURCES
+    src/messaging/hl7_message_bus.cpp
+    src/messaging/hl7_request_handler.cpp
+    src/messaging/hl7_pipeline.cpp
+    src/messaging/messaging_backend.cpp
+)
+list(APPEND PACS_BRIDGE_HEADERS
+    include/pacs/bridge/messaging/hl7_message_bus.h
+    include/pacs/bridge/messaging/hl7_request_handler.h
+    include/pacs/bridge/messaging/hl7_pipeline.h
+    include/pacs/bridge/messaging/messaging_backend.h
+)
+
 # FHIR Gateway (Phase 3)
 if(BRIDGE_BUILD_FHIR)
     list(APPEND PACS_BRIDGE_SOURCES
