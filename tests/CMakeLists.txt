@@ -306,6 +306,16 @@ add_bridge_test(performance_test "unit;performance")
 add_bridge_test(load_test "unit;load")
 
 # =============================================================================
+# Performance Benchmarks and Memory Safety Tests (Issue #163)
+# =============================================================================
+
+# Benchmark Suite Tests - Message processing, concurrent connections, throughput
+add_bridge_test(benchmark_suite_test "unit;benchmark;performance")
+
+# Memory Safety Tests - Memory leak detection and stability
+add_bridge_test(memory_safety_test "unit;memory;performance")
+
+# =============================================================================
 # PACS Adapter Tests (pacs_system Integration)
 # =============================================================================
 
@@ -591,6 +601,8 @@ message(STATUS "  - health_check_test")
 message(STATUS "  - bridge_metrics_test")
 message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
+message(STATUS "  - benchmark_suite_test (Issue #163)")
+message(STATUS "  - memory_safety_test (Issue #163)")
 message(STATUS "  - mwl_client_test")
 message(STATUS "  - mpps_handler_test")
 message(STATUS "  - ecosystem_integration_test")
