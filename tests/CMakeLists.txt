@@ -199,6 +199,9 @@ if(BRIDGE_BUILD_HL7)
     # HL7 Protocol Tests (uses GTest framework)
     add_gtest_test(hl7_test "unit;hl7;phase1")
 
+    # HL7 Extended Tests (Issue #159) - additional parsing, encoding, ACK tests
+    add_gtest_test(hl7_extended_test "unit;hl7;encoding;phase1")
+
     # ORU Generator Tests (Issue #25) - GTest framework
     add_gtest_test(oru_generator_test "unit;hl7;oru;phase2")
 
