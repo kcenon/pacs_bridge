@@ -246,12 +246,14 @@ list(APPEND PACS_BRIDGE_SOURCES
     src/tracing/trace_manager.cpp
     src/tracing/span_wrapper.cpp
     src/tracing/trace_propagation.cpp
+    src/tracing/exporter_factory.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/tracing/tracing_types.h
     include/pacs/bridge/tracing/trace_manager.h
     include/pacs/bridge/tracing/span_wrapper.h
     include/pacs/bridge/tracing/trace_propagation.h
+    include/pacs/bridge/tracing/exporter_factory.h
 )
 
 # Performance
