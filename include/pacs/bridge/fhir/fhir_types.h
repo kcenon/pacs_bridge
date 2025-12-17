@@ -176,6 +176,32 @@ enum class fhir_error : int {
 }
 
 /**
+ * @brief Get human-readable description of FHIR error
+ */
+[[nodiscard]] constexpr const char* to_string(fhir_error error) noexcept {
+    switch (error) {
+        case fhir_error::invalid_resource:
+            return "Invalid FHIR resource";
+        case fhir_error::resource_not_found:
+            return "Resource not found";
+        case fhir_error::validation_failed:
+            return "Resource validation failed";
+        case fhir_error::unsupported_resource_type:
+            return "Unsupported resource type";
+        case fhir_error::server_error:
+            return "Server error";
+        case fhir_error::subscription_error:
+            return "Subscription error";
+        case fhir_error::json_parse_error:
+            return "JSON parsing error";
+        case fhir_error::missing_required_field:
+            return "Missing required field";
+        default:
+            return "Unknown FHIR error";
+    }
+}
+
+/**
  * @brief FHIR resource types supported by the gateway
  */
 enum class resource_type {
