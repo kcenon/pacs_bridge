@@ -20,6 +20,7 @@
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
 #include <chrono>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
