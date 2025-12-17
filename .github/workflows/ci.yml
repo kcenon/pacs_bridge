@@ -182,6 +182,7 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+            -DBRIDGE_STANDALONE_BUILD=OFF \
             -DBRIDGE_BUILD_TESTS=ON \
             -DBRIDGE_BUILD_EXAMPLES=OFF \
             -DBRIDGE_BUILD_HL7=ON \
@@ -195,6 +196,7 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
+            -DBRIDGE_STANDALONE_BUILD=OFF \
             -DBRIDGE_BUILD_TESTS=ON \
             -DBRIDGE_BUILD_EXAMPLES=OFF \
             -DBRIDGE_BUILD_HL7=ON \
@@ -216,6 +218,7 @@ jobs:
           -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF `
+          -DBRIDGE_STANDALONE_BUILD=OFF `
           -DBRIDGE_BUILD_TESTS=ON `
           -DBRIDGE_BUILD_EXAMPLES=OFF `
           -DBRIDGE_BUILD_HL7=ON `
@@ -302,6 +305,7 @@ jobs:
         cmake -B build \
           -G Ninja \
           -DCMAKE_BUILD_TYPE=Debug \
+          -DBRIDGE_STANDALONE_BUILD=OFF \
           -DBRIDGE_ENABLE_COVERAGE=ON \
           -DBRIDGE_BUILD_TESTS=ON \
           -DBRIDGE_BUILD_EXAMPLES=OFF \
