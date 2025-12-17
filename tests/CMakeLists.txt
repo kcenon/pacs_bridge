@@ -404,11 +404,14 @@ macro(add_integration_test TEST_NAME)
         PRIVATE
             pacs_bridge
             pacs_bridge_compile_options
+            GTest::gtest
+            GTest::gmock_main
     )
 
     target_include_directories(${TEST_NAME}
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/integration
+            ${CMAKE_CURRENT_SOURCE_DIR}/utils
     )
 
     target_compile_definitions(${TEST_NAME}

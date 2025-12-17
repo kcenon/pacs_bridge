@@ -164,26 +164,26 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::optional<hl7_message> parse(std::string_view raw) {
+    std::expected<hl7_message, hl7_error> parse(std::string_view raw) {
         return parser_->parse(std::string(raw));
     }
 
-    std::optional<hl7_message> parse(const std::string& raw) {
+    std::expected<hl7_message, hl7_error> parse(const std::string& raw) {
         return parser_->parse(raw);
     }
 
     // Extract patient name from PID segment
     std::string extract_patient_name(const hl7_message& msg) {
-        auto pid = msg.get_segment("PID");
+        auto pid = msg.segment("PID");
         if (!pid) return "";
-        return pid->get_field(5);
+        return std::string(pid->field_value(5));
     }
 
     // Extract character set from MSH-18
     std::string extract_character_set(const hl7_message& msg) {
-        auto msh = msg.get_segment("MSH");
+        auto msh = msg.segment("MSH");
         if (!msh) return "";
-        return msh->get_field(18);
+        return std::string(msh->field_value(18));
     }
 
     // Check if string is valid UTF-8
@@ -349,11 +349,11 @@ TEST_F(Hl7EncodingTest, ParseEscapeSequences) {
     auto msg = parse(encoding_samples::MSG_ESCAPE_CHARS);
     ASSERT_TRUE(msg.has_value());
 
-    auto pid = msg->get_segment("PID");
+    auto pid = msg->segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // O'BRIEN should be preserved
-    std::string name = pid->get_field(5);
+    std::string name(pid->field_value(5));
     EXPECT_TRUE(name.find("O'BRIEN") != std::string::npos ||
                 name.find("O") != std::string::npos);
 }
@@ -362,11 +362,11 @@ TEST_F(Hl7EncodingTest, ParseAddressWithEscapedFieldSeparator) {
     auto msg = parse(encoding_samples::MSG_ESCAPE_CHARS);
     ASSERT_TRUE(msg.has_value());
 
-    auto pid = msg->get_segment("PID");
+    auto pid = msg->segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // Address with \F\ escape (field separator in address)
-    std::string address = pid->get_field(11);
+    std::string address(pid->field_value(11));
     EXPECT_FALSE(address.empty());
 }
 
@@ -374,11 +374,11 @@ TEST_F(Hl7EncodingTest, ParseObxWithEscapeSequences) {
     auto msg = parse(encoding_samples::MSG_ESCAPE_CHARS);
     ASSERT_TRUE(msg.has_value());
 
-    auto obx = msg->get_segment("OBX");
+    auto obx = msg->segment("OBX");
     ASSERT_TRUE(obx != nullptr);
 
     // OBX-5 contains \T\ (subcomponent separator) and \R\ (repetition)
-    std::string value = obx->get_field(5);
+    std::string value(obx->field_value(5));
     EXPECT_FALSE(value.empty());
 }
 
@@ -402,7 +402,7 @@ TEST_F(Hl7EncodingTest, RoundTripUtf8) {
     ASSERT_TRUE(msg.has_value());
 
     // Build the message back
-    std::string rebuilt = msg->to_string();
+    std::string rebuilt = msg->serialize();
     EXPECT_FALSE(rebuilt.empty());
 
     // Parse the rebuilt message
@@ -417,7 +417,7 @@ TEST_F(Hl7EncodingTest, RoundTripAscii) {
     auto msg = parse(encoding_samples::MSG_ASCII);
     ASSERT_TRUE(msg.has_value());
 
-    std::string rebuilt = msg->to_string();
+    std::string rebuilt = msg->serialize();
     auto reparsed = parse(rebuilt);
     ASSERT_TRUE(reparsed.has_value());
 
@@ -477,14 +477,15 @@ TEST_F(Hl7EncodingTest, ParseTwoByteUtf8) {
 // =============================================================================
 
 TEST_F(Hl7EncodingTest, BuildMessageWithUtf8) {
-    hl7_builder builder;
-    builder.set_sending_application("HIS")
-           .set_sending_facility("HOSPITAL")
-           .set_receiving_application("PACS")
-           .set_receiving_facility("RADIOLOGY")
-           .set_message_type("ADT")
-           .set_trigger_event("A01")
-           .set_character_set("UNICODE UTF-8");
+    builder_options opts;
+    opts.sending_application = "HIS";
+    opts.sending_facility = "HOSPITAL";
+    opts.receiving_application = "PACS";
+    opts.receiving_facility = "RADIOLOGY";
+    opts.character_set = "UNICODE UTF-8";
+
+    auto builder = hl7_builder::create(opts);
+    builder.message_type("ADT", "A01");
 
     auto msg = builder.build();
     ASSERT_TRUE(msg.has_value());

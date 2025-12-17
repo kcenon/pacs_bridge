@@ -36,7 +36,7 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::optional<hl7_message> parse(const std::string& raw) {
+    std::expected<hl7_message, hl7_error> parse(const std::string& raw) {
         return parser_->parse(raw);
     }
 
@@ -75,8 +75,8 @@ TEST_F(Hl7MalformedRecoveryTest, TruncatedAtSegmentBoundary) {
     auto msg = parse(truncated);
     // Should parse complete segments
     if (msg.has_value()) {
-        EXPECT_TRUE(msg->get_segment("MSH") != nullptr);
-        EXPECT_TRUE(msg->get_segment("PID") != nullptr);
+        EXPECT_TRUE(msg->segment("MSH") != nullptr);
+        EXPECT_TRUE(msg->segment("PID") != nullptr);
     }
 }
 
@@ -100,8 +100,8 @@ TEST_F(Hl7MalformedRecoveryTest, CorruptedSegmentName) {
     auto msg = parse(corrupted);
     // Should skip corrupted segment or recover
     if (msg.has_value()) {
-        EXPECT_TRUE(msg->get_segment("MSH") != nullptr);
-        EXPECT_TRUE(msg->get_segment("PV1") != nullptr);
+        EXPECT_TRUE(msg->segment("MSH") != nullptr);
+        EXPECT_TRUE(msg->segment("PV1") != nullptr);
     }
 }
 
@@ -176,10 +176,10 @@ TEST_F(Hl7MalformedRecoveryTest, ValidSegmentsAroundCorrupted) {
     auto msg = parse(mixed);
     // Should recover valid segments
     if (msg.has_value()) {
-        EXPECT_TRUE(msg->get_segment("MSH") != nullptr);
-        EXPECT_TRUE(msg->get_segment("EVN") != nullptr);
-        EXPECT_TRUE(msg->get_segment("PID") != nullptr);
-        EXPECT_TRUE(msg->get_segment("PV1") != nullptr);
+        EXPECT_TRUE(msg->segment("MSH") != nullptr);
+        EXPECT_TRUE(msg->segment("EVN") != nullptr);
+        EXPECT_TRUE(msg->segment("PID") != nullptr);
+        EXPECT_TRUE(msg->segment("PV1") != nullptr);
     }
 }
 
@@ -290,7 +290,7 @@ TEST_F(Hl7MalformedRecoveryTest, CorruptedObxSegment) {
     auto msg = parse(corrupted);
     // Should parse valid OBX segments
     if (msg.has_value()) {
-        auto obx_segments = msg->get_segments("OBX");
+        auto obx_segments = msg->segments("OBX");
         // At least one valid OBX should be recovered
         EXPECT_GE(obx_segments.size(), 1);
     }

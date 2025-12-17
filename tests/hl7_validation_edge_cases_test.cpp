@@ -38,7 +38,7 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::optional<hl7_message> parse(const std::string& raw) {
+    std::expected<hl7_message, hl7_error> parse(const std::string& raw) {
         return parser_->parse(raw);
     }
 
@@ -122,9 +122,9 @@ TEST_F(Hl7ValidationEdgeCaseTest, VeryLongFieldValue) {
     auto msg = parse(msg_long);
     // Should handle long fields gracefully
     if (msg.has_value()) {
-        auto pid = msg->get_segment("PID");
+        auto pid = msg->segment("PID");
         if (pid) {
-            EXPECT_GE(pid->get_field(3).size(), 10000);
+            EXPECT_GE(pid->field_value(3).size(), 10000);
         }
     }
 }
@@ -137,7 +137,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, MaximumSegmentCount) {
     }
     auto msg = parse(many_segments);
     if (msg.has_value()) {
-        auto obx_segments = msg->get_segments("OBX");
+        auto obx_segments = msg->segments("OBX");
         EXPECT_GE(obx_segments.size(), 100);
     }
 }
@@ -179,7 +179,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, UnknownSegmentType) {
     auto msg = parse(msg_unknown);
     // Unknown segments should be preserved
     if (msg.has_value()) {
-        auto xyz = msg->get_segment("XYZ");
+        auto xyz = msg->segment("XYZ");
         // May or may not be available depending on implementation
     }
 }
@@ -414,8 +414,9 @@ TEST_F(Hl7ValidationEdgeCaseTest, ProductionMode) {
         "PID|1||12345\r";
     auto msg = parse(msg_prod);
     ASSERT_TRUE(msg.has_value());
-    auto msh = msg->get_segment("MSH");
-    EXPECT_EQ(msh->get_field(11), "P");
+    auto msh = msg->segment("MSH");
+    ASSERT_NE(msh, nullptr);
+    EXPECT_EQ(msh->field_value(11), "P");
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, TestMode) {
@@ -424,8 +425,9 @@ TEST_F(Hl7ValidationEdgeCaseTest, TestMode) {
         "PID|1||12345\r";
     auto msg = parse(msg_test);
     ASSERT_TRUE(msg.has_value());
-    auto msh = msg->get_segment("MSH");
-    EXPECT_EQ(msh->get_field(11), "T");
+    auto msh = msg->segment("MSH");
+    ASSERT_NE(msh, nullptr);
+    EXPECT_EQ(msh->field_value(11), "T");
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, DebugMode) {
@@ -434,8 +436,9 @@ TEST_F(Hl7ValidationEdgeCaseTest, DebugMode) {
         "PID|1||12345\r";
     auto msg = parse(msg_debug);
     ASSERT_TRUE(msg.has_value());
-    auto msh = msg->get_segment("MSH");
-    EXPECT_EQ(msh->get_field(11), "D");
+    auto msh = msg->segment("MSH");
+    ASSERT_NE(msh, nullptr);
+    EXPECT_EQ(msh->field_value(11), "D");
 }
 
 }  // namespace
