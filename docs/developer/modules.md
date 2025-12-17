@@ -26,6 +26,7 @@ PACS Bridge is organized into modular components for maintainability and extensi
 pacs_bridge/
 ├── include/pacs/bridge/
 │   ├── protocol/hl7/         # HL7 message handling
+│   ├── messaging/            # Messaging patterns (Pub/Sub, Pipeline)
 │   ├── mllp/                 # MLLP transport
 │   ├── fhir/                 # FHIR gateway
 │   ├── emr/                  # EMR client integration
@@ -140,6 +141,87 @@ auto result = handler.handle(orm_message);
 | S12 | Scheduled | Create worklist |
 | S13 | Modified | Update worklist |
 | S14 | Cancelled | Cancel worklist |
+
+### Messaging Module (`messaging/`)
+
+**Purpose:** Provide messaging patterns for decoupled, scalable HL7 message processing.
+
+**Key Classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `hl7_message_bus` | Pub/Sub message distribution with topic-based routing |
+| `hl7_publisher` | Convenient publisher wrapper |
+| `hl7_subscriber` | Convenient subscriber wrapper with type-specific helpers |
+| `hl7_pipeline` | Staged message processing with validators, transformers |
+| `hl7_pipeline_builder` | Fluent API for building processing pipelines |
+| `hl7_request_client` | Request/Reply pattern client |
+| `hl7_request_server` | Request/Reply pattern server |
+| `messaging_backend_factory` | Factory for backend selection |
+
+**Key Headers:**
+
+```cpp
+#include <pacs/bridge/messaging/hl7_message_bus.h>     // Pub/Sub
+#include <pacs/bridge/messaging/hl7_pipeline.h>        // Pipeline
+#include <pacs/bridge/messaging/hl7_request_handler.h> // Request/Reply
+#include <pacs/bridge/messaging/messaging_backend.h>   // Backend factory
+```
+
+**Pub/Sub Pattern:**
+
+```cpp
+// Create and start message bus
+hl7_message_bus bus;
+bus.start();
+
+// Subscribe to ADT messages
+bus.subscribe(topics::HL7_ADT_ALL, [](const hl7_message& msg) {
+    // Process ADT message
+    return subscription_result::ok();
+});
+
+// Publish a message (auto-routes by type)
+bus.publish(adt_message);
+```
+
+**Pipeline Pattern:**
+
+```cpp
+// Build a processing pipeline
+auto pipeline = hl7_pipeline_builder::create("validation_pipeline")
+    .add_validator([](const hl7_message& msg) {
+        return msg.has_segment("MSH");
+    })
+    .add_transformer("enrich", [](const hl7_message& msg) {
+        auto enriched = msg;
+        enriched.set_value("ZPI.1", "PROCESSED");
+        return enriched;
+    })
+    .with_statistics(true)
+    .build();
+
+auto result = pipeline.process(message);
+```
+
+**Request/Reply Pattern:**
+
+```cpp
+// Server side
+hl7_request_server server(bus, "hl7.orders");
+server.register_handler([](const hl7_message& request)
+    -> std::expected<hl7_message, request_error> {
+    // Process request and return response
+    return ack_builder::generate_ack(request, ack_code::AA);
+});
+server.start();
+
+// Client side
+hl7_request_client client(bus, "hl7.orders");
+auto result = client.request(order_message, std::chrono::seconds(30));
+```
+
+**Error Codes:** -800 to -839 (messaging module range)
 
 ---
 
