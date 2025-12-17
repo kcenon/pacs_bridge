@@ -19,6 +19,7 @@
 #include <random>
 #include <regex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace pacs::bridge::tracing::test {
@@ -201,8 +202,8 @@ public:
         auto msg = parser_.parse(raw_message);
 
         if (msg.has_value()) {
-            span->set_attribute("message_type", msg->get_message_type());
-            span->set_attribute("trigger_event", msg->get_trigger_event());
+            span->set_attribute("message_type", hl7::to_string(msg->type()));
+            span->set_attribute("trigger_event", std::string(msg->trigger_event()));
             span->set_attribute("message_control_id", get_message_control_id(*msg));
             span->add_event("message_parsed");
             span->set_status(true);
@@ -223,9 +224,9 @@ public:
 
 private:
     std::string get_message_control_id(const hl7::hl7_message& msg) {
-        auto msh = msg.get_segment("MSH");
+        auto msh = msg.segment("MSH");
         if (!msh) return "";
-        return msh->get_field(10);
+        return std::string(msh->field_value(10));
     }
 
     MockTracer& tracer_;

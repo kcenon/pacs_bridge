@@ -114,7 +114,7 @@ public:
             high_resolution_clock::now() - start).count() / 1000.0;
 
         if (msg.has_value()) {
-            std::string msg_type = msg->get_message_type();
+            std::string msg_type = hl7::to_string(msg->type());
             metrics_.increment_counter("pacs_bridge_messages_processed_total",
                                        {{"message_type", msg_type}});
             metrics_.record_histogram("pacs_bridge_message_processing_duration_ms",
