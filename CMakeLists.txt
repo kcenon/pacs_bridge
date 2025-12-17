@@ -313,6 +313,18 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/messaging/messaging_backend.h
 )
 
+# Event Bus Integration (requires common_system)
+# See: https://github.com/kcenon/pacs_bridge/issues/142
+# Only available when building with kcenon ecosystem dependencies
+if(NOT BRIDGE_STANDALONE_BUILD)
+    list(APPEND PACS_BRIDGE_SOURCES
+        src/messaging/hl7_events.cpp
+    )
+    list(APPEND PACS_BRIDGE_HEADERS
+        include/pacs/bridge/messaging/hl7_events.h
+    )
+endif()
+
 # FHIR Gateway (Phase 3)
 if(BRIDGE_BUILD_FHIR)
     list(APPEND PACS_BRIDGE_SOURCES

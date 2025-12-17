@@ -177,6 +177,10 @@ jobs:
       run: |
         # For clang on Linux, use libc++ for better C++23 support
         # This ensures ABI compatibility with GoogleTest built from source
+        # Note: BRIDGE_STANDALONE_BUILD=ON (default) excludes Event Bus code
+        # which requires common_system's Event Bus. Full ecosystem build with
+        # Event Bus integration will be tested separately when kcenon ecosystem
+        # dependency management is resolved. See Issue #142 for details.
         if [ "${{ matrix.compiler }}" = "clang" ] && [ "${{ runner.os }}" = "Linux" ]; then
           cmake -B build \
             -G Ninja \
@@ -212,6 +216,7 @@ jobs:
         # Refresh PATH to include Ninja from chocolatey
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
+        # Note: BRIDGE_STANDALONE_BUILD=ON (default) - see Issue #142
         cmake -B build `
           -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
@@ -296,6 +301,7 @@ jobs:
 
     # Tests enabled (Issue #6 - Test Framework Setup completed)
     # Coverage reports include unit test coverage
+    # Note: BRIDGE_STANDALONE_BUILD=ON (default) - see Issue #142
     - name: Configure CMake with coverage
       working-directory: pacs_bridge
       run: |

@@ -386,8 +386,56 @@ add_integration_test(stress_test "integration;stress;phase2" 600)
 add_integration_test(monitoring_integration_test "integration;monitoring;metrics;phase4" 180)
 
 # =============================================================================
-# Messaging Pattern Tests (Issue #146)
+# Messaging Pattern Tests (Issue #146, #142)
 # =============================================================================
+
+# HL7 Events Tests (Issue #142)
+# Tests Event Bus integration, event types, and publisher/subscriber utilities
+# Only available when building with kcenon ecosystem dependencies (requires common_system)
+if(NOT BRIDGE_STANDALONE_BUILD)
+    add_executable(hl7_events_test messaging/hl7_events_test.cpp)
+    target_link_libraries(hl7_events_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(hl7_events_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(hl7_events_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+    target_include_directories(hl7_events_test
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+    target_compile_definitions(hl7_events_test
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        include(GoogleTest)
+        gtest_discover_tests(hl7_events_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 120
+                LABELS "unit;messaging;events;phase4"
+        )
+    else()
+        add_test(
+            NAME hl7_events_test
+            COMMAND hl7_events_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        set_tests_properties(hl7_events_test PROPERTIES
+            TIMEOUT 120
+            LABELS "unit;messaging;events;phase4"
+        )
+    endif()
+else()
+    message(STATUS "Skipping hl7_events_test: requires common_system Event Bus (BRIDGE_STANDALONE_BUILD=OFF)")
+endif()
 
 # Messaging Pattern Integration Tests (Issue #146)
 # Tests Pub/Sub, Request/Reply, Pipeline, and Backend selection
