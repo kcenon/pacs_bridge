@@ -202,6 +202,15 @@ if(BRIDGE_BUILD_HL7)
     # HL7 Extended Tests (Issue #159) - additional parsing, encoding, ACK tests
     add_gtest_test(hl7_extended_test "unit;hl7;encoding;phase1")
 
+    # HL7 Encoding ISO Conversion Tests (Issue #145) - ISO-8859-1, UTF-8, escape sequences
+    add_gtest_test(hl7_encoding_iso_conversion_test "unit;hl7;encoding;i18n;phase1")
+
+    # HL7 Validation Edge Cases Tests (Issue #145) - boundary conditions, malformed inputs
+    add_gtest_test(hl7_validation_edge_cases_test "unit;hl7;validation;phase1")
+
+    # HL7 Malformed Segment Recovery Tests (Issue #145) - error recovery, partial parsing
+    add_gtest_test(hl7_malformed_segment_recovery_test "unit;hl7;recovery;phase1")
+
     # ORU Generator Tests (Issue #25) - GTest framework
     add_gtest_test(oru_generator_test "unit;hl7;oru;phase2")
 
@@ -213,6 +222,24 @@ if(BRIDGE_BUILD_HL7)
 
     # SIU Message Handler Tests (Issue #26) - GTest framework
     add_gtest_test(siu_handler_test "unit;hl7;siu;phase2")
+
+    # MDM Message Handler Tests (Issue #145) - Medical Document Management
+    add_gtest_test(mdm_handler_test "unit;hl7;mdm;phase2")
+
+    # BAR Message Handler Tests (Issue #145) - Billing Account Record
+    add_gtest_test(bar_handler_test "unit;hl7;bar;phase2")
+
+    # RDE Message Handler Tests (Issue #145) - Pharmacy Order
+    add_gtest_test(rde_handler_test "unit;hl7;rde;phase2")
+
+    # QRY Message Handler Tests (Issue #145) - Query Handler
+    add_gtest_test(qry_handler_test "unit;hl7;qry;phase2")
+
+    # MFN Message Handler Tests (Issue #145) - Master File Notification
+    add_gtest_test(mfn_handler_test "unit;hl7;mfn;phase2")
+
+    # PEX Message Handler Tests (Issue #145) - Product Experience (Adverse Events)
+    add_gtest_test(pex_handler_test "unit;hl7;pex;phase2")
 
     # HL7-DICOM Mapping Tests - custom framework
     add_bridge_test(mapping_test "unit;mapping;phase1")
@@ -281,6 +308,9 @@ add_bridge_test(health_check_test "unit;monitoring")
 # These tests work with the internal implementation regardless of monitoring_system availability
 add_gtest_test(bridge_metrics_test "unit;monitoring;metrics")
 
+# Monitoring Metrics Completeness Tests (Issue #145) - counter, gauge, histogram validation
+add_gtest_test(monitoring_metrics_completeness_test "unit;monitoring;metrics;completeness")
+
 # Prometheus Endpoint Tests (Issue #88)
 # Tests HTTP server, /metrics endpoint, and health endpoints via TCP
 add_bridge_test(prometheus_endpoint_test "unit;monitoring;prometheus;phase4")
@@ -293,6 +323,9 @@ add_bridge_test(prometheus_endpoint_test "unit;monitoring;prometheus;phase4")
 # Tests trace context, span creation, W3C traceparent format
 add_gtest_test(trace_manager_test "unit;tracing;phase4")
 
+# Monitoring Trace Validation Tests (Issue #145) - W3C traceparent, span attributes
+add_gtest_test(monitoring_trace_validation_test "unit;tracing;validation;phase4")
+
 # =============================================================================
 # Performance Tests
 # =============================================================================
@@ -304,6 +337,20 @@ add_bridge_test(performance_test "unit;performance")
 # =============================================================================
 
 add_bridge_test(load_test "unit;load")
+
+# =============================================================================
+# High Volume Stress Tests (Issue #145)
+# =============================================================================
+
+# Stress High Volume Message Tests - parse throughput, memory stability
+add_gtest_test(stress_high_volume_message_test "unit;stress;volume;performance" 180)
+
+# =============================================================================
+# Concurrency and Thread Safety Tests (Issue #145)
+# =============================================================================
+
+# Concurrency Thread Safety Tests - multi-threaded parsing, shared resources
+add_gtest_test(concurrency_thread_safety_test "unit;concurrency;thread-safety")
 
 # =============================================================================
 # Performance Benchmarks and Memory Safety Tests (Issue #163)
@@ -394,6 +441,12 @@ endif()
 
 # Failover Routing Tests (RIS failover)
 add_integration_test(failover_test "integration;failover;phase2")
+
+# Multi-PACS Failover Tests (Issue #145) - routing strategies, cascading failover
+add_integration_test(multi_pacs_failover_test "integration;failover;multi-pacs;phase2")
+
+# Backwards Compatibility Tests (Issue #145) - HL7 v2.3, v2.4, v2.5 interoperability
+add_integration_test(backwards_compatibility_test "integration;compatibility;hl7-version;phase2")
 
 # Disaster Recovery Tests (Issue #162) - network failures, message loss, retry logic
 if(PACS_BRIDGE_HAS_SQLITE)
@@ -576,11 +629,22 @@ message(STATUS "")
 message(STATUS "Tests enabled:")
 if(BRIDGE_BUILD_HL7)
     message(STATUS "  - hl7_test")
+    message(STATUS "  - hl7_extended_test")
+    message(STATUS "  - hl7_encoding_iso_conversion_test (Issue #145)")
+    message(STATUS "  - hl7_validation_edge_cases_test (Issue #145)")
+    message(STATUS "  - hl7_malformed_segment_recovery_test (Issue #145)")
     message(STATUS "  - oru_generator_test")
     message(STATUS "  - adt_handler_test")
     message(STATUS "  - orm_handler_test")
     message(STATUS "  - siu_handler_test")
+    message(STATUS "  - mdm_handler_test (Issue #145)")
+    message(STATUS "  - bar_handler_test (Issue #145)")
+    message(STATUS "  - rde_handler_test (Issue #145)")
+    message(STATUS "  - qry_handler_test (Issue #145)")
+    message(STATUS "  - mfn_handler_test (Issue #145)")
+    message(STATUS "  - pex_handler_test (Issue #145)")
     message(STATUS "  - mapping_test")
+    message(STATUS "  - mapper_extended_test")
     message(STATUS "  - router_test")
     message(STATUS "  - outbound_router_test")
     if(PACS_BRIDGE_HAS_SQLITE)
@@ -599,8 +663,13 @@ if(PACS_BRIDGE_HAS_OPENSSL)
 endif()
 message(STATUS "  - health_check_test")
 message(STATUS "  - bridge_metrics_test")
+message(STATUS "  - monitoring_metrics_completeness_test (Issue #145)")
+message(STATUS "  - trace_manager_test")
+message(STATUS "  - monitoring_trace_validation_test (Issue #145)")
 message(STATUS "  - performance_test")
 message(STATUS "  - load_test")
+message(STATUS "  - stress_high_volume_message_test (Issue #145)")
+message(STATUS "  - concurrency_thread_safety_test (Issue #145)")
 message(STATUS "  - benchmark_suite_test (Issue #163)")
 message(STATUS "  - memory_safety_test (Issue #163)")
 message(STATUS "  - mwl_client_test")
@@ -613,6 +682,8 @@ if(PACS_BRIDGE_HAS_SQLITE)
     message(STATUS "  - queue_persistence_test")
 endif()
 message(STATUS "  - failover_test")
+message(STATUS "  - multi_pacs_failover_test (Issue #145)")
+message(STATUS "  - backwards_compatibility_test (Issue #145)")
 if(PACS_BRIDGE_HAS_SQLITE)
     message(STATUS "  - disaster_recovery_test (Issue #162)")
 endif()
