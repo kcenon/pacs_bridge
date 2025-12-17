@@ -128,7 +128,7 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
-        span.set_attribute("pacs.duration_ms", elapsed.count());
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
         span.set_attribute("pacs.success", true);
 
         return mwl_client::operation_result{
@@ -184,7 +184,7 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
-        span.set_attribute("pacs.duration_ms", elapsed.count());
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
         span.set_attribute("pacs.success", true);
 
         return mwl_client::operation_result{
@@ -238,7 +238,7 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
-        span.set_attribute("pacs.duration_ms", elapsed.count());
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
         span.set_attribute("pacs.success", true);
 
         return mwl_client::operation_result{
@@ -290,7 +290,7 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
-        span.set_attribute("pacs.duration_ms", elapsed.count());
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
         span.set_attribute("pacs.result_count", static_cast<int64_t>(results.size()));
         span.set_attribute("pacs.success", true);
 

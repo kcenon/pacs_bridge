@@ -543,7 +543,7 @@ std::expected<handler_result, router_error> message_router::route(
     auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(
         end_time - start_time).count();
 
-    span.set_attribute("router.duration_us", total_duration);
+    span.set_attribute("router.duration_us", static_cast<int64_t>(total_duration));
 
     pimpl_->log(log_level::info, control_id, msg_type, "", "",
                 "Routing completed successfully", total_duration);

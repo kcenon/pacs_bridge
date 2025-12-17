@@ -84,7 +84,7 @@ std::expected<hl7_message, hl7_error> hl7_parser::parse(
         details->original_size = data.size();
 
         // Add tracing attributes
-        span.set_attribute("hl7.parse_time_us", details->parse_time_us);
+        span.set_attribute("hl7.parse_time_us", static_cast<int64_t>(details->parse_time_us));
         span.set_attribute("hl7.segment_count", static_cast<int64_t>(details->segment_count));
         span.set_attribute("hl7.field_count", static_cast<int64_t>(details->field_count));
         if (!details->detected_message_type.empty()) {
