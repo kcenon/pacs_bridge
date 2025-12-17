@@ -47,3 +47,6 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# CMake test discovery cache
+tests/cmake_test_discovery_*.json
