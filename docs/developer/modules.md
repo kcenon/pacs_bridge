@@ -1,7 +1,7 @@
 # Module Descriptions
 
-> **Version:** 0.1.0.0
-> **Last Updated:** 2025-12-10
+> **Version:** 0.1.0.1
+> **Last Updated:** 2025-12-17
 
 ---
 
@@ -226,6 +226,10 @@ auto result = client.request(order_message, std::chrono::seconds(30));
 ```
 
 **Event Bus Integration (Issue #142):**
+
+> **Note:** Event Bus integration requires building with `BRIDGE_STANDALONE_BUILD=OFF`.
+> This feature depends on `common_system` which provides the Event Bus implementation.
+> In standalone builds, the `hl7_events.h` header and related functionality are not available.
 
 The HL7 Events system integrates with `common_system`'s Event Bus to provide
 event-driven message processing. Events are published at each processing stage:
