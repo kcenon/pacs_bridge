@@ -288,6 +288,16 @@ auto& message = result.value();
 | Integration Tests | `tests/integration/` | Test component interaction |
 | Stress Tests | `tests/stress/` | Performance testing |
 
+#### Integration Test Categories (Issue #161)
+
+| Test File | Focus Area | Labels |
+|-----------|------------|--------|
+| `mllp_connection_test.cpp` | Connection setup/teardown, timeout, reconnection | `integration;mllp;connection` |
+| `pacs_worklist_test.cpp` | Worklist query, status updates | `integration;pacs;worklist` |
+| `e2e_scenario_test.cpp` | Complete imaging workflow scenarios | `integration;e2e;scenario` |
+| `mpps_integration_test.cpp` | MPPS N-CREATE/N-SET flows | `integration;mpps` |
+| `failover_test.cpp` | RIS failover scenarios | `integration;failover` |
+
 ### Writing Tests
 
 ```cpp
