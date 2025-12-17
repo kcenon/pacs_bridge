@@ -120,29 +120,29 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::optional<hl7_message> parse_pex(std::string_view raw) {
+    std::expected<hl7_message, hl7_error> parse_pex(std::string_view raw) {
         return parser_->parse(std::string(raw));
     }
 
     // Extract event description from PEO
     std::string extract_event_description(const hl7_message& msg) {
-        auto peo = msg.get_segment("PEO");
+        auto peo = msg.segment("PEO");
         if (!peo) return "";
-        return peo->get_field(2);
+        return std::string(peo->field_value(2));
     }
 
     // Extract product code from PCR
     std::string extract_product_code(const hl7_message& msg) {
-        auto pcr = msg.get_segment("PCR");
+        auto pcr = msg.segment("PCR");
         if (!pcr) return "";
-        return pcr->get_field(2);
+        return std::string(pcr->field_value(2));
     }
 
     // Extract causality assessment from PCR
     std::string extract_causality(const hl7_message& msg) {
-        auto pcr = msg.get_segment("PCR");
+        auto pcr = msg.segment("PCR");
         if (!pcr) return "";
-        return pcr->get_field(10);
+        return std::string(pcr->field_value(10));
     }
 };
 
@@ -154,23 +154,23 @@ TEST_F(PexHandlerTest, ParsePexP07Initial) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "PEX");
-    EXPECT_EQ(msg->get_trigger_event(), "P07");
+    EXPECT_STREQ(to_string(msg->type()), "PEX");
+    EXPECT_EQ(msg->trigger_event(), "P07");
 }
 
 TEST_F(PexHandlerTest, ParsePexP08Update) {
     auto msg = parse_pex(pex_samples::PEX_P08_UPDATE);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "PEX");
-    EXPECT_EQ(msg->get_trigger_event(), "P08");
+    EXPECT_STREQ(to_string(msg->type()), "PEX");
+    EXPECT_EQ(msg->trigger_event(), "P08");
 }
 
 TEST_F(PexHandlerTest, ParsePexSeriousEvent) {
     auto msg = parse_pex(pex_samples::PEX_SERIOUS_EVENT);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "PEX");
+    EXPECT_STREQ(to_string(msg->type()), "PEX");
 }
 
 TEST_F(PexHandlerTest, ParsePexDeviceEvent) {
@@ -178,7 +178,7 @@ TEST_F(PexHandlerTest, ParsePexDeviceEvent) {
     ASSERT_TRUE(msg.has_value());
 
     // Should have PSH segment for device info
-    auto psh = msg->get_segment("PSH");
+    auto psh = msg->segment("PSH");
     ASSERT_TRUE(psh != nullptr);
 }
 
@@ -187,7 +187,7 @@ TEST_F(PexHandlerTest, ParsePexMultiProduct) {
     ASSERT_TRUE(msg.has_value());
 
     // Should have multiple PCR segments
-    auto pcr_segments = msg->get_segments("PCR");
+    auto pcr_segments = msg->segments("PCR");
     EXPECT_EQ(pcr_segments.size(), 3);
 }
 
@@ -199,35 +199,35 @@ TEST_F(PexHandlerTest, ExtractSenderInfo) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pes = msg->get_segment("PES");
+    auto pes = msg->segment("PES");
     ASSERT_TRUE(pes != nullptr);
 
     // PES-1 is Sender Organization Name
-    EXPECT_EQ(pes->get_field(1), "HOSPITAL");
+    EXPECT_EQ(pes->field_value(1), "HOSPITAL");
     // PES-2 is Sender Individual Name
-    EXPECT_TRUE(pes->get_field(2).find("SMITH") != std::string::npos);
+    EXPECT_TRUE(pes->field_value(2).find("SMITH") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractEventDateTime) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pes = msg->get_segment("PES");
+    auto pes = msg->segment("PES");
     ASSERT_TRUE(pes != nullptr);
 
     // PES-4 is Event Date/Time
-    EXPECT_EQ(pes->get_field(4), "20240110");
+    EXPECT_EQ(pes->field_value(4), "20240110");
 }
 
 TEST_F(PexHandlerTest, ExtractEventConfirmation) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pes = msg->get_segment("PES");
+    auto pes = msg->segment("PES");
     ASSERT_TRUE(pes != nullptr);
 
     // PES-5 is Event Qualification (C = Confirmed)
-    EXPECT_TRUE(pes->get_field(5).find("C") != std::string::npos);
+    EXPECT_TRUE(pes->field_value(5).find("C") != std::string::npos);
 }
 
 // =============================================================================
@@ -246,35 +246,35 @@ TEST_F(PexHandlerTest, ExtractEventSeverity) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto peo = msg->get_segment("PEO");
+    auto peo = msg->segment("PEO");
     ASSERT_TRUE(peo != nullptr);
 
     // PEO-5 is Event Severity (M = Moderate)
-    EXPECT_TRUE(peo->get_field(5).find("M") != std::string::npos);
+    EXPECT_TRUE(peo->field_value(5).find("M") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractSeriousEvent) {
     auto msg = parse_pex(pex_samples::PEX_SERIOUS_EVENT);
     ASSERT_TRUE(msg.has_value());
 
-    auto peo = msg->get_segment("PEO");
+    auto peo = msg->segment("PEO");
     ASSERT_TRUE(peo != nullptr);
 
     // PEO-5 should indicate severe
-    EXPECT_TRUE(peo->get_field(5).find("S") != std::string::npos);
+    EXPECT_TRUE(peo->field_value(5).find("S") != std::string::npos);
     // PEO-7 should indicate life-threatening
-    EXPECT_TRUE(peo->get_field(7).find("Y") != std::string::npos);
+    EXPECT_TRUE(peo->field_value(7).find("Y") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractEventOutcome) {
     auto msg = parse_pex(pex_samples::PEX_P08_UPDATE);
     ASSERT_TRUE(msg.has_value());
 
-    auto peo = msg->get_segment("PEO");
+    auto peo = msg->segment("PEO");
     ASSERT_TRUE(peo != nullptr);
 
     // PEO-5 should indicate resolved
-    EXPECT_TRUE(peo->get_field(5).find("R") != std::string::npos);
+    EXPECT_TRUE(peo->field_value(5).find("R") != std::string::npos);
 }
 
 // =============================================================================
@@ -293,25 +293,25 @@ TEST_F(PexHandlerTest, ExtractProductDosage) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pcr = msg->get_segment("PCR");
+    auto pcr = msg->segment("PCR");
     ASSERT_TRUE(pcr != nullptr);
 
     // PCR-3 is Dose
-    EXPECT_EQ(pcr->get_field(3), "500MG");
+    EXPECT_EQ(pcr->field_value(3), "500MG");
     // PCR-4 is Dose Frequency
-    EXPECT_EQ(pcr->get_field(4), "TID");
+    EXPECT_EQ(pcr->field_value(4), "TID");
 }
 
 TEST_F(PexHandlerTest, ExtractRouteOfAdmin) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pcr = msg->get_segment("PCR");
+    auto pcr = msg->segment("PCR");
     ASSERT_TRUE(pcr != nullptr);
 
     // PCR-5 is Route of Administration
-    EXPECT_TRUE(pcr->get_field(5).find("PO") != std::string::npos ||
-                pcr->get_field(5).find("Oral") != std::string::npos);
+    EXPECT_TRUE(pcr->field_value(5).find("PO") != std::string::npos ||
+                pcr->field_value(5).find("Oral") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractCausality) {
@@ -340,26 +340,26 @@ TEST_F(PexHandlerTest, ExtractDeviceInfo) {
     auto msg = parse_pex(pex_samples::PEX_DEVICE_EVENT);
     ASSERT_TRUE(msg.has_value());
 
-    auto psh = msg->get_segment("PSH");
+    auto psh = msg->segment("PSH");
     ASSERT_TRUE(psh != nullptr);
 
     // PSH-2 is Product Name
-    EXPECT_TRUE(psh->get_field(2).find("INFUSION PUMP") != std::string::npos);
+    EXPECT_TRUE(psh->field_value(2).find("INFUSION PUMP") != std::string::npos);
     // PSH-3 is Manufacturer Name
-    EXPECT_TRUE(psh->get_field(3).find("MANUFACTURER") != std::string::npos);
+    EXPECT_TRUE(psh->field_value(3).find("MANUFACTURER") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractDeviceLotSerial) {
     auto msg = parse_pex(pex_samples::PEX_DEVICE_EVENT);
     ASSERT_TRUE(msg.has_value());
 
-    auto psh = msg->get_segment("PSH");
+    auto psh = msg->segment("PSH");
     ASSERT_TRUE(psh != nullptr);
 
     // PSH-4 is Lot Number
-    EXPECT_EQ(psh->get_field(4), "LOT123");
+    EXPECT_EQ(psh->field_value(4), "LOT123");
     // PSH-5 is Serial Number
-    EXPECT_EQ(psh->get_field(5), "SN456789");
+    EXPECT_EQ(psh->field_value(5), "SN456789");
 }
 
 // =============================================================================
@@ -370,12 +370,12 @@ TEST_F(PexHandlerTest, ExtractLabResults) {
     auto msg = parse_pex(pex_samples::PEX_WITH_RESULTS);
     ASSERT_TRUE(msg.has_value());
 
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     EXPECT_EQ(obx_segments.size(), 2);
 
     // First OBX should show low platelet count
-    EXPECT_TRUE(obx_segments[0]->get_field(3).find("PLT") != std::string::npos);
-    EXPECT_EQ(obx_segments[0]->get_field(5), "45");
+    EXPECT_TRUE(obx_segments[0]->field_value(3).find("PLT") != std::string::npos);
+    EXPECT_EQ(obx_segments[0]->field_value(5), "45");
 }
 
 // =============================================================================
@@ -386,22 +386,22 @@ TEST_F(PexHandlerTest, ExtractPatientFromPex) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pid = msg->get_segment("PID");
+    auto pid = msg->segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
-    EXPECT_TRUE(pid->get_field(3).find("12345") != std::string::npos);
-    EXPECT_TRUE(pid->get_field(5).find("DOE") != std::string::npos);
+    EXPECT_TRUE(pid->field_value(3).find("12345") != std::string::npos);
+    EXPECT_TRUE(pid->field_value(5).find("DOE") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractEmergencyContact) {
     auto msg = parse_pex(pex_samples::PEX_SERIOUS_EVENT);
     ASSERT_TRUE(msg.has_value());
 
-    auto nk1 = msg->get_segment("NK1");
+    auto nk1 = msg->segment("NK1");
     ASSERT_TRUE(nk1 != nullptr);
 
     // NK1-2 is Contact Name
-    EXPECT_TRUE(nk1->get_field(2).find("SMITH") != std::string::npos);
+    EXPECT_TRUE(nk1->field_value(2).find("SMITH") != std::string::npos);
 }
 
 // =============================================================================
@@ -417,7 +417,7 @@ TEST_F(PexHandlerTest, MissingPesSegment) {
     auto msg = parse_pex(invalid_pex);
     ASSERT_TRUE(msg.has_value());
 
-    auto pes = msg->get_segment("PES");
+    auto pes = msg->segment("PES");
     EXPECT_TRUE(pes == nullptr);
 }
 
@@ -430,7 +430,7 @@ TEST_F(PexHandlerTest, MissingPeoSegment) {
     auto msg = parse_pex(pex_no_event);
     ASSERT_TRUE(msg.has_value());
 
-    auto peo = msg->get_segment("PEO");
+    auto peo = msg->segment("PEO");
     EXPECT_TRUE(peo == nullptr);
 }
 
@@ -442,24 +442,22 @@ TEST_F(PexHandlerTest, BuildAckForPex) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    hl7_builder builder;
-    auto ack = builder.build_ack(*msg, "AA", "Product experience report received");
+    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Product experience report received");
 
-    ASSERT_TRUE(ack.has_value());
-    EXPECT_EQ(ack->get_message_type(), "ACK");
+    // ack is hl7_message directly, no has_value check needed
+    EXPECT_STREQ(to_string(ack.type()), "ACK");
 }
 
 TEST_F(PexHandlerTest, BuildErrorAckForPex) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.has_value());
 
-    hl7_builder builder;
-    auto ack = builder.build_ack(*msg, "AE", "Invalid event report");
+    auto ack = hl7_builder::create_ack(*msg, ack_code::AE, "Invalid event report");
 
-    ASSERT_TRUE(ack.has_value());
-    auto msa = ack->get_segment("MSA");
+    // ack is hl7_message directly, no has_value check needed
+    auto msa = ack.segment("MSA");
     ASSERT_TRUE(msa != nullptr);
-    EXPECT_EQ(msa->get_field(1), "AE");
+    EXPECT_EQ(msa->field_value(1), "AE");
 }
 
 }  // namespace

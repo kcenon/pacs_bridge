@@ -108,29 +108,29 @@ protected:
     std::unique_ptr<hl7_parser> parser_;
 
     // Helper to parse MDM message
-    std::optional<hl7_message> parse_mdm(std::string_view raw) {
+    std::expected<hl7_message, hl7_error> parse_mdm(std::string_view raw) {
         return parser_->parse(std::string(raw));
     }
 
     // Extract document unique ID from TXA segment
     std::string extract_document_id(const hl7_message& msg) {
-        auto txa = msg.get_segment("TXA");
+        auto txa = msg.segment("TXA");
         if (!txa) return "";
-        return txa->get_field(12);
+        return std::string(txa->field_value(12));
     }
 
     // Extract document type from TXA segment
     std::string extract_document_type(const hl7_message& msg) {
-        auto txa = msg.get_segment("TXA");
+        auto txa = msg.segment("TXA");
         if (!txa) return "";
-        return txa->get_field(2);
+        return std::string(txa->field_value(2));
     }
 
     // Extract document status from TXA segment
     std::string extract_document_status(const hl7_message& msg) {
-        auto txa = msg.get_segment("TXA");
+        auto txa = msg.segment("TXA");
         if (!txa) return "";
-        return txa->get_field(17);
+        return std::string(txa->field_value(17));
     }
 };
 
@@ -142,8 +142,8 @@ TEST_F(MdmHandlerTest, ParseMdmT02Original) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "MDM");
-    EXPECT_EQ(msg->get_trigger_event(), "T02");
+    EXPECT_STREQ(to_string(msg->type()), "MDM");
+    EXPECT_EQ(msg->trigger_event(), "T02");
     EXPECT_EQ(extract_document_id(*msg), "DOC12345");
     EXPECT_EQ(extract_document_status(*msg), "AU");
 }
@@ -152,8 +152,8 @@ TEST_F(MdmHandlerTest, ParseMdmT04StatusChange) {
     auto msg = parse_mdm(mdm_samples::MDM_T04_STATUS_CHANGE);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "MDM");
-    EXPECT_EQ(msg->get_trigger_event(), "T04");
+    EXPECT_STREQ(to_string(msg->type()), "MDM");
+    EXPECT_EQ(msg->trigger_event(), "T04");
     EXPECT_EQ(extract_document_status(*msg), "LA");
 }
 
@@ -161,48 +161,48 @@ TEST_F(MdmHandlerTest, ParseMdmT06Addendum) {
     auto msg = parse_mdm(mdm_samples::MDM_T06_ADDENDUM);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "MDM");
-    EXPECT_EQ(msg->get_trigger_event(), "T06");
+    EXPECT_STREQ(to_string(msg->type()), "MDM");
+    EXPECT_EQ(msg->trigger_event(), "T06");
 
-    auto txa = msg->get_segment("TXA");
+    auto txa = msg->segment("TXA");
     ASSERT_TRUE(txa != nullptr);
     // TXA-13 contains parent document ID
-    EXPECT_EQ(txa->get_field(13), "DOC12345");
+    EXPECT_EQ(txa->field_value(13), "DOC12345");
 }
 
 TEST_F(MdmHandlerTest, ParseMdmT08Edit) {
     auto msg = parse_mdm(mdm_samples::MDM_T08_EDIT);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "MDM");
-    EXPECT_EQ(msg->get_trigger_event(), "T08");
+    EXPECT_STREQ(to_string(msg->type()), "MDM");
+    EXPECT_EQ(msg->trigger_event(), "T08");
 }
 
 TEST_F(MdmHandlerTest, ParseMdmT10Replacement) {
     auto msg = parse_mdm(mdm_samples::MDM_T10_REPLACEMENT);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "MDM");
-    EXPECT_EQ(msg->get_trigger_event(), "T10");
+    EXPECT_STREQ(to_string(msg->type()), "MDM");
+    EXPECT_EQ(msg->trigger_event(), "T10");
 
-    auto txa = msg->get_segment("TXA");
+    auto txa = msg->segment("TXA");
     ASSERT_TRUE(txa != nullptr);
     // Replacement should reference original document
-    EXPECT_EQ(txa->get_field(13), "DOC12345");
+    EXPECT_EQ(txa->field_value(13), "DOC12345");
 }
 
 TEST_F(MdmHandlerTest, ParseRadiologyReport) {
     auto msg = parse_mdm(mdm_samples::MDM_RADIOLOGY_REPORT);
     ASSERT_TRUE(msg.has_value());
 
-    EXPECT_EQ(msg->get_message_type(), "MDM");
+    EXPECT_STREQ(to_string(msg->type()), "MDM");
 
     // Should have OBR segment for radiology
-    auto obr = msg->get_segment("OBR");
+    auto obr = msg->segment("OBR");
     ASSERT_TRUE(obr != nullptr);
 
     // Should have multiple OBX segments
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     EXPECT_GE(obx_segments.size(), 2);
 }
 
@@ -256,13 +256,13 @@ TEST_F(MdmHandlerTest, ExtractPatientFromMdm) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto pid = msg->get_segment("PID");
+    auto pid = msg->segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // Patient ID
-    EXPECT_TRUE(pid->get_field(3).find("12345") != std::string::npos);
+    EXPECT_TRUE(pid->field_value(3).find("12345") != std::string::npos);
     // Patient Name
-    EXPECT_TRUE(pid->get_field(5).find("DOE") != std::string::npos);
+    EXPECT_TRUE(pid->field_value(5).find("DOE") != std::string::npos);
 }
 
 // =============================================================================
@@ -273,11 +273,11 @@ TEST_F(MdmHandlerTest, ExtractObxContent) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
     ASSERT_TRUE(msg.has_value());
 
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     ASSERT_GE(obx_segments.size(), 1);
 
     // OBX-5 contains the observation value (report text)
-    std::string content = obx_segments[0]->get_field(5);
+    std::string content = std::string(obx_segments[0]->field_value(5));
     EXPECT_FALSE(content.empty());
 }
 
@@ -285,13 +285,13 @@ TEST_F(MdmHandlerTest, MultipleObxSegments) {
     auto msg = parse_mdm(mdm_samples::MDM_RADIOLOGY_REPORT);
     ASSERT_TRUE(msg.has_value());
 
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     EXPECT_EQ(obx_segments.size(), 2);
 
     // First OBX should be impression
-    EXPECT_TRUE(obx_segments[0]->get_field(3).find("IMPRESSION") != std::string::npos);
+    EXPECT_TRUE(obx_segments[0]->field_value(3).find("IMPRESSION") != std::string::npos);
     // Second OBX should be findings
-    EXPECT_TRUE(obx_segments[1]->get_field(3).find("FINDINGS") != std::string::npos);
+    EXPECT_TRUE(obx_segments[1]->field_value(3).find("FINDINGS") != std::string::npos);
 }
 
 // =============================================================================
@@ -307,7 +307,7 @@ TEST_F(MdmHandlerTest, MissingTxaSegment) {
     ASSERT_TRUE(msg.has_value());
 
     // Should parse but TXA should be missing
-    auto txa = msg->get_segment("TXA");
+    auto txa = msg->segment("TXA");
     EXPECT_TRUE(txa == nullptr);
 }
 
@@ -330,15 +330,14 @@ TEST_F(MdmHandlerTest, BuildAckForMdm) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
     ASSERT_TRUE(msg.has_value());
 
-    hl7_builder builder;
-    auto ack = builder.build_ack(*msg, "AA", "Message accepted");
+    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Message accepted");
 
-    ASSERT_TRUE(ack.has_value());
-    EXPECT_EQ(ack->get_message_type(), "ACK");
+    // ack is hl7_message directly, no has_value check needed
+    EXPECT_STREQ(to_string(ack.type()), "ACK");
 
-    auto msa = ack->get_segment("MSA");
+    auto msa = ack.segment("MSA");
     ASSERT_TRUE(msa != nullptr);
-    EXPECT_EQ(msa->get_field(1), "AA");
+    EXPECT_EQ(msa->field_value(1), "AA");
 }
 
 }  // namespace
