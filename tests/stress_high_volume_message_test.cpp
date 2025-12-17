@@ -178,7 +178,7 @@ TEST_F(StressHighVolumeTest, ParseMessageWith100Segments) {
     auto msg = parser_->parse(large_msg);
 
     ASSERT_TRUE(msg.has_value());
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     EXPECT_EQ(obx_segments.size(), 100);
 }
 
@@ -187,7 +187,7 @@ TEST_F(StressHighVolumeTest, ParseMessageWith500Segments) {
     auto msg = parser_->parse(large_msg);
 
     ASSERT_TRUE(msg.has_value());
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     EXPECT_EQ(obx_segments.size(), 500);
 }
 
@@ -196,7 +196,7 @@ TEST_F(StressHighVolumeTest, ParseMessageWith1000Segments) {
     auto msg = parser_->parse(large_msg);
 
     ASSERT_TRUE(msg.has_value());
-    auto obx_segments = msg->get_segments("OBX");
+    auto obx_segments = msg->segments("OBX");
     EXPECT_EQ(obx_segments.size(), 1000);
 }
 
@@ -355,16 +355,14 @@ TEST_F(StressHighVolumeTest, Build1000Messages) {
 
     auto elapsed = measure_time_ms([&]() {
         for (int i = 0; i < count; ++i) {
-            hl7_builder builder;
-            builder.set_sending_application("HIS")
-                   .set_sending_facility("HOSPITAL")
-                   .set_receiving_application("PACS")
-                   .set_receiving_facility("RADIOLOGY")
-                   .set_message_type("ADT")
-                   .set_trigger_event("A01")
-                   .set_message_control_id("MSG" + std::to_string(i));
-
-            auto msg = builder.build();
+            auto msg = hl7_builder::create()
+                .sending_app("HIS")
+                .sending_facility("HOSPITAL")
+                .receiving_app("PACS")
+                .receiving_facility("RADIOLOGY")
+                .message_type("ADT", "A01")
+                .control_id("MSG" + std::to_string(i))
+                .build();
             if (msg.has_value()) ++success;
         }
     });
@@ -386,7 +384,7 @@ TEST_F(StressHighVolumeTest, RoundTrip1000Messages) {
             auto parsed = parser_->parse(original);
             if (!parsed.has_value()) continue;
 
-            std::string rebuilt = parsed->to_string();
+            std::string rebuilt = parsed->serialize();
             auto reparsed = parser_->parse(rebuilt);
             if (reparsed.has_value()) ++success;
         }
@@ -425,7 +423,7 @@ TEST_F(StressHighVolumeTest, VaryingMessageSizes) {
         std::string msg = create_oru_message(i, i);
         auto parsed = parser_->parse(msg);
         if (parsed.has_value()) {
-            auto obx_segments = parsed->get_segments("OBX");
+            auto obx_segments = parsed->segments("OBX");
             if (obx_segments.size() == static_cast<size_t>(i)) {
                 ++success;
             }
@@ -454,12 +452,11 @@ TEST_F(StressHighVolumeTest, InterleavedParseAndBuild) {
         ASSERT_TRUE(parsed.has_value());
 
         // Build ACK
-        hl7_builder builder;
-        auto ack = builder.build_ack(*parsed, "AA", "OK");
-        ASSERT_TRUE(ack.has_value());
+        auto ack = hl7_builder::create_ack(*parsed, ack_code::AA, "OK");
+        // ack is hl7_message directly, no has_value check needed
 
         // Parse ACK
-        auto ack_parsed = parser_->parse(ack->to_string());
+        auto ack_parsed = parser_->parse(ack.serialize());
         ASSERT_TRUE(ack_parsed.has_value());
     }
 }

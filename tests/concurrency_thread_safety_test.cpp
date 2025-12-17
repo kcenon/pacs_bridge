@@ -20,6 +20,7 @@
 #include <chrono>
 #include <future>
 #include <mutex>
+#include <queue>
 #include <random>
 #include <string>
 #include <thread>
@@ -121,7 +122,7 @@ TEST_F(ConcurrencyThreadSafetyTest, SharedParserConcurrentAccess) {
             int msg_id = thread_id * 1000 + i;
             std::string msg = create_test_message(msg_id);
 
-            std::optional<hl7_message> result;
+            std::expected<hl7_message, hl7_error> result;
             {
                 std::lock_guard<std::mutex> lock(parser_mutex);
                 result = shared_parser.parse(msg);
@@ -156,16 +157,15 @@ TEST_F(ConcurrencyThreadSafetyTest, ConcurrentMessageBuilding) {
 
     auto thread_func = [&](int thread_id) {
         for (int i = 0; i < messages_per_thread; ++i) {
-            hl7_builder builder;
-            builder.set_sending_application("HIS_" + std::to_string(thread_id))
-                   .set_sending_facility("HOSPITAL")
-                   .set_receiving_application("PACS")
-                   .set_receiving_facility("RADIOLOGY")
-                   .set_message_type("ADT")
-                   .set_trigger_event("A01")
-                   .set_message_control_id("MSG" + std::to_string(thread_id * 1000 + i));
+            auto msg = hl7_builder::create()
+                .sending_app("HIS_" + std::to_string(thread_id))
+                .sending_facility("HOSPITAL")
+                .receiving_app("PACS")
+                .receiving_facility("RADIOLOGY")
+                .message_type("ADT", "A01")
+                .control_id("MSG" + std::to_string(thread_id * 1000 + i))
+                .build();
 
-            auto msg = builder.build();
             if (msg.has_value()) {
                 ++success_count;
             }
@@ -210,16 +210,15 @@ TEST_F(ConcurrencyThreadSafetyTest, MixedParseAndBuildWorkload) {
                 }
             } else {
                 // Build operation
-                hl7_builder builder;
-                builder.set_sending_application("HIS")
-                       .set_sending_facility("HOSPITAL")
-                       .set_receiving_application("PACS")
-                       .set_receiving_facility("RADIOLOGY")
-                       .set_message_type("ADT")
-                       .set_trigger_event("A01")
-                       .set_message_control_id("MSG" + std::to_string(thread_id * 1000 + i));
+                auto msg = hl7_builder::create()
+                    .sending_app("HIS")
+                    .sending_facility("HOSPITAL")
+                    .receiving_app("PACS")
+                    .receiving_facility("RADIOLOGY")
+                    .message_type("ADT", "A01")
+                    .control_id("MSG" + std::to_string(thread_id * 1000 + i))
+                    .build();
 
-                auto msg = builder.build();
                 if (msg.has_value()) {
                     ++build_success;
                 }
@@ -258,8 +257,8 @@ TEST_F(ConcurrencyThreadSafetyTest, MessageObjectCopySafety) {
             hl7_message copy = *original;
 
             // Read from the copy
-            auto msh = copy.get_segment("MSH");
-            if (msh && !msh->get_field(9).empty()) {
+            auto msh = copy.segment("MSH");
+            if (msh && !msh->field_value(9).empty()) {
                 ++success_count;
             }
         }
@@ -283,11 +282,11 @@ TEST_F(ConcurrencyThreadSafetyTest, MessageObjectCopySafety) {
 
 TEST_F(ConcurrencyThreadSafetyTest, AsyncParseOperations) {
     const int async_count = 20;
-    std::vector<std::future<std::optional<hl7_message>>> futures;
+    std::vector<std::future<std::expected<hl7_message, hl7_error>>> futures;
     futures.reserve(async_count);
 
     for (int i = 0; i < async_count; ++i) {
-        futures.push_back(std::async(std::launch::async, [this, i]() {
+        futures.emplace_back(std::async(std::launch::async, [this, i]() {
             hl7_parser parser;
             return parser.parse(create_test_message(i));
         }));
@@ -368,7 +367,7 @@ TEST_F(ConcurrencyThreadSafetyTest, ConcurrentLargeMessages) {
             std::string msg = create_large_message(thread_id * 1000 + i, 50);
             auto result = parser.parse(msg);
             if (result.has_value()) {
-                auto obx_segments = result->get_segments("OBX");
+                auto obx_segments = result->segments("OBX");
                 if (obx_segments.size() == 50) {
                     ++success_count;
                 }
@@ -476,14 +475,14 @@ TEST_F(ConcurrencyThreadSafetyTest, ConcurrentRoundTrip) {
             if (!parsed.has_value()) continue;
 
             // Convert to string
-            std::string rebuilt = parsed->to_string();
+            std::string rebuilt = parsed->serialize();
 
             // Parse rebuilt
             auto reparsed = parser.parse(rebuilt);
             if (!reparsed.has_value()) continue;
 
             // Verify
-            if (parsed->get_message_type() == reparsed->get_message_type()) {
+            if (parsed->type() == reparsed->type()) {
                 ++success_count;
             }
         }
@@ -517,18 +516,21 @@ TEST_F(ConcurrencyThreadSafetyTest, MemorySafetyUnderLoad) {
                 auto msg = parser.parse(create_test_message(thread_id * 1000 + i));
                 if (msg.has_value()) {
                     // Access various parts of the message
-                    auto msh = msg->get_segment("MSH");
-                    auto pid = msg->get_segment("PID");
-                    auto pv1 = msg->get_segment("PV1");
+                    auto msh = msg->segment("MSH");
+                    auto pid = msg->segment("PID");
+                    auto pv1 = msg->segment("PV1");
 
-                    if (msh) { volatile auto _ = msh->get_field(9); }
-                    if (pid) { volatile auto _ = pid->get_field(3); }
-                    if (pv1) { volatile auto _ = pv1->get_field(3); }
+                    if (msh) { volatile auto _ = msh->field_value(9); }
+                    if (pid) { volatile auto _ = pid->field_value(3); }
+                    if (pv1) { volatile auto _ = pv1->field_value(3); }
 
-                    // Get all segments
-                    auto segments = msg->get_all_segments();
-                    for (const auto& seg : segments) {
-                        volatile auto _ = seg->get_segment_name();
+                    // Check segment count and iterate known segments
+                    volatile auto seg_count = msg->segment_count();
+                    // Access a few standard segments
+                    for (const auto& seg_id : {"MSH", "PID", "PV1"}) {
+                        if (auto seg = msg->segment(seg_id)) {
+                            volatile auto _ = seg->segment_id();
+                        }
                     }
                 }
             }
