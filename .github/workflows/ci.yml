@@ -177,26 +177,19 @@ jobs:
       run: |
         # For clang on Linux, use libc++ for better C++23 support
         # This ensures ABI compatibility with GoogleTest built from source
-        # Use pre-cloned dependencies instead of FetchContent re-downloading
-        FETCH_OPTS="-DFETCHCONTENT_SOURCE_DIR_COMMON_SYSTEM=$GITHUB_WORKSPACE/common_system"
-        FETCH_OPTS="$FETCH_OPTS -DFETCHCONTENT_SOURCE_DIR_THREAD_SYSTEM=$GITHUB_WORKSPACE/thread_system"
-        FETCH_OPTS="$FETCH_OPTS -DFETCHCONTENT_SOURCE_DIR_LOGGER_SYSTEM=$GITHUB_WORKSPACE/logger_system"
-        FETCH_OPTS="$FETCH_OPTS -DFETCHCONTENT_SOURCE_DIR_CONTAINER_SYSTEM=$GITHUB_WORKSPACE/container_system"
-        FETCH_OPTS="$FETCH_OPTS -DFETCHCONTENT_SOURCE_DIR_NETWORK_SYSTEM=$GITHUB_WORKSPACE/network_system"
-        FETCH_OPTS="$FETCH_OPTS -DFETCHCONTENT_SOURCE_DIR_MONITORING_SYSTEM=$GITHUB_WORKSPACE/monitoring_system"
-        FETCH_OPTS="$FETCH_OPTS -DFETCHCONTENT_SOURCE_DIR_PACS_SYSTEM=$GITHUB_WORKSPACE/pacs_system"
-
+        # Note: BRIDGE_STANDALONE_BUILD=ON (default) excludes Event Bus code
+        # which requires common_system's Event Bus. Full ecosystem build with
+        # Event Bus integration will be tested separately when kcenon ecosystem
+        # dependency management is resolved. See Issue #142 for details.
         if [ "${{ matrix.compiler }}" = "clang" ] && [ "${{ runner.os }}" = "Linux" ]; then
           cmake -B build \
             -G Ninja \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
-            -DBRIDGE_STANDALONE_BUILD=OFF \
             -DBRIDGE_BUILD_TESTS=ON \
             -DBRIDGE_BUILD_EXAMPLES=OFF \
             -DBRIDGE_BUILD_HL7=ON \
             -DBRIDGE_BUILD_FHIR=OFF \
-            $FETCH_OPTS \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \
             "-DCMAKE_CXX_FLAGS=-stdlib=libc++" \
@@ -206,12 +199,10 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
             -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF \
-            -DBRIDGE_STANDALONE_BUILD=OFF \
             -DBRIDGE_BUILD_TESTS=ON \
             -DBRIDGE_BUILD_EXAMPLES=OFF \
             -DBRIDGE_BUILD_HL7=ON \
             -DBRIDGE_BUILD_FHIR=OFF \
-            $FETCH_OPTS \
             -DCMAKE_C_COMPILER=${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
         fi
@@ -225,23 +216,15 @@ jobs:
         # Refresh PATH to include Ninja from chocolatey
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        # Use pre-cloned dependencies instead of FetchContent re-downloading
+        # Note: BRIDGE_STANDALONE_BUILD=ON (default) - see Issue #142
         cmake -B build `
           -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_COMPILE_WARNING_AS_ERROR=OFF `
-          -DBRIDGE_STANDALONE_BUILD=OFF `
           -DBRIDGE_BUILD_TESTS=ON `
           -DBRIDGE_BUILD_EXAMPLES=OFF `
           -DBRIDGE_BUILD_HL7=ON `
           -DBRIDGE_BUILD_FHIR=OFF `
-          -DFETCHCONTENT_SOURCE_DIR_COMMON_SYSTEM="$env:GITHUB_WORKSPACE/common_system" `
-          -DFETCHCONTENT_SOURCE_DIR_THREAD_SYSTEM="$env:GITHUB_WORKSPACE/thread_system" `
-          -DFETCHCONTENT_SOURCE_DIR_LOGGER_SYSTEM="$env:GITHUB_WORKSPACE/logger_system" `
-          -DFETCHCONTENT_SOURCE_DIR_CONTAINER_SYSTEM="$env:GITHUB_WORKSPACE/container_system" `
-          -DFETCHCONTENT_SOURCE_DIR_NETWORK_SYSTEM="$env:GITHUB_WORKSPACE/network_system" `
-          -DFETCHCONTENT_SOURCE_DIR_MONITORING_SYSTEM="$env:GITHUB_WORKSPACE/monitoring_system" `
-          -DFETCHCONTENT_SOURCE_DIR_PACS_SYSTEM="$env:GITHUB_WORKSPACE/pacs_system" `
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_MANIFEST_MODE=OFF
 
@@ -318,26 +301,18 @@ jobs:
 
     # Tests enabled (Issue #6 - Test Framework Setup completed)
     # Coverage reports include unit test coverage
+    # Note: BRIDGE_STANDALONE_BUILD=ON (default) - see Issue #142
     - name: Configure CMake with coverage
       working-directory: pacs_bridge
       run: |
-        # Use pre-cloned dependencies instead of FetchContent re-downloading
         cmake -B build \
           -G Ninja \
           -DCMAKE_BUILD_TYPE=Debug \
-          -DBRIDGE_STANDALONE_BUILD=OFF \
           -DBRIDGE_ENABLE_COVERAGE=ON \
           -DBRIDGE_BUILD_TESTS=ON \
           -DBRIDGE_BUILD_EXAMPLES=OFF \
           -DBRIDGE_BUILD_HL7=ON \
-          -DBRIDGE_BUILD_FHIR=OFF \
-          -DFETCHCONTENT_SOURCE_DIR_COMMON_SYSTEM=$GITHUB_WORKSPACE/common_system \
-          -DFETCHCONTENT_SOURCE_DIR_THREAD_SYSTEM=$GITHUB_WORKSPACE/thread_system \
-          -DFETCHCONTENT_SOURCE_DIR_LOGGER_SYSTEM=$GITHUB_WORKSPACE/logger_system \
-          -DFETCHCONTENT_SOURCE_DIR_CONTAINER_SYSTEM=$GITHUB_WORKSPACE/container_system \
-          -DFETCHCONTENT_SOURCE_DIR_NETWORK_SYSTEM=$GITHUB_WORKSPACE/network_system \
-          -DFETCHCONTENT_SOURCE_DIR_MONITORING_SYSTEM=$GITHUB_WORKSPACE/monitoring_system \
-          -DFETCHCONTENT_SOURCE_DIR_PACS_SYSTEM=$GITHUB_WORKSPACE/pacs_system
+          -DBRIDGE_BUILD_FHIR=OFF
 
     - name: Build
       working-directory: pacs_bridge
