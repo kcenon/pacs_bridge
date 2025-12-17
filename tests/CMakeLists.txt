@@ -385,6 +385,13 @@ endif()
 # Failover Routing Tests (RIS failover)
 add_integration_test(failover_test "integration;failover;phase2")
 
+# Disaster Recovery Tests (Issue #162) - network failures, message loss, retry logic
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_integration_test(disaster_recovery_test "integration;disaster-recovery;resilience;phase2" 600)
+else()
+    message(STATUS "Skipping disaster_recovery_test: SQLite not available (required for queue_manager)")
+endif()
+
 # Stress Tests (high volume)
 add_integration_test(stress_test "integration;stress;phase2" 600)
 
@@ -594,6 +601,9 @@ if(PACS_BRIDGE_HAS_SQLITE)
     message(STATUS "  - queue_persistence_test")
 endif()
 message(STATUS "  - failover_test")
+if(PACS_BRIDGE_HAS_SQLITE)
+    message(STATUS "  - disaster_recovery_test (Issue #162)")
+endif()
 message(STATUS "  - stress_test")
 message(STATUS "  - mllp_connection_test (Issue #161)")
 message(STATUS "  - pacs_worklist_test (Issue #161)")

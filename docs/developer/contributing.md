@@ -288,7 +288,7 @@ auto& message = result.value();
 | Integration Tests | `tests/integration/` | Test component interaction |
 | Stress Tests | `tests/stress/` | Performance testing |
 
-#### Integration Test Categories (Issue #161)
+#### Integration Test Categories (Issue #161, #162)
 
 | Test File | Focus Area | Labels |
 |-----------|------------|--------|
@@ -297,6 +297,7 @@ auto& message = result.value();
 | `e2e_scenario_test.cpp` | Complete imaging workflow scenarios | `integration;e2e;scenario` |
 | `mpps_integration_test.cpp` | MPPS N-CREATE/N-SET flows | `integration;mpps` |
 | `failover_test.cpp` | RIS failover scenarios | `integration;failover` |
+| `disaster_recovery_test.cpp` | Network failures, message loss, retry logic, resilience | `integration;disaster-recovery;resilience` |
 
 ### Writing Tests
 
