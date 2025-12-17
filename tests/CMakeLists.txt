@@ -388,6 +388,15 @@ add_integration_test(failover_test "integration;failover;phase2")
 # Stress Tests (high volume)
 add_integration_test(stress_test "integration;stress;phase2" 600)
 
+# MLLP Connection Tests (Issue #161) - setup/teardown, timeout, reconnection
+add_integration_test(mllp_connection_test "integration;mllp;connection;phase2")
+
+# PACS Worklist Tests (Issue #161) - worklist updates, status management
+add_integration_test(pacs_worklist_test "integration;pacs;worklist;phase2")
+
+# End-to-End Scenario Tests (Issue #161) - complete workflow scenarios
+add_integration_test(e2e_scenario_test "integration;e2e;scenario;phase2" 600)
+
 # Monitoring Integration Tests (Issue #90)
 add_integration_test(monitoring_integration_test "integration;monitoring;metrics;phase4" 180)
 
@@ -586,6 +595,9 @@ if(PACS_BRIDGE_HAS_SQLITE)
 endif()
 message(STATUS "  - failover_test")
 message(STATUS "  - stress_test")
+message(STATUS "  - mllp_connection_test (Issue #161)")
+message(STATUS "  - pacs_worklist_test (Issue #161)")
+message(STATUS "  - e2e_scenario_test (Issue #161)")
 message(STATUS "")
 message(STATUS "Phase 4 Integration Tests:")
 message(STATUS "  - monitoring_integration_test")
