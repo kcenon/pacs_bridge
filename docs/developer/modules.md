@@ -36,6 +36,7 @@ pacs_bridge/
 │   ├── config/               # Configuration
 │   ├── security/             # Security features
 │   ├── monitoring/           # Health and metrics
+│   ├── tracing/              # Distributed tracing
 │   ├── testing/              # Test utilities
 │   └── concepts/             # C++20 concepts
 ├── src/
@@ -567,6 +568,117 @@ metrics.record_hl7_message_received("ADT");
     PACS_BRIDGE_TIME_HL7_PROCESSING("ADT");
     // Process message
 }
+```
+
+### Distributed Tracing (`tracing/`)
+
+**Purpose:** End-to-end distributed tracing with W3C Trace Context support.
+
+**See also:** [GitHub Issue #144](https://github.com/kcenon/pacs_bridge/issues/144)
+
+**Key Classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `trace_manager` | Singleton trace manager for span creation |
+| `span_wrapper` | RAII wrapper for span lifecycle management |
+| `trace_context` | W3C Trace Context data structure |
+| `trace_exporter` | Interface for trace data export |
+| `exporter_factory` | Factory for creating trace exporters |
+| `batch_exporter` | Batching wrapper with retry logic |
+
+**Key Headers:**
+
+```cpp
+#include <pacs/bridge/tracing/trace_manager.h>
+#include <pacs/bridge/tracing/span_wrapper.h>
+#include <pacs/bridge/tracing/trace_propagation.h>
+#include <pacs/bridge/tracing/exporter_factory.h>
+```
+
+**Span Types (span_kind):**
+
+| Kind | Description |
+|------|-------------|
+| `server` | Server-side handling of a request |
+| `client` | Client-side call to external service |
+| `internal` | Internal processing operation |
+| `producer` | Message producer |
+| `consumer` | Message consumer |
+
+**Export Formats:**
+
+| Format | Description |
+|--------|-------------|
+| `jaeger_thrift` | Jaeger Thrift over HTTP |
+| `jaeger_grpc` | Jaeger gRPC (OTLP compatible) |
+| `zipkin_json` | Zipkin JSON v2 format |
+| `otlp_grpc` | OpenTelemetry Protocol gRPC |
+| `otlp_http_json` | OTLP JSON over HTTP |
+
+**Usage Example:**
+
+```cpp
+// Initialize tracing
+tracing_config config;
+config.enabled = true;
+config.service_name = "pacs_bridge";
+config.format = trace_export_format::otlp_grpc;
+config.endpoint = "http://localhost:4317";
+
+auto& manager = trace_manager::instance();
+manager.configure(config);
+
+// Create spans with RAII
+{
+    auto span = manager.start_span("hl7_process", span_kind::server);
+    span.set_attribute("hl7.message_type", "ADT^A01");
+    span.set_attribute("hl7.message_id", "MSG001");
+
+    // Processing...
+
+    span.set_status(span_status::ok);
+}  // Span automatically ends and exports
+
+// Create child spans
+{
+    auto parent = manager.start_span("parent_operation", span_kind::server);
+
+    {
+        auto child = manager.start_span("child_operation", span_kind::internal);
+        child.set_attribute("child.data", "value");
+    }
+}
+```
+
+**Trace Context Propagation:**
+
+```cpp
+// Inject trace context into HL7 message
+hl7_propagation_config config;
+config.enabled = true;
+config.strategy = hl7_propagation_strategy::z_segment;
+config.segment_name = "ZTR";
+
+inject_trace_context(hl7_message, trace_context, config);
+
+// Extract trace context from HL7 message
+auto ctx = extract_trace_context(hl7_message, config);
+if (ctx) {
+    auto span = manager.start_span_from_context("process", span_kind::server, *ctx);
+}
+```
+
+**Custom Exporter Registration:**
+
+```cpp
+// Register a custom exporter factory
+exporter_factory::register_factory(
+    trace_export_format::jaeger_thrift,
+    [](const tracing_config& config) -> std::expected<std::unique_ptr<trace_exporter>, exporter_error> {
+        return std::make_unique<my_jaeger_exporter>(config);
+    }
+);
 ```
 
 ---
