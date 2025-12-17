@@ -302,6 +302,8 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Queue Tests | Message persistence & recovery | Implemented |
 | Failover Tests | RIS failover routing | Implemented |
 | Stress Tests | High volume load testing | Implemented |
+| Performance Tests | Benchmarks, concurrency, throughput | Implemented |
+| Memory Safety | Leak detection, RAII compliance | Implemented |
 | Monitoring | Prometheus metrics collector | Implemented |
 | Monitoring | /metrics HTTP endpoint | Implemented |
 | Monitoring | Grafana dashboard & alerts | Implemented |
@@ -357,6 +359,10 @@ ctest --test-dir build -j $(nproc) --output-on-failure
 ./build/bin/queue_persistence_test      # Message queue recovery
 ./build/bin/failover_test               # RIS failover routing
 ./build/bin/stress_test                 # High volume load testing
+
+# Run performance benchmarks and memory tests
+./build/bin/benchmark_suite_test        # Message processing, concurrency, throughput
+./build/bin/memory_safety_test          # Memory leak detection, RAII compliance
 
 # Filter tests by label
 ctest --test-dir build -L phase1      # Phase 1 unit tests only
