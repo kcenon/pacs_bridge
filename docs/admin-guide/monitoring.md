@@ -127,6 +127,19 @@ curl http://localhost:8081/metrics
 | `patient_cache_misses_total` | Counter | - | Cache misses |
 | `patient_cache_evictions_total` | Counter | - | Cache evictions |
 
+#### Distributed Tracing Metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `trace_spans_created_total` | Counter | `operation`, `kind` | Total spans created |
+| `trace_spans_ended_total` | Counter | `operation`, `status` | Total spans completed |
+| `trace_span_duration_seconds` | Histogram | `operation` | Span duration |
+| `trace_export_batch_size` | Histogram | - | Batch sizes sent to exporter |
+| `trace_export_duration_seconds` | Histogram | - | Export latency |
+| `trace_export_errors_total` | Counter | `error_type` | Export errors |
+| `trace_queue_depth` | Gauge | - | Pending spans in queue |
+| `trace_spans_dropped_total` | Counter | - | Spans dropped due to queue overflow |
+
 ### Prometheus Configuration
 
 Add PACS Bridge as a scrape target:

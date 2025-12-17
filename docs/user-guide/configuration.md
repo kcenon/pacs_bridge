@@ -19,6 +19,7 @@
 - [Patient Cache](#patient-cache)
 - [Logging](#logging)
 - [Monitoring](#monitoring)
+- [Distributed Tracing](#distributed-tracing)
 - [Configuration Examples](#configuration-examples)
 
 ---
@@ -372,6 +373,113 @@ monitoring:
 | `health.base_path` | string | No | `/health` | Health endpoint path |
 | `health.enable_metrics_endpoint` | boolean | No | `true` | Enable Prometheus metrics |
 | `health.metrics_path` | string | No | `/metrics` | Metrics endpoint path |
+
+---
+
+## Distributed Tracing
+
+PACS Bridge supports distributed tracing with W3C Trace Context standard. Traces can be exported to various backends including Jaeger, Zipkin, and OpenTelemetry collectors.
+
+**See also:** [GitHub Issue #144](https://github.com/kcenon/pacs_bridge/issues/144)
+
+```yaml
+tracing:
+  enabled: true
+  service_name: "pacs_bridge"
+  format: "otlp_grpc"
+  endpoint: "http://jaeger:4317"
+  sample_rate: 1.0
+
+  batch:
+    max_batch_size: 512
+    max_export_delay: 5s
+    max_queue_size: 2048
+    retry_count: 3
+    retry_delay: 1s
+
+  propagation:
+    hl7:
+      enabled: true
+      strategy: "z_segment"
+      segment_name: "ZTR"
+```
+
+### General Settings
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `enabled` | boolean | No | `false` | Enable distributed tracing |
+| `service_name` | string | No | `pacs_bridge` | Service name in traces |
+| `format` | string | No | `otlp_grpc` | Export format (see below) |
+| `endpoint` | string | If enabled | - | Trace backend endpoint |
+| `sample_rate` | float | No | `1.0` | Sampling rate (0.0-1.0) |
+
+### Export Formats
+
+| Format | Description | Example Endpoint |
+|--------|-------------|------------------|
+| `jaeger_thrift` | Jaeger Thrift over HTTP | `http://jaeger:14268/api/traces` |
+| `jaeger_grpc` | Jaeger gRPC (OTLP compatible) | `http://jaeger:14250` |
+| `zipkin_json` | Zipkin JSON v2 format | `http://zipkin:9411/api/v2/spans` |
+| `otlp_grpc` | OpenTelemetry Protocol gRPC | `http://collector:4317` |
+| `otlp_http_json` | OTLP JSON over HTTP | `http://collector:4318/v1/traces` |
+
+### Batch Export Settings
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `batch.max_batch_size` | integer | No | `512` | Maximum spans per batch |
+| `batch.max_export_delay` | duration | No | `5s` | Maximum delay before export |
+| `batch.max_queue_size` | integer | No | `2048` | Maximum pending spans |
+| `batch.retry_count` | integer | No | `3` | Retry attempts on failure |
+| `batch.retry_delay` | duration | No | `1s` | Delay between retries |
+
+### HL7 Trace Propagation
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `propagation.hl7.enabled` | boolean | No | `false` | Enable HL7 trace propagation |
+| `propagation.hl7.strategy` | string | No | `z_segment` | Propagation strategy |
+| `propagation.hl7.segment_name` | string | No | `ZTR` | Custom Z-segment name |
+| `propagation.hl7.msh_field_index` | integer | No | `25` | MSH field for custom field strategy |
+
+### Propagation Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `z_segment` | Use custom Z-segment (recommended) |
+| `msh_control_id` | Append to MSH-10 Message Control ID |
+| `msh_custom_field` | Use custom MSH field |
+
+### Example: Jaeger Integration
+
+```yaml
+tracing:
+  enabled: true
+  service_name: "pacs_bridge_prod"
+  format: "jaeger_thrift"
+  endpoint: "http://jaeger.monitoring:14268/api/traces"
+  sample_rate: 0.1  # Sample 10% in production
+
+  batch:
+    max_batch_size: 256
+    max_export_delay: 10s
+```
+
+### Example: OpenTelemetry Collector
+
+```yaml
+tracing:
+  enabled: true
+  service_name: "pacs_bridge"
+  format: "otlp_grpc"
+  endpoint: "http://otel-collector:4317"
+
+  propagation:
+    hl7:
+      enabled: true
+      strategy: "z_segment"
+```
 
 ---
 

@@ -20,6 +20,7 @@
 #include "pacs/bridge/mllp/mllp_server.h"
 
 #include "pacs/bridge/monitoring/bridge_metrics.h"
+#include "pacs/bridge/tracing/trace_manager.h"
 
 #include <algorithm>
 #include <atomic>
@@ -792,11 +793,22 @@ private:
                 break;
             }
 
+            // Start tracing span for message receive
+            auto span = tracing::trace_manager::instance().start_span(
+                "mllp_receive", tracing::span_kind::server);
+            span.set_attribute("mllp.port", static_cast<int64_t>(config_.port))
+                .set_attribute("mllp.remote_address", session->remote_address)
+                .set_attribute("mllp.remote_port", static_cast<int64_t>(session->remote_port))
+                .set_attribute("mllp.session_id", static_cast<int64_t>(session->id));
+
             // Extract message content (between VT and FS)
             mllp_message msg;
             msg.content.assign(buffer.begin() + 1, end_it);
             msg.session = session->to_session_info();
             msg.received_at = std::chrono::system_clock::now();
+
+            // Add message size to span
+            span.set_attribute("mllp.message_size", static_cast<int64_t>(msg.content.size()));
 
             // Remove processed message from buffer (including CR)
             buffer.erase(buffer.begin(), end_it + 2);
@@ -817,7 +829,12 @@ private:
             // Send response if provided
             if (response) {
                 send_response(session, *response);
+                span.set_attribute("mllp.response_sent", true);
+            } else {
+                span.set_attribute("mllp.response_sent", false);
             }
+
+            // Span ends automatically via RAII
         }
     }
 

@@ -5,6 +5,8 @@
 
 #include "pacs/bridge/router/message_router.h"
 
+#include "pacs/bridge/tracing/trace_manager.h"
+
 #include <kcenon/common/interfaces/global_logger_registry.h>
 
 #include <algorithm>
@@ -414,6 +416,10 @@ void message_router::clear_routes() {
 
 std::expected<handler_result, router_error> message_router::route(
     const hl7::hl7_message& message) const {
+    // Start tracing span
+    auto span = tracing::trace_manager::instance().start_span(
+        "hl7_route", tracing::span_kind::internal);
+
     std::lock_guard lock(pimpl_->mutex_);
 
     auto start_time = std::chrono::steady_clock::now();
@@ -424,6 +430,11 @@ std::expected<handler_result, router_error> message_router::route(
     auto header = message.header();
     std::string control_id(message.control_id());
     std::string msg_type = header.full_message_type();
+
+    // Add tracing attributes
+    span.set_attribute("hl7.message_type", msg_type);
+    span.set_attribute("hl7.control_id", control_id);
+    span.set_attribute("router.route_count", static_cast<int64_t>(pimpl_->routes_.size()));
 
     pimpl_->log_debug(control_id, msg_type,
                       "Routing message started");
@@ -470,6 +481,8 @@ std::expected<handler_result, router_error> message_router::route(
                 ++pimpl_->stats_.handler_errors;
                 pimpl_->log_error(control_id, msg_type, r.id, handler_id,
                                   std::string("Handler threw exception: ") + e.what());
+                span.set_attribute("router.matched_route", r.id);
+                span.set_error(std::string("Handler exception: ") + e.what());
                 return std::unexpected(router_error::handler_error);
             }
 
@@ -477,6 +490,8 @@ std::expected<handler_result, router_error> message_router::route(
                 ++pimpl_->stats_.handler_errors;
                 pimpl_->log_error(control_id, msg_type, r.id, handler_id,
                                   "Handler returned error: " + final_result.error_message);
+                span.set_attribute("router.matched_route", r.id);
+                span.set_error("Handler error: " + final_result.error_message);
                 return std::unexpected(router_error::handler_error);
             }
 
@@ -502,25 +517,33 @@ std::expected<handler_result, router_error> message_router::route(
             ++pimpl_->stats_.default_handled;
             pimpl_->log_warning(control_id, msg_type,
                                 "No matching route, using default handler");
+            span.set_attribute("router.used_default", true);
             try {
                 final_result = pimpl_->default_handler_(message);
             } catch (const std::exception& e) {
                 ++pimpl_->stats_.handler_errors;
                 pimpl_->log_error(control_id, msg_type, "", "default",
                                   std::string("Default handler threw exception: ") + e.what());
+                span.set_error(std::string("Default handler exception: ") + e.what());
                 return std::unexpected(router_error::handler_error);
             }
         } else {
             ++pimpl_->stats_.unhandled_messages;
             pimpl_->log_warning(control_id, msg_type,
                                 "No matching route and no default handler");
+            span.set_attribute("router.matched", false);
+            span.set_error("No matching route");
             return std::unexpected(router_error::no_matching_route);
         }
+    } else {
+        span.set_attribute("router.matched", true);
     }
 
     auto end_time = std::chrono::steady_clock::now();
     auto total_duration = std::chrono::duration_cast<std::chrono::microseconds>(
         end_time - start_time).count();
+
+    span.set_attribute("router.duration_us", static_cast<int64_t>(total_duration));
 
     pimpl_->log(log_level::info, control_id, msg_type, "", "",
                 "Routing completed successfully", total_duration);

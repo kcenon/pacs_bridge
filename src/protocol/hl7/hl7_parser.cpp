@@ -5,6 +5,8 @@
 
 #include "pacs/bridge/protocol/hl7/hl7_parser.h"
 
+#include "pacs/bridge/tracing/trace_manager.h"
+
 #include <algorithm>
 #include <chrono>
 #include <sstream>
@@ -38,6 +40,11 @@ hl7_parser& hl7_parser::operator=(hl7_parser&&) noexcept = default;
 
 std::expected<hl7_message, hl7_error> hl7_parser::parse(
     std::string_view data, parse_details* details) const {
+    // Start tracing span
+    auto span = tracing::trace_manager::instance().start_span(
+        "hl7_parse", tracing::span_kind::internal);
+    span.set_attribute("hl7.message_size", static_cast<int64_t>(data.size()));
+
     auto start = std::chrono::steady_clock::now();
 
     // Preprocessing
@@ -75,6 +82,21 @@ std::expected<hl7_message, hl7_error> hl7_parser::parse(
                                      end - start)
                                      .count();
         details->original_size = data.size();
+
+        // Add tracing attributes
+        span.set_attribute("hl7.parse_time_us", static_cast<int64_t>(details->parse_time_us));
+        span.set_attribute("hl7.segment_count", static_cast<int64_t>(details->segment_count));
+        span.set_attribute("hl7.field_count", static_cast<int64_t>(details->field_count));
+        if (!details->detected_message_type.empty()) {
+            span.set_attribute("hl7.message_type", details->detected_message_type);
+        }
+        if (!details->detected_version.empty()) {
+            span.set_attribute("hl7.version", details->detected_version);
+        }
+    }
+
+    if (!result) {
+        span.set_error("HL7 parsing failed");
     }
 
     return result;

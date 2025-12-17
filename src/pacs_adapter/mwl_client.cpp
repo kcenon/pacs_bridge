@@ -5,6 +5,7 @@
 
 #include "pacs/bridge/pacs_adapter/mwl_client.h"
 #include "pacs/bridge/monitoring/bridge_metrics.h"
+#include "pacs/bridge/tracing/trace_manager.h"
 
 #include <algorithm>
 #include <atomic>
@@ -80,15 +81,24 @@ public:
 
     std::expected<mwl_client::operation_result, mwl_error>
     add_entry(const mapping::mwl_item& item) {
+        // Start tracing span for PACS update
+        auto span = tracing::trace_manager::instance().start_span(
+            "pacs_update", tracing::span_kind::client);
+        span.set_attribute("pacs.operation", "mwl_add");
+        span.set_attribute("pacs.accession_number",
+                           item.imaging_service_request.accession_number);
+
         auto start_time = std::chrono::steady_clock::now();
 
         // Validate input
         if (item.imaging_service_request.accession_number.empty()) {
+            span.set_error("Invalid data: empty accession number");
             return std::unexpected(mwl_error::invalid_data);
         }
 
         // Ensure connection
         if (!ensure_connected()) {
+            span.set_error("Connection failed");
             return std::unexpected(mwl_error::connection_failed);
         }
 
@@ -102,6 +112,7 @@ public:
             });
 
         if (it != entries_.end()) {
+            span.set_error("Duplicate entry");
             return std::unexpected(mwl_error::duplicate_entry);
         }
 
@@ -117,6 +128,9 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
+        span.set_attribute("pacs.success", true);
+
         return mwl_client::operation_result{
             .elapsed_time = elapsed,
             .retry_count = 0,
@@ -127,13 +141,21 @@ public:
     std::expected<mwl_client::operation_result, mwl_error>
     update_entry(std::string_view accession_number,
                  const mapping::mwl_item& item) {
+        // Start tracing span for PACS update
+        auto span = tracing::trace_manager::instance().start_span(
+            "pacs_update", tracing::span_kind::client);
+        span.set_attribute("pacs.operation", "mwl_update");
+        span.set_attribute("pacs.accession_number", std::string(accession_number));
+
         auto start_time = std::chrono::steady_clock::now();
 
         if (accession_number.empty()) {
+            span.set_error("Invalid data: empty accession number");
             return std::unexpected(mwl_error::invalid_data);
         }
 
         if (!ensure_connected()) {
+            span.set_error("Connection failed");
             return std::unexpected(mwl_error::connection_failed);
         }
 
@@ -146,6 +168,7 @@ public:
             });
 
         if (it == entries_.end()) {
+            span.set_error("Entry not found");
             return std::unexpected(mwl_error::entry_not_found);
         }
 
@@ -161,6 +184,9 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
+        span.set_attribute("pacs.success", true);
+
         return mwl_client::operation_result{
             .elapsed_time = elapsed,
             .retry_count = 0,
@@ -170,13 +196,21 @@ public:
 
     std::expected<mwl_client::operation_result, mwl_error>
     cancel_entry(std::string_view accession_number) {
+        // Start tracing span for PACS update
+        auto span = tracing::trace_manager::instance().start_span(
+            "pacs_update", tracing::span_kind::client);
+        span.set_attribute("pacs.operation", "mwl_cancel");
+        span.set_attribute("pacs.accession_number", std::string(accession_number));
+
         auto start_time = std::chrono::steady_clock::now();
 
         if (accession_number.empty()) {
+            span.set_error("Invalid data: empty accession number");
             return std::unexpected(mwl_error::invalid_data);
         }
 
         if (!ensure_connected()) {
+            span.set_error("Connection failed");
             return std::unexpected(mwl_error::connection_failed);
         }
 
@@ -189,6 +223,7 @@ public:
             });
 
         if (it == entries_.end()) {
+            span.set_error("Entry not found");
             return std::unexpected(mwl_error::entry_not_found);
         }
 
@@ -203,6 +238,9 @@ public:
 
         update_avg_operation_time(elapsed.count());
 
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
+        span.set_attribute("pacs.success", true);
+
         return mwl_client::operation_result{
             .elapsed_time = elapsed,
             .retry_count = 0,
@@ -212,9 +250,15 @@ public:
 
     std::expected<mwl_client::query_result, mwl_error>
     query(const mwl_query_filter& filter) {
+        // Start tracing span for PACS query
+        auto span = tracing::trace_manager::instance().start_span(
+            "pacs_update", tracing::span_kind::client);
+        span.set_attribute("pacs.operation", "mwl_query");
+
         auto start_time = std::chrono::steady_clock::now();
 
         if (!ensure_connected()) {
+            span.set_error("Connection failed");
             return std::unexpected(mwl_error::connection_failed);
         }
 
@@ -245,6 +289,10 @@ public:
             elapsed_ns);
 
         update_avg_operation_time(elapsed.count());
+
+        span.set_attribute("pacs.duration_ms", static_cast<int64_t>(elapsed.count()));
+        span.set_attribute("pacs.result_count", static_cast<int64_t>(results.size()));
+        span.set_attribute("pacs.success", true);
 
         return mwl_client::query_result{
             .items = std::move(results),

@@ -5,6 +5,7 @@
 
 #include "pacs/bridge/mapping/hl7_dicom_mapper.h"
 #include "pacs/bridge/protocol/hl7/hl7_builder.h"
+#include "pacs/bridge/tracing/trace_manager.h"
 
 #include <algorithm>
 #include <chrono>
@@ -101,9 +102,17 @@ hl7_dicom_mapper& hl7_dicom_mapper::operator=(hl7_dicom_mapper&&) noexcept = def
 
 std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
     const hl7::hl7_message& message) const {
+    // Start tracing span for HL7 to DICOM mapping
+    auto span = tracing::trace_manager::instance().start_span(
+        "hl7_to_dicom", tracing::span_kind::internal);
+
     // Check message type
     auto header = message.header();
+    span.set_attribute("hl7.message_type", header.full_message_type());
+    span.set_attribute("mapping.target", "mwl");
+
     if (header.type != hl7::message_type::ORM) {
+        span.set_error("Unsupported message type for MWL mapping");
         return std::unexpected(mapping_error::unsupported_message_type);
     }
 
@@ -264,9 +273,20 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
     if (pimpl_->config_.validate_output) {
         auto errors = validate_mwl(mwl);
         if (!errors.empty() && !pimpl_->config_.allow_partial_mapping) {
+            span.set_error("MWL validation failed");
+            span.set_attribute("mapping.validation_errors",
+                               static_cast<int64_t>(errors.size()));
             return std::unexpected(mapping_error::validation_failed);
         }
     }
+
+    // Add success attributes
+    span.set_attribute("mapping.success", true);
+    span.set_attribute("mapping.patient_id", mwl.patient.patient_id);
+    span.set_attribute("mapping.accession_number",
+                       mwl.imaging_service_request.accession_number);
+    span.set_attribute("mapping.scheduled_steps",
+                       static_cast<int64_t>(mwl.scheduled_steps.size()));
 
     return mwl;
 }

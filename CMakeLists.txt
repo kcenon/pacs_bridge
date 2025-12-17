@@ -239,6 +239,23 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/monitoring/bridge_metrics.h
 )
 
+# Distributed Tracing
+# See: https://github.com/kcenon/pacs_bridge/issues/144
+list(APPEND PACS_BRIDGE_SOURCES
+    src/tracing/tracing_types.cpp
+    src/tracing/trace_manager.cpp
+    src/tracing/span_wrapper.cpp
+    src/tracing/trace_propagation.cpp
+    src/tracing/exporter_factory.cpp
+)
+list(APPEND PACS_BRIDGE_HEADERS
+    include/pacs/bridge/tracing/tracing_types.h
+    include/pacs/bridge/tracing/trace_manager.h
+    include/pacs/bridge/tracing/span_wrapper.h
+    include/pacs/bridge/tracing/trace_propagation.h
+    include/pacs/bridge/tracing/exporter_factory.h
+)
+
 # Performance
 list(APPEND PACS_BRIDGE_SOURCES
     src/performance/benchmark_runner.cpp
