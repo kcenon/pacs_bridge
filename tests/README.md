@@ -199,6 +199,75 @@ Custom test framework for tests that don't use GTest:
 | `phase4` | Phase 4 tests (Monitoring) |
 | `phase5` | Phase 5 tests (EMR) |
 
+## HL7 API Usage Guide
+
+When writing tests that use HL7 parsing and building APIs, ensure correct usage:
+
+### Parser Return Type
+
+```cpp
+// Correct: parse() returns std::expected<hl7_message, hl7_error>
+auto result = parser.parse(raw_message);
+if (result.has_value()) {
+    const auto& msg = *result;
+}
+
+// Wrong: Do NOT use std::optional
+// std::optional<hl7_message> result = parser.parse(raw);  // Compilation error
+```
+
+### Message Access
+
+```cpp
+// Correct: Use segment() and field_value()
+auto msh = msg.segment("MSH");           // Returns pointer to segment
+auto version = msh->field_value(12);     // Returns std::string_view
+
+// Wrong: These methods don't exist
+// msg.get_segment("MSH");
+// msh->get_field(12);
+```
+
+### Builder Usage
+
+```cpp
+// Correct: Use static factory and fluent methods
+auto builder = hl7_builder::create();
+builder.sending_app("HIS")
+       .sending_facility("HOSPITAL")
+       .receiving_app("PACS")
+       .message_type("ADT", "A01")    // Type and trigger combined
+       .version("2.4");
+auto result = builder.build();        // Returns std::expected
+
+// Wrong: Do NOT use set_* methods
+// builder.set_sending_application("HIS");
+// builder.set_message_type("ADT");
+// builder.set_trigger_event("A01");
+```
+
+### ACK Creation
+
+```cpp
+// Correct: create_ack returns hl7_message directly
+auto ack = hl7_builder::create_ack(original, ack_code::AA, "OK");
+auto serialized = ack.serialize();   // Direct access, no dereferencing
+
+// Wrong: create_ack does NOT return expected/optional
+// ack.has_value();  // Compilation error
+// *ack;             // Wrong - ack is already the message
+```
+
+### String Conversions
+
+```cpp
+// Correct: Explicit conversion from string_view
+std::string value(msh->field_value(9));
+
+// Wrong: Implicit conversion may fail
+// std::string value = msh->field_value(9);  // Some compilers reject this
+```
+
 ## Related Issues
 
 - Issue #145 - Test Coverage Expansion (this work)
