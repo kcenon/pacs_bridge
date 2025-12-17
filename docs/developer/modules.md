@@ -158,6 +158,9 @@ auto result = handler.handle(orm_message);
 | `hl7_request_client` | Request/Reply pattern client |
 | `hl7_request_server` | Request/Reply pattern server |
 | `messaging_backend_factory` | Factory for backend selection |
+| `event_subscription` | RAII subscription handle for Event Bus |
+| `event_publisher` | Utility namespace for publishing HL7 events |
+| `event_subscriber` | Utility namespace for subscribing to HL7 events |
 
 **Key Headers:**
 
@@ -166,6 +169,7 @@ auto result = handler.handle(orm_message);
 #include <pacs/bridge/messaging/hl7_pipeline.h>        // Pipeline
 #include <pacs/bridge/messaging/hl7_request_handler.h> // Request/Reply
 #include <pacs/bridge/messaging/messaging_backend.h>   // Backend factory
+#include <pacs/bridge/messaging/hl7_events.h>          // Event Bus integration
 ```
 
 **Pub/Sub Pattern:**
@@ -219,6 +223,67 @@ server.start();
 // Client side
 hl7_request_client client(bus, "hl7.orders");
 auto result = client.request(order_message, std::chrono::seconds(30));
+```
+
+**Event Bus Integration (Issue #142):**
+
+The HL7 Events system integrates with `common_system`'s Event Bus to provide
+event-driven message processing. Events are published at each processing stage:
+
+| Event Type | Stage | Description |
+|------------|-------|-------------|
+| `hl7_message_received_event` | Receive | Raw message received from MLLP |
+| `hl7_ack_sent_event` | Receive | ACK/NAK sent to sender |
+| `hl7_message_parsed_event` | Parse | Message successfully parsed |
+| `hl7_message_validated_event` | Validate | Message passed validation |
+| `hl7_message_routed_event` | Route | Message routed to destination |
+| `hl7_to_dicom_mapped_event` | Transform | HL7 mapped to DICOM |
+| `dicom_worklist_updated_event` | Transform | Worklist entry updated |
+| `hl7_processing_error_event` | Error | Processing error occurred |
+
+**Event Subscription:**
+
+```cpp
+// Subscribe to specific events
+auto sub = event_subscriber::on_message_received(
+    [](const hl7_message_received_event& event) {
+        std::cout << "Received: " << event.message_type << std::endl;
+    });
+
+// Subscribe to all events for monitoring
+auto all_subs = event_subscriber::on_all_events(
+    [](std::string_view event_type, std::string_view event_id) {
+        log_event(event_type, event_id);
+    });
+```
+
+**Event Publishing:**
+
+```cpp
+// Publish events at processing stages
+event_publisher::publish_message_received("ADT^A01", raw_message,
+    connection_id, remote_endpoint);
+
+event_publisher::publish_message_parsed("ADT^A01", control_id,
+    segment_count, parse_time, correlation_id);
+
+event_publisher::publish_worklist_updated(
+    dicom_worklist_updated_event::operation_type::created,
+    patient_id, accession_number, modality, correlation_id);
+```
+
+**Correlation ID Tracking:**
+
+All events support correlation IDs for request tracking across the processing pipeline:
+
+```cpp
+// Generate correlation ID at message receipt
+std::string correlation_id = generate_uuid();
+
+// Pass through all processing stages
+event_publisher::publish_message_received("ADT^A01", raw, conn_id, "", correlation_id);
+event_publisher::publish_message_parsed("ADT^A01", ctrl_id, 5, parse_time, correlation_id);
+event_publisher::publish_dicom_mapped("ADT^A01", ctrl_id, pat_id, acc_num, 42, correlation_id);
 ```
 
 **Error Codes:** -800 to -839 (messaging module range)
