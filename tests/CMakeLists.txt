@@ -220,6 +220,9 @@ if(BRIDGE_BUILD_HL7)
     # DICOM-HL7 Mapping Tests (MPPS to ORM - Issue #24) - custom framework
     add_bridge_test(dicom_hl7_mapper_test "unit;mapping;phase2")
 
+    # Extended Mapper Tests (Issue #160) - Patient, Study, Order mapping
+    add_bridge_test(mapper_extended_test "unit;mapping;patient;study;order")
+
     # Message Router Tests - custom framework
     add_bridge_test(router_test "unit;router;phase1")
 
