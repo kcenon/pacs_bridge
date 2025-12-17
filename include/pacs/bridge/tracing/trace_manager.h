@@ -13,6 +13,7 @@
  * @see https://github.com/kcenon/pacs_bridge/issues/147
  */
 
+#include "span_wrapper.h"
 #include "tracing_types.h"
 
 #include <expected>
@@ -22,9 +23,6 @@
 #include <string_view>
 
 namespace pacs::bridge::tracing {
-
-// Forward declarations
-class span_wrapper;
 
 // =============================================================================
 // Trace Manager Error Codes (-950 to -959)

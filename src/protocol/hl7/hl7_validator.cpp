@@ -5,6 +5,8 @@
 
 #include "pacs/bridge/protocol/hl7/hl7_validator.h"
 
+#include "pacs/bridge/tracing/trace_manager.h"
+
 #include <sstream>
 
 namespace pacs::bridge::hl7 {
@@ -79,29 +81,52 @@ std::string validator_result::summary() const {
 // =============================================================================
 
 validator_result hl7_validator::validate(const hl7_message& message) {
+    // Start tracing span
+    auto span = tracing::trace_manager::instance().start_span(
+        "hl7_validate", tracing::span_kind::internal);
+
     auto header = message.header();
+    span.set_attribute("hl7.message_type", header.full_message_type());
+    span.set_attribute("hl7.version", std::string(header.version_id));
+
+    validator_result result;
 
     switch (header.type) {
         case message_type::ADT:
-            return validate_adt(message);
+            result = validate_adt(message);
+            break;
         case message_type::ORM:
-            return validate_orm(message);
+            result = validate_orm(message);
+            break;
         case message_type::ORU:
-            return validate_oru(message);
+            result = validate_oru(message);
+            break;
         case message_type::SIU:
-            return validate_siu(message);
+            result = validate_siu(message);
+            break;
         case message_type::ACK:
-            return validate_ack(message);
+            result = validate_ack(message);
+            break;
         default: {
-            validator_result result;
             result.type = header.type;
             result.trigger_event = header.trigger_event;
 
             // For unknown types, just validate MSH
             validate_msh(message, result);
-            return result;
+            break;
         }
     }
+
+    // Add validation result attributes
+    span.set_attribute("hl7.validation_passed", result.valid);
+    span.set_attribute("hl7.error_count", static_cast<int64_t>(result.error_count()));
+    span.set_attribute("hl7.warning_count", static_cast<int64_t>(result.warning_count()));
+
+    if (!result.valid) {
+        span.set_error("HL7 validation failed");
+    }
+
+    return result;
 }
 
 validator_result hl7_validator::validate_adt(const hl7_message& message) {
