@@ -1,7 +1,7 @@
 # Module Descriptions
 
-> **Version:** 0.1.0.1
-> **Last Updated:** 2025-12-17
+> **Version:** 0.1.0.2
+> **Last Updated:** 2025-12-18
 
 ---
 
@@ -551,15 +551,19 @@ auto oru = reverse_mapper.map_mpps_to_oru(mpps_event);
 
 **Build Modes:**
 
-The PACS Adapter supports two build modes:
+The PACS Adapter supports two build modes with compile-time selection:
 
 | Mode | Option | Description |
 |------|--------|-------------|
 | Standalone | `BRIDGE_STANDALONE_BUILD=ON` | In-memory stub storage for testing |
-| Full Integration | `BRIDGE_STANDALONE_BUILD=OFF` | Real pacs_system index_database |
+| Full Integration | `BRIDGE_STANDALONE_BUILD=OFF` | Real pacs_system integration |
 
-When `PACS_BRIDGE_HAS_PACS_SYSTEM` is defined, the MWL client uses pacs_system's
-`index_database` API for persistent worklist storage with SQLite backend.
+When `PACS_BRIDGE_HAS_PACS_SYSTEM` is defined:
+- **MWL Client**: Uses pacs_system's `index_database` API for persistent worklist storage
+- **MPPS Handler**: Uses pacs_system's `mpps_scp` for real MPPS N-CREATE/N-SET event handling
+
+In standalone mode, stub implementations provide the same interface for testing without
+requiring external PACS dependencies.
 
 **Configuration:**
 
@@ -885,6 +889,15 @@ exporter_factory::register_factory(
 > **See also:** [GitHub Issue #173](https://github.com/kcenon/pacs_bridge/issues/173)
 
 **Purpose:** Wire MPPS status changes to HL7 message generation and outbound delivery with reliable routing and failure handling.
+
+**Dependencies:**
+
+| Dependency | Reason |
+|------------|--------|
+| SQLite (`PACS_BRIDGE_HAS_SQLITE`) | Required for queue_manager integration (reliable message delivery) |
+
+> **Note:** This module is only built when SQLite is available. When SQLite is not present,
+> the workflow module and its tests are excluded from the build.
 
 **Key Classes:**
 
