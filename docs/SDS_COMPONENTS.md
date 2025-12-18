@@ -5302,7 +5302,209 @@ auto job_queue = thread_system::create_lockfree_queue<hl7_message>();
 
 ---
 
-*Document Version: 0.1.4.0*
+## 13. Bridge Server Module
+
+### 13.1 Module Overview
+
+The Bridge Server Module provides the main orchestration entrypoint for the PACS Bridge system. It coordinates all Phase 2 components (MPPS ingestion, HL7 mapping, reliable outbound delivery) through a single unified interface.
+
+**Key Responsibilities:**
+- Start/stop all gateway components in dependency order
+- Configuration loading from YAML/JSON files
+- Graceful shutdown with signal handling
+- Health monitoring and statistics aggregation
+- Runtime configuration hot-reload
+
+### DES-BRIDGE-001: bridge_server
+
+**Traces to:** FR-1.1, FR-2.1, FR-5.1, NFR-4.1, SRS-INT-001
+
+```cpp
+namespace pacs::bridge {
+
+/**
+ * @brief Bridge server specific error codes
+ * Allocated range: -800 to -809
+ */
+enum class bridge_server_error : int {
+    already_running = -800,
+    not_running = -801,
+    invalid_configuration = -802,
+    config_load_failed = -803,
+    mpps_init_failed = -804,
+    outbound_init_failed = -805,
+    workflow_init_failed = -806,
+    health_init_failed = -807,
+    shutdown_timeout = -808,
+    internal_error = -809
+};
+
+/**
+ * @brief Aggregated server statistics
+ */
+struct bridge_statistics {
+    // MLLP Statistics
+    size_t mllp_active_connections = 0;
+    size_t mllp_messages_received = 0;
+    size_t mllp_messages_sent = 0;
+
+    // MPPS Statistics
+    size_t mpps_events_received = 0;
+    size_t mpps_in_progress_count = 0;
+    size_t mpps_completed_count = 0;
+    size_t mpps_discontinued_count = 0;
+
+    // Workflow Statistics
+    size_t workflow_executions = 0;
+    size_t workflow_successes = 0;
+    size_t workflow_failures = 0;
+
+    // Queue Statistics
+    size_t queue_depth = 0;
+    size_t queue_dead_letters = 0;
+    size_t queue_total_enqueued = 0;
+    size_t queue_total_delivered = 0;
+
+    // Timing
+    std::chrono::seconds uptime{0};
+    std::chrono::system_clock::time_point last_activity;
+};
+
+/**
+ * @brief Component health status
+ */
+struct bridge_health_status {
+    bool healthy = false;
+    bool mpps_handler_healthy = false;
+    bool outbound_sender_healthy = false;
+    bool workflow_healthy = false;
+    bool queue_healthy = false;
+    std::string details;
+    std::vector<monitoring::component_health> component_reports;
+};
+
+/**
+ * @brief Main PACS Bridge orchestration server
+ *
+ * Coordinates all gateway components for the Phase 2 workflow:
+ * MPPS events -> HL7 mapping -> Reliable outbound delivery
+ */
+class bridge_server {
+public:
+    // Construction
+    explicit bridge_server(const config::bridge_config& config);
+    explicit bridge_server(const std::filesystem::path& config_path);
+    ~bridge_server();
+
+    // Lifecycle
+    [[nodiscard]] std::expected<void, bridge_server_error> start();
+    void stop(std::chrono::seconds timeout = std::chrono::seconds{30});
+    void wait_for_shutdown();
+    [[nodiscard]] bool is_running() const noexcept;
+
+    // Runtime Configuration
+    [[nodiscard]] std::expected<void, bridge_server_error>
+    reload_config(const std::filesystem::path& config_path);
+
+    [[nodiscard]] std::expected<void, bridge_server_error>
+    add_destination(const config::outbound_destination& destination);
+
+    void remove_destination(std::string_view name);
+    [[nodiscard]] std::vector<std::string> destinations() const;
+
+    // Monitoring
+    [[nodiscard]] bridge_statistics get_statistics() const;
+    void reset_statistics();
+    [[nodiscard]] bool is_healthy() const;
+    [[nodiscard]] bridge_health_status get_health_status() const;
+
+    // Configuration Access
+    [[nodiscard]] std::string_view name() const noexcept;
+    [[nodiscard]] const config::bridge_config& config() const noexcept;
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge
+```
+
+#### Component Orchestration
+
+The bridge_server starts and stops components in dependency order:
+
+**Startup Order:**
+1. Health checker initialization
+2. Queue manager (with crash recovery)
+3. Outbound router
+4. Reliable outbound sender
+5. MPPS-HL7 workflow
+6. MPPS handler (begins receiving events)
+7. (Optional) MLLP server for inbound HL7
+
+**Shutdown Order (reverse):**
+1. MPPS handler (stop receiving)
+2. MPPS-HL7 workflow
+3. Reliable outbound sender (flush pending)
+4. Queue manager
+5. Health checker
+
+#### Signal Handling
+
+```cpp
+// Graceful shutdown on SIGINT/SIGTERM
+bridge_server server(config);
+server.start();
+server.wait_for_shutdown();  // Blocks until signal
+server.stop();  // Graceful cleanup
+```
+
+#### Usage Example
+
+```cpp
+// Load from configuration file
+bridge_server server("/etc/pacs_bridge/config.yaml");
+
+auto result = server.start();
+if (!result) {
+    std::cerr << "Failed to start: " << to_string(result.error()) << std::endl;
+    return 1;
+}
+
+std::cout << "PACS Bridge '" << server.name() << "' started" << std::endl;
+
+// Monitor health periodically
+while (server.is_running()) {
+    auto health = server.get_health_status();
+    if (!health.healthy) {
+        log_warning("Health degraded: {}", health.details);
+    }
+    std::this_thread::sleep_for(std::chrono::seconds{30});
+}
+
+server.wait_for_shutdown();
+server.stop();
+```
+
+#### CLI Executable
+
+The `pacs_bridge` CLI provides command-line access:
+
+```bash
+# Show help
+pacs_bridge --help
+
+# Show version
+pacs_bridge --version
+
+# Start with configuration
+pacs_bridge --config /etc/pacs_bridge/config.yaml
+```
+
+---
+
+*Document Version: 0.1.5.0*
 *Created: 2025-12-07*
-*Updated: 2025-12-07 - Added Performance Module (Section 12)*
+*Updated: 2025-12-18 - Added Bridge Server Module (Section 13)*
 *Author: kcenon@naver.com*
