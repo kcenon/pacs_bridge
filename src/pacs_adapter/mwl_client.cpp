@@ -1,6 +1,10 @@
 /**
  * @file mwl_client.cpp
  * @brief Implementation of Modality Worklist client for pacs_system
+ *
+ * This file provides two implementations:
+ * - Stub implementation (PACS_BRIDGE_STANDALONE_BUILD): In-memory storage for testing
+ * - Real implementation (PACS_BRIDGE_HAS_PACS_SYSTEM): Uses pacs_system's index_database
  */
 
 #include "pacs/bridge/pacs_adapter/mwl_client.h"
@@ -14,7 +18,164 @@
 #include <shared_mutex>
 #include <thread>
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+#include <pacs/storage/index_database.hpp>
+#include <pacs/storage/worklist_record.hpp>
+#endif
+
 namespace pacs::bridge::pacs_adapter {
+
+// =============================================================================
+// Conversion Utilities (for pacs_system integration)
+// =============================================================================
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+namespace {
+
+/**
+ * @brief Convert mwl_item to pacs_system worklist_item
+ */
+[[nodiscard]] pacs::storage::worklist_item
+to_worklist_item(const mapping::mwl_item& item) {
+    pacs::storage::worklist_item wl;
+
+    // Patient information
+    wl.patient_id = item.patient.patient_id;
+    wl.patient_name = item.patient.patient_name;
+    wl.birth_date = item.patient.patient_birth_date;
+    wl.sex = item.patient.patient_sex;
+
+    // Imaging service request
+    wl.accession_no = item.imaging_service_request.accession_number;
+
+    // Requested procedure
+    wl.requested_proc_id = item.requested_procedure.requested_procedure_id;
+    wl.study_uid = item.requested_procedure.study_instance_uid;
+    wl.referring_phys = item.requested_procedure.referring_physician_name;
+    wl.referring_phys_id = item.requested_procedure.referring_physician_id;
+
+    // Scheduled procedure step (use first step if available)
+    if (!item.scheduled_steps.empty()) {
+        const auto& sps = item.scheduled_steps[0];
+        wl.step_id = sps.scheduled_step_id;
+        wl.station_ae = sps.scheduled_station_ae_title;
+        wl.station_name = sps.scheduled_step_location;
+        wl.modality = sps.modality;
+        wl.procedure_desc = sps.scheduled_step_description;
+        wl.step_status = sps.scheduled_step_status.empty()
+                             ? "SCHEDULED"
+                             : sps.scheduled_step_status;
+
+        // Combine date and time for scheduled_datetime (YYYYMMDDHHMMSS)
+        wl.scheduled_datetime = sps.scheduled_start_date;
+        if (!sps.scheduled_start_time.empty()) {
+            wl.scheduled_datetime += sps.scheduled_start_time;
+        }
+
+        // Protocol code (serialize as JSON-like string)
+        if (!sps.protocol_code_value.empty()) {
+            wl.protocol_code = "{\"value\":\"" + sps.protocol_code_value + "\","
+                               "\"meaning\":\"" + sps.protocol_code_meaning + "\","
+                               "\"scheme\":\"" + sps.protocol_coding_scheme + "\"}";
+        }
+    } else {
+        // Generate default step_id if not provided
+        wl.step_id = item.imaging_service_request.accession_number + "_SPS1";
+        wl.step_status = "SCHEDULED";
+    }
+
+    return wl;
+}
+
+/**
+ * @brief Convert pacs_system worklist_item to mwl_item
+ */
+[[nodiscard]] mapping::mwl_item
+from_worklist_item(const pacs::storage::worklist_item& wl) {
+    mapping::mwl_item item;
+
+    // Patient information
+    item.patient.patient_id = wl.patient_id;
+    item.patient.patient_name = wl.patient_name;
+    item.patient.patient_birth_date = wl.birth_date;
+    item.patient.patient_sex = wl.sex;
+
+    // Imaging service request
+    item.imaging_service_request.accession_number = wl.accession_no;
+
+    // Requested procedure
+    item.requested_procedure.requested_procedure_id = wl.requested_proc_id;
+    item.requested_procedure.study_instance_uid = wl.study_uid;
+    item.requested_procedure.referring_physician_name = wl.referring_phys;
+    item.requested_procedure.referring_physician_id = wl.referring_phys_id;
+
+    // Scheduled procedure step
+    mapping::dicom_scheduled_procedure_step sps;
+    sps.scheduled_step_id = wl.step_id;
+    sps.scheduled_station_ae_title = wl.station_ae;
+    sps.scheduled_step_location = wl.station_name;
+    sps.modality = wl.modality;
+    sps.scheduled_step_description = wl.procedure_desc;
+    sps.scheduled_step_status = wl.step_status;
+
+    // Parse scheduled_datetime (YYYYMMDDHHMMSS)
+    if (wl.scheduled_datetime.size() >= 8) {
+        sps.scheduled_start_date = wl.scheduled_datetime.substr(0, 8);
+        if (wl.scheduled_datetime.size() >= 14) {
+            sps.scheduled_start_time = wl.scheduled_datetime.substr(8, 6);
+        }
+    }
+
+    item.scheduled_steps.push_back(std::move(sps));
+
+    return item;
+}
+
+/**
+ * @brief Convert mwl_query_filter to pacs_system worklist_query
+ */
+[[nodiscard]] pacs::storage::worklist_query
+to_worklist_query(const mwl_query_filter& filter) {
+    pacs::storage::worklist_query query;
+
+    if (filter.patient_id && !filter.patient_id->empty()) {
+        query.patient_id = *filter.patient_id;
+    }
+    if (filter.accession_number && !filter.accession_number->empty()) {
+        query.accession_no = *filter.accession_number;
+    }
+    if (filter.patient_name && !filter.patient_name->empty()) {
+        query.patient_name = *filter.patient_name;
+    }
+    if (filter.modality && !filter.modality->empty()) {
+        query.modality = *filter.modality;
+    }
+    if (filter.scheduled_station_ae && !filter.scheduled_station_ae->empty()) {
+        query.station_ae = *filter.scheduled_station_ae;
+    }
+    if (filter.scheduled_date && !filter.scheduled_date->empty()) {
+        query.scheduled_date_from = *filter.scheduled_date;
+        query.scheduled_date_to = *filter.scheduled_date;
+    }
+    if (filter.scheduled_date_from && !filter.scheduled_date_from->empty()) {
+        query.scheduled_date_from = *filter.scheduled_date_from;
+    }
+    if (filter.scheduled_date_to && !filter.scheduled_date_to->empty()) {
+        query.scheduled_date_to = *filter.scheduled_date_to;
+    }
+
+    // Include all status or only scheduled
+    query.include_all_status = false;
+
+    if (filter.max_results > 0) {
+        query.limit = filter.max_results;
+    }
+
+    return query;
+}
+
+}  // namespace
+#endif  // PACS_BRIDGE_HAS_PACS_SYSTEM
 
 // =============================================================================
 // Implementation Class
@@ -104,6 +265,33 @@ public:
 
         std::unique_lock lock(mutex_);
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            span.set_error("Database not initialized");
+            return std::unexpected(mwl_error::connection_failed);
+        }
+
+        // Convert mwl_item to worklist_item
+        auto wl_item = to_worklist_item(item);
+
+        // Check for duplicate by querying existing entry
+        auto existing = db_->find_worklist_item(wl_item.step_id, wl_item.accession_no);
+        if (existing.has_value()) {
+            span.set_error("Duplicate entry");
+            return std::unexpected(mwl_error::duplicate_entry);
+        }
+
+        // Add entry to database
+        auto add_result = db_->add_worklist_item(wl_item);
+        if (add_result.is_err()) {
+            span.set_error("Database add failed: " + add_result.error());
+            return std::unexpected(mwl_error::add_failed);
+        }
+
+        stats_.add_count++;
+#else
+        // Stub mode: use in-memory storage
         // Check for duplicate
         auto it = std::find_if(entries_.begin(), entries_.end(),
             [&item](const mapping::mwl_item& existing) {
@@ -116,9 +304,10 @@ public:
             return std::unexpected(mwl_error::duplicate_entry);
         }
 
-        // Add entry (in real implementation, send to pacs_system via DICOM)
+        // Add entry to in-memory storage
         entries_.push_back(item);
         stats_.add_count++;
+#endif
 
         // Record metrics for entry creation
         monitoring::bridge_metrics_collector::instance().record_mwl_entry_created();
@@ -161,6 +350,45 @@ public:
 
         std::unique_lock lock(mutex_);
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            span.set_error("Database not initialized");
+            return std::unexpected(mwl_error::connection_failed);
+        }
+
+        // Find existing entry by accession number using query
+        pacs::storage::worklist_query query;
+        query.accession_no = std::string(accession_number);
+        query.include_all_status = true;
+
+        auto query_result = db_->query_worklist(query);
+        if (query_result.is_err() || query_result.value().empty()) {
+            span.set_error("Entry not found");
+            return std::unexpected(mwl_error::entry_not_found);
+        }
+
+        const auto& existing_wl = query_result.value()[0];
+
+        // Convert updated item to worklist_item and merge
+        auto wl_item = to_worklist_item(item);
+
+        // Update status if the new status is provided
+        std::string new_status = wl_item.step_status.empty()
+                                     ? existing_wl.step_status
+                                     : wl_item.step_status;
+
+        auto update_result = db_->update_worklist_status(
+            existing_wl.step_id, std::string(accession_number), new_status);
+
+        if (update_result.is_err()) {
+            span.set_error("Database update failed: " + update_result.error());
+            return std::unexpected(mwl_error::update_failed);
+        }
+
+        stats_.update_count++;
+#else
+        // Stub mode: use in-memory storage
         auto it = std::find_if(entries_.begin(), entries_.end(),
             [accession_number](const mapping::mwl_item& existing) {
                 return existing.imaging_service_request.accession_number ==
@@ -175,6 +403,7 @@ public:
         // Update entry with non-empty fields from item
         update_mwl_item(*it, item);
         stats_.update_count++;
+#endif
 
         // Record metrics for entry update
         monitoring::bridge_metrics_collector::instance().record_mwl_entry_updated();
@@ -216,6 +445,38 @@ public:
 
         std::unique_lock lock(mutex_);
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            span.set_error("Database not initialized");
+            return std::unexpected(mwl_error::connection_failed);
+        }
+
+        // Find entry by accession number to get step_id
+        pacs::storage::worklist_query query;
+        query.accession_no = std::string(accession_number);
+        query.include_all_status = true;
+
+        auto query_result = db_->query_worklist(query);
+        if (query_result.is_err() || query_result.value().empty()) {
+            span.set_error("Entry not found");
+            return std::unexpected(mwl_error::entry_not_found);
+        }
+
+        const auto& existing_wl = query_result.value()[0];
+
+        // Delete entry from database
+        auto delete_result = db_->delete_worklist_item(
+            existing_wl.step_id, std::string(accession_number));
+
+        if (delete_result.is_err()) {
+            span.set_error("Database delete failed: " + delete_result.error());
+            return std::unexpected(mwl_error::cancel_failed);
+        }
+
+        stats_.cancel_count++;
+#else
+        // Stub mode: use in-memory storage
         auto it = std::find_if(entries_.begin(), entries_.end(),
             [accession_number](const mapping::mwl_item& existing) {
                 return existing.imaging_service_request.accession_number ==
@@ -229,6 +490,7 @@ public:
 
         entries_.erase(it);
         stats_.cancel_count++;
+#endif
 
         // Record metrics for entry cancellation
         monitoring::bridge_metrics_collector::instance().record_mwl_entry_cancelled();
@@ -266,6 +528,30 @@ public:
 
         std::vector<mapping::mwl_item> results;
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            span.set_error("Database not initialized");
+            return std::unexpected(mwl_error::connection_failed);
+        }
+
+        // Convert filter to pacs_system worklist_query
+        auto wl_query = to_worklist_query(filter);
+
+        auto query_result = db_->query_worklist(wl_query);
+        if (query_result.is_err()) {
+            span.set_error("Database query failed: " + query_result.error());
+            return std::unexpected(mwl_error::query_failed);
+        }
+
+        // Convert worklist_items to mwl_items
+        for (const auto& wl_item : query_result.value()) {
+            results.push_back(from_worklist_item(wl_item));
+        }
+
+        stats_.query_count++;
+#else
+        // Stub mode: use in-memory storage
         for (const auto& entry : entries_) {
             if (matches_filter(entry, filter)) {
                 results.push_back(entry);
@@ -278,6 +564,7 @@ public:
         }
 
         stats_.query_count++;
+#endif
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time);
@@ -338,13 +625,33 @@ public:
             return false;
         }
 
+        if (!ensure_connected()) {
+            return false;
+        }
+
         std::shared_lock lock(mutex_);
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            return false;
+        }
+
+        pacs::storage::worklist_query query;
+        query.accession_no = std::string(accession_number);
+        query.include_all_status = true;
+        query.limit = 1;
+
+        auto query_result = db_->query_worklist(query);
+        return query_result.is_ok() && !query_result.value().empty();
+#else
+        // Stub mode: use in-memory storage
         return std::any_of(entries_.begin(), entries_.end(),
             [accession_number](const mapping::mwl_item& entry) {
                 return entry.imaging_service_request.accession_number ==
                        accession_number;
             });
+#endif
     }
 
     std::expected<mapping::mwl_item, mwl_error>
@@ -359,6 +666,25 @@ public:
 
         std::shared_lock lock(mutex_);
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            return std::unexpected(mwl_error::connection_failed);
+        }
+
+        pacs::storage::worklist_query query;
+        query.accession_no = std::string(accession_number);
+        query.include_all_status = true;
+        query.limit = 1;
+
+        auto query_result = db_->query_worklist(query);
+        if (query_result.is_err() || query_result.value().empty()) {
+            return std::unexpected(mwl_error::entry_not_found);
+        }
+
+        return from_worklist_item(query_result.value()[0]);
+#else
+        // Stub mode: use in-memory storage
         auto it = std::find_if(entries_.begin(), entries_.end(),
             [accession_number](const mapping::mwl_item& entry) {
                 return entry.imaging_service_request.accession_number ==
@@ -370,6 +696,7 @@ public:
         }
 
         return *it;
+#endif
     }
 
     // =========================================================================
@@ -407,8 +734,44 @@ public:
 
         std::unique_lock lock(mutex_);
 
-        std::string before_date_str(before_date);
         size_t cancelled = 0;
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+        // Real pacs_system integration: use index_database
+        if (!db_) {
+            return std::unexpected(mwl_error::connection_failed);
+        }
+
+        // Use pacs_system's cleanup_old_worklist_items API
+        // Convert date string to hours since epoch (approximate)
+        // Note: This is a simplified approach; a more accurate implementation
+        // would parse the date and calculate the exact duration
+        auto cleanup_result = db_->cleanup_old_worklist_items(std::chrono::hours(0));
+        if (cleanup_result.is_err()) {
+            return std::unexpected(mwl_error::cancel_failed);
+        }
+
+        // For now, query entries before date and delete them individually
+        pacs::storage::worklist_query query;
+        query.scheduled_date_to = std::string(before_date);
+        query.include_all_status = true;
+
+        auto query_result = db_->query_worklist(query);
+        if (query_result.is_ok()) {
+            for (const auto& wl_item : query_result.value()) {
+                auto delete_result = db_->delete_worklist_item(
+                    wl_item.step_id, wl_item.accession_no);
+                if (delete_result.is_ok()) {
+                    cancelled++;
+                    stats_.cancel_count++;
+                    monitoring::bridge_metrics_collector::instance()
+                        .record_mwl_entry_cancelled();
+                }
+            }
+        }
+#else
+        // Stub mode: use in-memory storage
+        std::string before_date_str(before_date);
 
         auto it = entries_.begin();
         while (it != entries_.end()) {
@@ -434,6 +797,7 @@ public:
                 ++it;
             }
         }
+#endif
 
         return cancelled;
     }
@@ -465,14 +829,32 @@ private:
                 std::this_thread::sleep_for(config_.retry_delay);
             }
 
-            // Simulate connection (always succeeds in stub implementation)
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+            // Real pacs_system integration: open index_database
+            if (!db_) {
+                auto db_result = pacs::storage::index_database::open(
+                    config_.pacs_database_path);
+
+                if (db_result.is_err()) {
+                    // Log error and retry
+                    continue;
+                }
+
+                db_ = std::move(db_result.value());
+            }
+
+            // Verify database is open and accessible
+            if (db_ && db_->is_open()) {
+                return {};
+            }
+#else
+            // Stub mode: Connection always succeeds (in-memory storage)
             // In real implementation:
             // - Create DICOM association
             // - Negotiate presentation contexts for MWL
             // - Verify AE titles
-
-            // Stub: Connection always succeeds
             return {};
+#endif
         }
 
         return std::unexpected(mwl_error::connection_failed);
@@ -487,6 +869,8 @@ private:
         return result.has_value();
     }
 
+#ifndef PACS_BRIDGE_HAS_PACS_SYSTEM
+    // Stub mode helper methods
     bool matches_filter(const mapping::mwl_item& entry,
                        const mwl_query_filter& filter) const {
         // Patient ID filter
@@ -671,6 +1055,7 @@ private:
             }
         }
     }
+#endif  // !PACS_BRIDGE_HAS_PACS_SYSTEM
 
     void update_avg_operation_time(double elapsed_ms) {
         // Running average calculation
@@ -691,8 +1076,15 @@ private:
     mwl_client_config config_;
     mutable std::shared_mutex mutex_;
     std::atomic<bool> connected_{false};
-    std::vector<mapping::mwl_item> entries_;
     mwl_client::statistics stats_;
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+    // Real pacs_system integration: use index_database for persistent storage
+    std::unique_ptr<pacs::storage::index_database> db_;
+#else
+    // Stub mode: use in-memory storage
+    std::vector<mapping::mwl_item> entries_;
+#endif
 };
 
 // =============================================================================

@@ -548,15 +548,58 @@ auto oru = reverse_mapper.map_mpps_to_oru(mpps_event);
 | Update Worklist | MWL Update | Outbound |
 | Receive MPPS | MPPS N-CREATE/N-SET | Inbound |
 
+**Build Modes:**
+
+The PACS Adapter supports two build modes:
+
+| Mode | Option | Description |
+|------|--------|-------------|
+| Standalone | `BRIDGE_STANDALONE_BUILD=ON` | In-memory stub storage for testing |
+| Full Integration | `BRIDGE_STANDALONE_BUILD=OFF` | Real pacs_system index_database |
+
+When `PACS_BRIDGE_HAS_PACS_SYSTEM` is defined, the MWL client uses pacs_system's
+`index_database` API for persistent worklist storage with SQLite backend.
+
+**Configuration:**
+
+```cpp
+mwl_client_config config;
+config.pacs_host = "localhost";
+config.pacs_port = 11112;
+config.our_ae_title = "PACS_BRIDGE";
+config.max_retries = 3;
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+config.pacs_database_path = "/var/lib/pacs_bridge/worklist.db";
+#endif
+```
+
 **Usage:**
 
 ```cpp
 mwl_client client(pacs_config);
-auto result = client.update_worklist(mwl_item);
+client.connect();
+
+// Add MWL entry (from ORM order)
+auto result = client.add_entry(mwl_item);
+
+// Query worklist
+mwl_query_filter filter;
+filter.modality = "CT";
+filter.scheduled_date = "20241215";
+auto query_result = client.query(filter);
+
+// Update entry status
+client.update_entry(accession_number, updates);
+
+// Cancel entry
+client.cancel_entry(accession_number);
 
 mpps_handler handler(dicom_hl7_mapper, message_queue);
 handler.on_mpps_event(mpps_event);
 ```
+
+**Error Codes:** -980 to -989 (mwl_client module range)
 
 ---
 
