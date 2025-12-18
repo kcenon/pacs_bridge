@@ -664,6 +664,7 @@ public:
         : config_(cfg),
           queue_(cfg.storage_path),
           running_(false),
+          delivery_attempts_(0),
           delivered_count_(0) {}
 
     ~outbound_queue_simulator() {
@@ -693,11 +694,27 @@ public:
     }
 
     /**
+     * @brief Check if the simulator is running
+     */
+    bool is_running() const {
+        return running_;
+    }
+
+    /**
      * @brief Enqueue a message for delivery
      */
     void enqueue(const std::string& message) {
         queue_.enqueue(message);
         cv_.notify_one();
+    }
+
+    /**
+     * @brief Simulate system restart by stopping and reloading queue from disk
+     */
+    void simulate_restart() {
+        stop();
+        queue_.simulate_recovery();
+        start();
     }
 
     /**
@@ -722,6 +739,28 @@ public:
     }
 
     /**
+     * @brief Get count of delivery attempts (for queue_persistence_test compatibility)
+     */
+    uint32_t delivery_attempts() const {
+        return delivery_attempts_;
+    }
+
+    /**
+     * @brief Alias for delivered_count (for queue_persistence_test compatibility)
+     */
+    uint32_t successful_deliveries() const {
+        return static_cast<uint32_t>(delivered_count_);
+    }
+
+    /**
+     * @brief Reset delivery counters
+     */
+    void reset_counters() {
+        delivery_attempts_ = 0;
+        delivered_count_ = 0;
+    }
+
+    /**
      * @brief Access the underlying test_message_queue for recovery testing
      */
     test_message_queue& underlying_queue() {
@@ -742,6 +781,7 @@ private:
             }
 
             // Try to deliver
+            delivery_attempts_++;
             if (try_deliver(msg_opt.value())) {
                 // Success - remove from queue
                 queue_.dequeue();
@@ -777,6 +817,7 @@ private:
     config config_;
     test_message_queue queue_;
     std::atomic<bool> running_;
+    std::atomic<uint32_t> delivery_attempts_;
     std::atomic<size_t> delivered_count_;
     std::thread delivery_thread_;
     std::mutex mutex_;
