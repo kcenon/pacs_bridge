@@ -15,11 +15,11 @@ This directory contains all tests for the PACS Bridge project. Tests are organiz
 | **Monitoring** | 5 | Health checks, metrics, tracing |
 | **Performance** | 5 | Benchmarks, stress tests |
 | **PACS Adapter** | 2 | MWL, MPPS integration |
-| **Integration** | 12 | End-to-end workflows |
+| **Integration** | 13 | End-to-end workflows |
 | **FHIR** | 6 | FHIR R4 gateway (Phase 3) |
 | **EMR** | 7 | EMR client (Phase 5) |
 | **Messaging** | 2 | Event bus, patterns |
-| **Total** | **70** | - |
+| **Total** | **71** | - |
 
 ## Test Categories
 
@@ -79,6 +79,7 @@ This directory contains all tests for the PACS Bridge project. Tests are organiz
 | `mllp_connection_test` | Connection lifecycle | 300s |
 | `pacs_worklist_test` | Worklist updates | 300s |
 | `e2e_scenario_test` | Complete workflows | 600s |
+| `phase2_e2e_test` | MPPS→HL7→MLLP + queue recovery (Issue #176) | 600s |
 | `monitoring_integration_test` | Metrics integration | 180s |
 
 ## Running Tests
@@ -270,9 +271,10 @@ std::string value(msh->field_value(9));
 
 ## Related Issues
 
-- Issue #145 - Test Coverage Expansion (this work)
+- Issue #145 - Test Coverage Expansion
 - Issue #159 - HL7 Extended Tests
 - Issue #160 - Mapper Extended Tests
 - Issue #161 - Integration Tests
 - Issue #162 - Disaster Recovery Tests
 - Issue #163 - Benchmark and Memory Tests
+- Issue #176 - Phase 2 E2E: MPPS→HL7→MLLP + queue recovery

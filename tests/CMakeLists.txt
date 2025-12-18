@@ -481,6 +481,9 @@ add_integration_test(pacs_worklist_test "integration;pacs;worklist;phase2")
 # End-to-End Scenario Tests (Issue #161) - complete workflow scenarios
 add_integration_test(e2e_scenario_test "integration;e2e;scenario;phase2" 600)
 
+# Phase 2 E2E Tests (Issue #176) - MPPS→HL7→MLLP + queue recovery
+add_integration_test(phase2_e2e_test "integration;e2e;phase2;mpps;mllp;recovery" 600)
+
 # Monitoring Integration Tests (Issue #90)
 add_integration_test(monitoring_integration_test "integration;monitoring;metrics;phase4" 180)
 
@@ -709,6 +712,7 @@ message(STATUS "  - stress_test")
 message(STATUS "  - mllp_connection_test (Issue #161)")
 message(STATUS "  - pacs_worklist_test (Issue #161)")
 message(STATUS "  - e2e_scenario_test (Issue #161)")
+message(STATUS "  - phase2_e2e_test (Issue #176)")
 message(STATUS "")
 message(STATUS "Phase 4 Integration Tests:")
 message(STATUS "  - monitoring_integration_test")
