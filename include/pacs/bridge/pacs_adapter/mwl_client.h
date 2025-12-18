@@ -120,6 +120,9 @@ enum class mwl_error : int {
  * @brief MWL client configuration
  *
  * Configuration for connecting to pacs_system's worklist_scp service.
+ *
+ * When PACS_BRIDGE_HAS_PACS_SYSTEM is defined, uses pacs_system's index_database
+ * for persistent MWL storage. Otherwise, uses in-memory stub storage.
  */
 struct mwl_client_config {
     /** pacs_system host address */
@@ -151,6 +154,17 @@ struct mwl_client_config {
 
     /** Keep-alive ping interval */
     std::chrono::seconds keep_alive_interval{30};
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+    /**
+     * @brief pacs_system database path
+     *
+     * Path to the SQLite database file used by pacs_system's index_database.
+     * Required when building with pacs_system integration (BRIDGE_STANDALONE_BUILD=OFF).
+     * Use ":memory:" for in-memory database (useful for testing).
+     */
+    std::string pacs_database_path = "pacs_bridge.db";
+#endif
 };
 
 // =============================================================================
