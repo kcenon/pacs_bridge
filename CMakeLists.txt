@@ -312,6 +312,18 @@ if(PACS_BRIDGE_HAS_SQLITE)
     )
 endif()
 
+# Bridge Server Orchestration (Phase 2 entrypoint)
+# See: https://github.com/kcenon/pacs_bridge/issues/175
+# Requires SQLite for reliable message delivery
+if(PACS_BRIDGE_HAS_SQLITE)
+    list(APPEND PACS_BRIDGE_SOURCES
+        src/bridge_server.cpp
+    )
+    list(APPEND PACS_BRIDGE_HEADERS
+        include/pacs/bridge/bridge_server.h
+    )
+endif()
+
 # Messaging Patterns (messaging_system Integration)
 # See: https://github.com/kcenon/pacs_bridge/issues/146
 list(APPEND PACS_BRIDGE_SOURCES

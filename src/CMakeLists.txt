@@ -84,3 +84,36 @@ endif()
 # Testing modules
 #   testing: Load and stress testing framework
 #            Implements load_generator, load_runner, load_reporter
+
+# =============================================================================
+# CLI Executable Target
+# =============================================================================
+#
+# pacs_bridge CLI executable - main entrypoint for Phase 2 workflow
+# See: https://github.com/kcenon/pacs_bridge/issues/175
+#
+# Usage:
+#   pacs_bridge --config <path>    Start with configuration file
+#   pacs_bridge --help             Show help message
+#   pacs_bridge --version          Show version information
+
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_executable(pacs_bridge_cli
+        app/main.cpp
+    )
+
+    target_link_libraries(pacs_bridge_cli
+        PRIVATE
+            pacs_bridge
+    )
+
+    set_target_properties(pacs_bridge_cli PROPERTIES
+        OUTPUT_NAME "pacs_bridge"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+
+    # Install CLI executable
+    install(TARGETS pacs_bridge_cli
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
