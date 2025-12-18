@@ -300,12 +300,15 @@ list(APPEND PACS_BRIDGE_HEADERS
 
 # Workflow Orchestration (MPPS → HL7 → Outbound)
 # See: https://github.com/kcenon/pacs_bridge/issues/173
-list(APPEND PACS_BRIDGE_SOURCES
-    src/workflow/mpps_hl7_workflow.cpp
-)
-list(APPEND PACS_BRIDGE_HEADERS
-    include/pacs/bridge/workflow/mpps_hl7_workflow.h
-)
+# Requires SQLite due to queue_manager dependency for reliable message delivery
+if(PACS_BRIDGE_HAS_SQLITE)
+    list(APPEND PACS_BRIDGE_SOURCES
+        src/workflow/mpps_hl7_workflow.cpp
+    )
+    list(APPEND PACS_BRIDGE_HEADERS
+        include/pacs/bridge/workflow/mpps_hl7_workflow.h
+    )
+endif()
 
 # Messaging Patterns (messaging_system Integration)
 # See: https://github.com/kcenon/pacs_bridge/issues/146
