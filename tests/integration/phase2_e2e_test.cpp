@@ -726,8 +726,12 @@ bool test_e2e_queue_when_ris_down() {
         std::chrono::milliseconds{10000});
 
     INTEGRATION_TEST_ASSERT(delivered, "All queued messages should be delivered");
-    INTEGRATION_TEST_ASSERT(queue.queue_empty(),
-                            "Queue should be empty after delivery");
+
+    // Wait for queue to be emptied (delivery thread may need time to dequeue)
+    bool emptied = integration_test_fixture::wait_for(
+        [&queue]() { return queue.queue_empty(); },
+        std::chrono::milliseconds{3000});
+    INTEGRATION_TEST_ASSERT(emptied, "Queue should be empty after delivery");
 
     // Validate delivered messages
     auto validators = ris.get_validators();
@@ -812,7 +816,12 @@ bool test_e2e_queue_recovery_after_restart() {
 
         INTEGRATION_TEST_ASSERT(delivered,
                                 "Recovered message should be delivered");
-        INTEGRATION_TEST_ASSERT(queue.queue_empty(),
+
+        // Wait for queue to be emptied (delivery thread may need time to dequeue)
+        bool emptied = integration_test_fixture::wait_for(
+            [&queue]() { return queue.queue_empty(); },
+            std::chrono::milliseconds{3000});
+        INTEGRATION_TEST_ASSERT(emptied,
                                 "Queue should be empty after delivery");
 
         queue.stop();
@@ -995,8 +1004,8 @@ bool test_e2e_high_volume_processing() {
 
     // Wait for all messages to be received
     bool all_received = integration_test_fixture::wait_for(
-        [&ris, batch_size]() {
-            return ris.messages_received() >= batch_size;
+        [&ris]() {
+            return ris.messages_received() >= 20;  // batch_size
         },
         std::chrono::milliseconds{15000});
 
