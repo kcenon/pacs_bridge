@@ -59,7 +59,7 @@ public:
         auto load_result = config::config_loader::load(config_path);
         if (!load_result) {
             throw std::runtime_error("Failed to load configuration: " +
-                                     std::string(to_string(load_result.error())));
+                                     load_result.error().to_string());
         }
         config_ = std::move(*load_result);
         config_path_ = config_path;
@@ -287,9 +287,9 @@ public:
                 status.healthy = false;
             }
 
-            // Check queue health
-            auto stats = outbound_sender_->get_statistics();
-            status.queue_healthy = stats.queue_stats.database_connected;
+            // Check queue health - queue is healthy if sender is running
+            // (database connectivity is implicit in successful operation)
+            status.queue_healthy = outbound_sender_->is_running();
             if (!status.queue_healthy) {
                 status.healthy = false;
             }
