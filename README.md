@@ -274,7 +274,7 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Phase | Description | Status |
 |-------|-------------|--------|
 | Phase 1 | Core HL7 Gateway & MWL Integration | **Implemented** |
-| Phase 2 | MPPS and Bidirectional Flow | **In Progress** |
+| Phase 2 | MPPS and Bidirectional Flow | **Implemented** |
 | Phase 3 | FHIR Gateway and Reporting | Planning |
 | Phase 4 | Production Hardening | Planning |
 | Phase 5 | EMR Integration (FHIR R4 Client) | **In Progress** |
@@ -307,10 +307,12 @@ Source code implementation follows the phased approach outlined in the PRD:
 | Monitoring | Prometheus metrics collector | Implemented |
 | Monitoring | /metrics HTTP endpoint | Implemented |
 | Monitoring | Grafana dashboard & alerts | Implemented |
-| MPPS Handler | MPPS event processing | Pending |
-| HL7 Mapper | MPPS to ORM^O01 conversion | Pending |
-| Message Queue | Outbound queue with persistence | Pending |
-| Message Router | Failover routing support | Pending |
+| MPPS Handler | MPPS event processing (pacs_system) | Implemented |
+| HL7 Mapper | MPPS to ORM^O01 conversion | Implemented |
+| Message Queue | Outbound queue with SQLite persistence | Implemented |
+| Message Router | Failover routing with retry/DLQ | Implemented |
+| Bridge Server | Phase 2 workflow orchestration | Implemented |
+| E2E Tests | MPPS→HL7→MLLP + recovery tests | Implemented |
 
 ### Phase 5 Implementation Status
 
