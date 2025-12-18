@@ -166,9 +166,11 @@ list(APPEND PACS_BRIDGE_HEADERS
 if(PACS_BRIDGE_HAS_SQLITE)
     list(APPEND PACS_BRIDGE_SOURCES
         src/router/queue_manager.cpp
+        src/router/reliable_outbound_sender.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/router/queue_manager.h
+        include/pacs/bridge/router/reliable_outbound_sender.h
     )
 endif()
 
