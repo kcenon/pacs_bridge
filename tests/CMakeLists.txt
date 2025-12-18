@@ -372,6 +372,9 @@ add_bridge_test(mwl_client_test "unit;pacs_adapter;phase1")
 # MPPS Handler Tests (Phase 2 - Issue #23)
 add_bridge_test(mpps_handler_test "unit;pacs_adapter;mpps;phase2")
 
+# MPPS to HL7 Workflow Tests (Issue #173)
+add_gtest_test(mpps_hl7_workflow_test "unit;workflow;mpps;hl7;phase2")
+
 # =============================================================================
 # Ecosystem Integration Test (Issue #4 - Dependency Setup Verification)
 # =============================================================================
@@ -677,6 +680,7 @@ message(STATUS "  - benchmark_suite_test (Issue #163)")
 message(STATUS "  - memory_safety_test (Issue #163)")
 message(STATUS "  - mwl_client_test")
 message(STATUS "  - mpps_handler_test")
+message(STATUS "  - mpps_hl7_workflow_test (Issue #173)")
 message(STATUS "  - ecosystem_integration_test")
 message(STATUS "")
 message(STATUS "Phase 2 Integration Tests:")
