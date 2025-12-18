@@ -20,16 +20,16 @@
 namespace pacs::bridge::integration::test {
 
 // =============================================================================
-// Queue Persistence with Outbound Queue Simulator
+// Queue Persistence with Persistence-specific Simulator
 // =============================================================================
 
 /**
- * @brief Outbound message queue with persistence support for testing
+ * @brief Outbound message queue simulator specialized for persistence testing
  *
- * Simulates the outbound message queue functionality with automatic
- * retry logic when the destination RIS is unavailable.
+ * This implementation uses yield-based polling and provides delivery attempt
+ * tracking for testing queue recovery scenarios.
  */
-class outbound_queue_simulator {
+class persistence_queue_simulator {
 public:
     struct config {
         std::filesystem::path storage_path;
@@ -38,21 +38,21 @@ public:
         int max_retries{5};
     };
 
-    explicit outbound_queue_simulator(const config& cfg)
+    explicit persistence_queue_simulator(const config& cfg)
         : config_(cfg),
           queue_(cfg.storage_path),
           running_(false),
           delivery_attempts_(0),
           successful_deliveries_(0) {}
 
-    ~outbound_queue_simulator() {
+    ~persistence_queue_simulator() {
         stop();
     }
 
     void start() {
         running_ = true;
         queue_.start();
-        delivery_thread_ = std::thread(&outbound_queue_simulator::delivery_loop,
+        delivery_thread_ = std::thread(&persistence_queue_simulator::delivery_loop,
                                        this);
     }
 
@@ -291,12 +291,12 @@ bool test_queue_recovery_ris_unavailable() {
         "RIS server should start");
 
     // Setup outbound queue
-    outbound_queue_simulator::config queue_config;
+    persistence_queue_simulator::config queue_config;
     queue_config.storage_path = temp_path;
     queue_config.ris_port = ris_port;
     queue_config.retry_interval = std::chrono::milliseconds{200};
 
-    outbound_queue_simulator queue(queue_config);
+    persistence_queue_simulator queue(queue_config);
     queue.start();
 
     // Phase 1: RIS available - send first message
@@ -363,12 +363,12 @@ bool test_queue_recovery_after_restart() {
 
     // Phase 1: Queue messages while RIS is unavailable
     {
-        outbound_queue_simulator::config queue_config;
+        persistence_queue_simulator::config queue_config;
         queue_config.storage_path = temp_path;
         queue_config.ris_port = ris_port;
         queue_config.retry_interval = std::chrono::milliseconds{200};
 
-        outbound_queue_simulator queue(queue_config);
+        persistence_queue_simulator queue(queue_config);
 
         // Enqueue without starting (no delivery thread)
         queue.enqueue("MSH|^~\\&|PACS||RIS||20240101||ORM^O01|1|P|2.4\r");
@@ -395,12 +395,12 @@ bool test_queue_recovery_after_restart() {
         "RIS server should start");
 
     {
-        outbound_queue_simulator::config queue_config;
+        persistence_queue_simulator::config queue_config;
         queue_config.storage_path = temp_path;
         queue_config.ris_port = ris_port;
         queue_config.retry_interval = std::chrono::milliseconds{200};
 
-        outbound_queue_simulator queue(queue_config);
+        persistence_queue_simulator queue(queue_config);
         queue.start();
 
         // Wait for delivery of persisted messages
@@ -444,12 +444,12 @@ bool test_queue_partial_delivery_recovery() {
             std::chrono::milliseconds{1000}),
         "RIS server should start");
 
-    outbound_queue_simulator::config queue_config;
+    persistence_queue_simulator::config queue_config;
     queue_config.storage_path = temp_path;
     queue_config.ris_port = ris_port;
     queue_config.retry_interval = std::chrono::milliseconds{200};
 
-    outbound_queue_simulator queue(queue_config);
+    persistence_queue_simulator queue(queue_config);
     queue.start();
 
     // Queue 5 messages

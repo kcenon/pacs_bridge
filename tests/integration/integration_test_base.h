@@ -519,11 +519,14 @@ private:
         std::string status_code(to_hl7_status(status));
 
         std::ostringstream oss;
+        // Build HL7 ORM^O01 message
+        // ORC segment: ORC-1=Order Control, ORC-2=Placer Order, ORC-3=Filler Order,
+        //              ORC-4=Placer Group, ORC-5=Order Status (IP/CM/CA/DC)
         oss << "MSH|^~\\&|PACS|RADIOLOGY|RIS|HOSPITAL|" << timestamp
             << "||ORM^O01|MSG" << messages_sent_ << "|P|2.4\r"
             << "PID|1||" << event.patient_id << "|||" << event.patient_name
             << "\r"
-            << "ORC|SC|" << event.scheduled_procedure_id << "||"
+            << "ORC|SC|" << event.scheduled_procedure_id << "|"
             << event.accession_number << "||" << status_code << "\r"
             << "OBR|1|" << event.scheduled_procedure_id << "||"
             << event.modality << "|||||||||||||||" << event.accession_number
@@ -631,6 +634,194 @@ public:
         }
         return events;
     }
+};
+
+// =============================================================================
+// Outbound Queue Simulator for Reliable Delivery Testing
+// =============================================================================
+
+/**
+ * @brief Simulates outbound message queue with retry logic for integration tests
+ *
+ * This class provides a complete simulation of the outbound delivery queue
+ * functionality, including:
+ * - Persistent message storage via test_message_queue
+ * - Background delivery thread with retry logic
+ * - Automatic redelivery when destination becomes available
+ *
+ * Used for testing Workflow 2 scenarios (reliable delivery + recovery).
+ */
+class outbound_queue_simulator {
+public:
+    struct config {
+        std::filesystem::path storage_path;
+        uint16_t ris_port = 12800;
+        std::chrono::milliseconds retry_interval{500};
+        size_t max_retries = 10;
+    };
+
+    explicit outbound_queue_simulator(const config& cfg)
+        : config_(cfg),
+          queue_(cfg.storage_path),
+          running_(false),
+          delivery_attempts_(0),
+          delivered_count_(0) {}
+
+    ~outbound_queue_simulator() {
+        stop();
+    }
+
+    /**
+     * @brief Start the background delivery thread
+     */
+    void start() {
+        if (running_) {
+            return;
+        }
+        running_ = true;
+        delivery_thread_ = std::thread(&outbound_queue_simulator::delivery_loop, this);
+    }
+
+    /**
+     * @brief Stop the delivery thread
+     */
+    void stop() {
+        running_ = false;
+        cv_.notify_all();
+        if (delivery_thread_.joinable()) {
+            delivery_thread_.join();
+        }
+    }
+
+    /**
+     * @brief Check if the simulator is running
+     */
+    bool is_running() const {
+        return running_;
+    }
+
+    /**
+     * @brief Enqueue a message for delivery
+     */
+    void enqueue(const std::string& message) {
+        queue_.enqueue(message);
+        cv_.notify_one();
+    }
+
+    /**
+     * @brief Simulate system restart by stopping and reloading queue from disk
+     */
+    void simulate_restart() {
+        stop();
+        queue_.simulate_recovery();
+        start();
+    }
+
+    /**
+     * @brief Get current queue size (pending messages)
+     */
+    size_t queue_size() const {
+        return queue_.size();
+    }
+
+    /**
+     * @brief Check if queue is empty
+     */
+    bool queue_empty() const {
+        return queue_.empty();
+    }
+
+    /**
+     * @brief Get count of successfully delivered messages
+     */
+    size_t delivered_count() const {
+        return delivered_count_;
+    }
+
+    /**
+     * @brief Get count of delivery attempts (for queue_persistence_test compatibility)
+     */
+    uint32_t delivery_attempts() const {
+        return delivery_attempts_;
+    }
+
+    /**
+     * @brief Alias for delivered_count (for queue_persistence_test compatibility)
+     */
+    uint32_t successful_deliveries() const {
+        return static_cast<uint32_t>(delivered_count_);
+    }
+
+    /**
+     * @brief Reset delivery counters
+     */
+    void reset_counters() {
+        delivery_attempts_ = 0;
+        delivered_count_ = 0;
+    }
+
+    /**
+     * @brief Access the underlying test_message_queue for recovery testing
+     */
+    test_message_queue& underlying_queue() {
+        return queue_;
+    }
+
+private:
+    void delivery_loop() {
+        while (running_) {
+            auto msg_opt = queue_.peek();
+            if (!msg_opt.has_value()) {
+                // Wait for new messages
+                std::unique_lock<std::mutex> lock(mutex_);
+                cv_.wait_for(lock, config_.retry_interval, [this]() {
+                    return !running_ || queue_.size() > 0;
+                });
+                continue;
+            }
+
+            // Try to deliver
+            delivery_attempts_++;
+            if (try_deliver(msg_opt.value())) {
+                // Success - remove from queue
+                queue_.dequeue();
+                delivered_count_++;
+            } else {
+                // Failed - wait before retry
+                std::this_thread::sleep_for(config_.retry_interval);
+            }
+        }
+    }
+
+    bool try_deliver(const std::string& message) {
+        mllp::mllp_client_config client_config;
+        client_config.host = "localhost";
+        client_config.port = config_.ris_port;
+        client_config.connect_timeout = std::chrono::milliseconds{500};
+
+        mllp::mllp_client client(client_config);
+
+        auto connect_result = client.connect();
+        if (!connect_result.has_value()) {
+            return false;
+        }
+
+        auto msg = mllp::mllp_message::from_string(message);
+        auto send_result = client.send(msg);
+
+        client.disconnect();
+
+        return send_result.has_value();
+    }
+
+    config config_;
+    test_message_queue queue_;
+    std::atomic<bool> running_;
+    std::atomic<uint32_t> delivery_attempts_;
+    std::atomic<size_t> delivered_count_;
+    std::thread delivery_thread_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
 };
 
 }  // namespace pacs::bridge::integration::test

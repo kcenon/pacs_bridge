@@ -15,11 +15,11 @@ This directory contains all tests for the PACS Bridge project. Tests are organiz
 | **Monitoring** | 5 | Health checks, metrics, tracing |
 | **Performance** | 5 | Benchmarks, stress tests |
 | **PACS Adapter** | 2 | MWL, MPPS integration |
-| **Integration** | 12 | End-to-end workflows |
+| **Integration** | 13 | End-to-end workflows |
 | **FHIR** | 6 | FHIR R4 gateway (Phase 3) |
 | **EMR** | 7 | EMR client (Phase 5) |
 | **Messaging** | 2 | Event bus, patterns |
-| **Total** | **70** | - |
+| **Total** | **71** | - |
 
 ## Test Categories
 
@@ -79,6 +79,7 @@ This directory contains all tests for the PACS Bridge project. Tests are organiz
 | `mllp_connection_test` | Connection lifecycle | 300s |
 | `pacs_worklist_test` | Worklist updates | 300s |
 | `e2e_scenario_test` | Complete workflows | 600s |
+| `phase2_e2e_test` | MPPS→HL7→MLLP + queue recovery (Issue #176) | 600s |
 | `monitoring_integration_test` | Metrics integration | 180s |
 
 ## Running Tests
@@ -268,11 +269,64 @@ std::string value(msh->field_value(9));
 // std::string value = msh->field_value(9);  // Some compilers reject this
 ```
 
+## Phase 2 E2E Tests (Issue #176)
+
+The `phase2_e2e_test` provides comprehensive end-to-end testing for the Phase 2 MPPS→HL7→MLLP workflow. This test suite validates the complete message flow from MPPS ingestion to HL7 delivery.
+
+### Test Infrastructure
+
+| Component | Description |
+|-----------|-------------|
+| `hl7_validator` | Parses HL7 messages and validates specific fields (MSH, PID, ORC, OBR) |
+| `validating_ris_server` | Extended mock RIS with HL7 validation capabilities |
+| `outbound_queue_simulator` | Simulates reliable delivery queue with retry logic |
+| `mpps_bridge_simulator` | Converts MPPS N-CREATE/N-SET to HL7 ORM^O01 messages |
+
+### Test Cases
+
+#### Workflow 1: MPPS → ORM Status → MLLP Delivery
+
+| Test | Status Verified | Description |
+|------|----------------|-------------|
+| `test_e2e_mpps_in_progress_full_validation` | ORC-5=IP | N-CREATE with full HL7 field validation |
+| `test_e2e_mpps_completed_full_validation` | ORC-5=CM | N-SET COMPLETED flow |
+| `test_e2e_mpps_discontinued_full_validation` | ORC-5=DC/CA | N-SET DISCONTINUED flow |
+| `test_e2e_mpps_complete_lifecycle` | IP→CM | Full procedure lifecycle |
+
+#### Workflow 2: Reliable Delivery + Recovery
+
+| Test | Scenario | Description |
+|------|----------|-------------|
+| `test_e2e_queue_when_ris_down` | RIS unavailable | Messages queued and delivered when RIS comes up |
+| `test_e2e_queue_recovery_after_restart` | System restart | SQLite queue persistence verified |
+| `test_e2e_failover_to_backup_ris` | Primary down | Automatic failover to backup RIS |
+
+#### Comprehensive Tests
+
+| Test | Description |
+|------|-------------|
+| `test_e2e_all_mpps_statuses` | Validates all 3 MPPS statuses in sequence |
+| `test_e2e_high_volume_processing` | 20 messages processed correctly |
+
+### Running Phase 2 E2E Tests
+
+```bash
+# Build and run
+cmake -B build -DBRIDGE_BUILD_TESTS=ON
+cmake --build build --target phase2_e2e_test
+./build/bin/phase2_e2e_test
+
+# Via CTest with label
+ctest --test-dir build -L phase2 -V
+```
+
 ## Related Issues
 
-- Issue #145 - Test Coverage Expansion (this work)
+- Issue #145 - Test Coverage Expansion
 - Issue #159 - HL7 Extended Tests
 - Issue #160 - Mapper Extended Tests
 - Issue #161 - Integration Tests
 - Issue #162 - Disaster Recovery Tests
 - Issue #163 - Benchmark and Memory Tests
+- Issue #170 - Epic: Phase 2 MPPS & Bidirectional Flow
+- Issue #176 - Phase 2 E2E: MPPS→HL7→MLLP + queue recovery
