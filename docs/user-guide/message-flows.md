@@ -226,23 +226,28 @@ When a modality queries for scheduled procedures:
 When a procedure is started on a modality:
 
 ```
-┌──────────┐          ┌─────────────┐          ┌──────────────┐
-│ Modality │          │ PACS Bridge │          │     RIS      │
-└────┬─────┘          └──────┬──────┘          └──────┬───────┘
-     │                       │                        │
-     │  MPPS N-CREATE        │                        │
-     │  (In Progress)        │                        │
-     │──────────────────────►│                        │
-     │                       │                        │
-     │                       │  Convert to ORU^R01    │
-     │                       │  (Status: In Progress) │
-     │                       │───────────────────────►│
-     │                       │                        │
-     │                       │  ACK                   │
-     │                       │◄───────────────────────│
-     │                       │                        │
-     │  N-CREATE Response    │                        │
-     │◄──────────────────────│                        │
+┌──────────┐       ┌─────────────┐       ┌──────────────┐       ┌──────────────┐
+│ Modality │       │ PACS Bridge │       │   Workflow   │       │     RIS      │
+│          │       │ mpps_handler│       │  Orchestrator│       │              │
+└────┬─────┘       └──────┬──────┘       └──────┬───────┘       └──────┬───────┘
+     │                    │                     │                      │
+     │  MPPS N-CREATE     │                     │                      │
+     │  (In Progress)     │                     │                      │
+     │───────────────────►│                     │                      │
+     │                    │  on_mpps_event()    │                      │
+     │                    │────────────────────►│                      │
+     │                    │                     │  Map to ORM^O01      │
+     │                    │                     │  Select destination  │
+     │                    │                     │  Generate trace IDs  │
+     │                    │                     │                      │
+     │                    │                     │  Outbound Router     │
+     │                    │                     │─────────────────────►│
+     │                    │                     │                      │
+     │                    │                     │  ACK                 │
+     │                    │                     │◄─────────────────────│
+     │                    │                     │                      │
+     │  N-CREATE Response │                     │                      │
+     │◄───────────────────│                     │                      │
 ```
 
 ### MPPS Complete (N-SET)
@@ -250,23 +255,28 @@ When a procedure is started on a modality:
 When a procedure is completed on a modality:
 
 ```
-┌──────────┐          ┌─────────────┐          ┌──────────────┐
-│ Modality │          │ PACS Bridge │          │     RIS      │
-└────┬─────┘          └──────┬──────┘          └──────┬───────┘
-     │                       │                        │
-     │  MPPS N-SET           │                        │
-     │  (Completed)          │                        │
-     │──────────────────────►│                        │
-     │                       │                        │
-     │                       │  Convert to ORU^R01    │
-     │                       │  (Status: Complete)    │
-     │                       │───────────────────────►│
-     │                       │                        │
-     │                       │  ACK                   │
-     │                       │◄───────────────────────│
-     │                       │                        │
-     │  N-SET Response       │                        │
-     │◄──────────────────────│                        │
+┌──────────┐       ┌─────────────┐       ┌──────────────┐       ┌──────────────┐
+│ Modality │       │ PACS Bridge │       │   Workflow   │       │     RIS      │
+│          │       │ mpps_handler│       │  Orchestrator│       │              │
+└────┬─────┘       └──────┬──────┘       └──────┬───────┘       └──────┬───────┘
+     │                    │                     │                      │
+     │  MPPS N-SET        │                     │                      │
+     │  (Completed)       │                     │                      │
+     │───────────────────►│                     │                      │
+     │                    │  on_mpps_event()    │                      │
+     │                    │────────────────────►│                      │
+     │                    │                     │  Map to ORM^O01      │
+     │                    │                     │  (Status: Complete)  │
+     │                    │                     │                      │
+     │                    │                     │  Route by modality/  │
+     │                    │                     │  station pattern     │
+     │                    │                     │─────────────────────►│
+     │                    │                     │                      │
+     │                    │                     │  ACK                 │
+     │                    │                     │◄─────────────────────│
+     │                    │                     │                      │
+     │  N-SET Response    │                     │                      │
+     │◄───────────────────│                     │                      │
 ```
 
 ### MPPS Discontinued (N-SET)
@@ -274,20 +284,49 @@ When a procedure is completed on a modality:
 When a procedure is discontinued:
 
 ```
-┌──────────┐          ┌─────────────┐          ┌──────────────┐
-│ Modality │          │ PACS Bridge │          │     RIS      │
-└────┬─────┘          └──────┬──────┘          └──────┬───────┘
-     │                       │                        │
-     │  MPPS N-SET           │                        │
-     │  (Discontinued)       │                        │
-     │──────────────────────►│                        │
-     │                       │                        │
-     │                       │  Convert to ORU^R01    │
-     │                       │  (Status: Discontinued)│
-     │                       │───────────────────────►│
-     │                       │                        │
-     │  N-SET Response       │                        │
-     │◄──────────────────────│                        │
+┌──────────┐       ┌─────────────┐       ┌──────────────┐       ┌──────────────┐
+│ Modality │       │ PACS Bridge │       │   Workflow   │       │     RIS      │
+│          │       │ mpps_handler│       │  Orchestrator│       │              │
+└────┬─────┘       └──────┬──────┘       └──────┬───────┘       └──────┬───────┘
+     │                    │                     │                      │
+     │  MPPS N-SET        │                     │                      │
+     │  (Discontinued)    │                     │                      │
+     │───────────────────►│                     │                      │
+     │                    │  on_mpps_event()    │                      │
+     │                    │────────────────────►│                      │
+     │                    │                     │  Map to ORM^O01      │
+     │                    │                     │  (Status: Cancelled) │
+     │                    │                     │                      │
+     │                    │                     │  Outbound Router     │
+     │                    │                     │─────────────────────►│
+     │                    │                     │                      │
+     │  N-SET Response    │                     │                      │
+     │◄───────────────────│                     │                      │
+```
+
+### MPPS Delivery Failure with Queue Fallback
+
+When outbound delivery fails, messages are queued for reliable retry:
+
+```
+┌──────────┐       ┌─────────────┐       ┌──────────────┐       ┌──────────────┐
+│ Modality │       │   Workflow  │       │Queue Manager │       │     RIS      │
+│          │       │ Orchestrator│       │              │       │              │
+└────┬─────┘       └──────┬──────┘       └──────┬───────┘       └──────┬───────┘
+     │                    │                     │                      │
+     │  MPPS Event        │                     │                      │
+     │───────────────────►│                     │                      │
+     │                    │  Try delivery       │                      │
+     │                    │─────────────────────────────────────────► X│ (Failed)
+     │                    │                     │                      │
+     │                    │  Enqueue for retry  │                      │
+     │                    │────────────────────►│                      │
+     │                    │                     │                      │
+     │  Response (OK)     │                     │  [Later: Retry]      │
+     │◄───────────────────│                     │─────────────────────►│
+     │                    │                     │                      │
+     │                    │                     │  ACK                 │
+     │                    │                     │◄─────────────────────│
 ```
 
 ---

@@ -1,7 +1,7 @@
 # Module Descriptions
 
-> **Version:** 0.1.0.1
-> **Last Updated:** 2025-12-17
+> **Version:** 0.1.0.2
+> **Last Updated:** 2025-12-18
 
 ---
 
@@ -32,6 +32,7 @@ pacs_bridge/
 │   ├── emr/                  # EMR client integration
 │   ├── mapping/              # Protocol translation
 │   ├── router/               # Message routing
+│   ├── workflow/             # Workflow orchestration
 │   ├── pacs_adapter/         # PACS integration
 │   ├── cache/                # Patient cache
 │   ├── config/               # Configuration
@@ -550,15 +551,19 @@ auto oru = reverse_mapper.map_mpps_to_oru(mpps_event);
 
 **Build Modes:**
 
-The PACS Adapter supports two build modes:
+The PACS Adapter supports two build modes with compile-time selection:
 
 | Mode | Option | Description |
 |------|--------|-------------|
 | Standalone | `BRIDGE_STANDALONE_BUILD=ON` | In-memory stub storage for testing |
-| Full Integration | `BRIDGE_STANDALONE_BUILD=OFF` | Real pacs_system index_database |
+| Full Integration | `BRIDGE_STANDALONE_BUILD=OFF` | Real pacs_system integration |
 
-When `PACS_BRIDGE_HAS_PACS_SYSTEM` is defined, the MWL client uses pacs_system's
-`index_database` API for persistent worklist storage with SQLite backend.
+When `PACS_BRIDGE_HAS_PACS_SYSTEM` is defined:
+- **MWL Client**: Uses pacs_system's `index_database` API for persistent worklist storage
+- **MPPS Handler**: Uses pacs_system's `mpps_scp` for real MPPS N-CREATE/N-SET event handling
+
+In standalone mode, stub implementations provide the same interface for testing without
+requiring external PACS dependencies.
 
 **Configuration:**
 
@@ -874,6 +879,141 @@ exporter_factory::register_factory(
     }
 );
 ```
+
+---
+
+## Workflow Modules
+
+### MPPS-HL7 Workflow Orchestrator (`workflow/`)
+
+> **See also:** [GitHub Issue #173](https://github.com/kcenon/pacs_bridge/issues/173)
+
+**Purpose:** Wire MPPS status changes to HL7 message generation and outbound delivery with reliable routing and failure handling.
+
+**Dependencies:**
+
+| Dependency | Reason |
+|------------|--------|
+| SQLite (`PACS_BRIDGE_HAS_SQLITE`) | Required for queue_manager integration (reliable message delivery) |
+
+> **Note:** This module is only built when SQLite is available. When SQLite is not present,
+> the workflow module and its tests are excluded from the build.
+
+**Key Classes:**
+
+| Class | Purpose |
+|-------|---------|
+| `mpps_hl7_workflow` | Main workflow coordinator |
+| `mpps_hl7_workflow_config` | Configuration for workflow behavior |
+| `workflow_config_builder` | Fluent API for building configurations |
+| `destination_rule` | Rule for routing messages to destinations |
+| `workflow_result` | Result of workflow processing |
+| `workflow_statistics` | Runtime statistics (messages processed, successes, failures) |
+
+**Key Headers:**
+
+```cpp
+#include <pacs/bridge/workflow/mpps_hl7_workflow.h>
+```
+
+**Destination Routing Criteria:**
+
+| Criteria | Description |
+|----------|-------------|
+| `by_modality` | Route based on DICOM modality (CT, MR, etc.) |
+| `by_station` | Route based on station/AE title |
+| `by_accession_pattern` | Route based on accession number regex pattern |
+
+**Usage Example:**
+
+```cpp
+// Build configuration
+auto config = workflow_config_builder::create()
+    .default_destination("PRIMARY_HIS")
+    .add_routing_rule({
+        .destination = "CT_HIS",
+        .criteria = destination_criteria::by_modality,
+        .pattern = "CT",
+        .priority = 10
+    })
+    .add_routing_rule({
+        .destination = "MR_HIS",
+        .criteria = destination_criteria::by_modality,
+        .pattern = "MR",
+        .priority = 10
+    })
+    .enable_queue_fallback(true)
+    .enable_statistics(true)
+    .build();
+
+// Create workflow
+mpps_hl7_workflow workflow(config);
+workflow.set_outbound_router(router);
+workflow.set_queue_manager(queue);
+
+// Wire to MPPS handler for automatic processing
+workflow.wire_to_handler(mpps_handler);
+
+// Start workflow
+if (auto result = workflow.start(); !result) {
+    std::cerr << "Failed: " << to_string(result.error()) << std::endl;
+}
+
+// Manual processing is also available
+auto result = workflow.process(mpps_event::completed, mpps_data);
+if (result) {
+    std::cout << "Delivered to: " << result->destination << std::endl;
+}
+```
+
+**Correlation and Tracing:**
+
+The workflow automatically generates correlation IDs and trace IDs for distributed tracing:
+
+```cpp
+// Result includes tracing information
+auto result = workflow.process(mpps_event::completed, mpps_data);
+if (result) {
+    std::cout << "Correlation ID: " << result->correlation_id << std::endl;
+    std::cout << "Trace ID: " << result->trace_id << std::endl;
+}
+```
+
+- **Correlation ID**: UUID v4 format (e.g., `550e8400-e29b-41d4-a716-446655440000`)
+- **Trace ID**: OpenTelemetry format - 32 hex characters (e.g., `4bf92f3577b34da6a3ce929d0e0e4736`)
+
+**Queue Fallback:**
+
+When outbound delivery fails, messages are automatically enqueued to the queue_manager for reliable retry:
+
+```cpp
+// Enable queue fallback in configuration
+auto config = workflow_config_builder::create()
+    .default_destination("PRIMARY_HIS")
+    .enable_queue_fallback(true)
+    .build();
+
+// When delivery fails, result indicates queued status
+auto result = workflow.process(mpps_event::completed, mpps_data);
+if (result && result->delivery_method == delivery_method::queued) {
+    std::cout << "Message queued for later delivery" << std::endl;
+}
+```
+
+**Statistics:**
+
+```cpp
+// Get runtime statistics
+auto stats = workflow.get_statistics();
+std::cout << "Processed: " << stats.messages_processed << std::endl;
+std::cout << "Successes: " << stats.messages_succeeded << std::endl;
+std::cout << "Failures: " << stats.messages_failed << std::endl;
+
+// Reset statistics
+workflow.reset_statistics();
+```
+
+**Error Codes:** -900 to -909 (workflow module range)
 
 ---
 

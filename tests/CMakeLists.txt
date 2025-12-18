@@ -372,6 +372,14 @@ add_bridge_test(mwl_client_test "unit;pacs_adapter;phase1")
 # MPPS Handler Tests (Phase 2 - Issue #23)
 add_bridge_test(mpps_handler_test "unit;pacs_adapter;mpps;phase2")
 
+# MPPS to HL7 Workflow Tests (Issue #173)
+# Requires SQLite due to queue_manager dependency
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_gtest_test(mpps_hl7_workflow_test "unit;workflow;mpps;hl7;phase2")
+else()
+    message(STATUS "Skipping mpps_hl7_workflow_test: SQLite not available (required for queue_manager)")
+endif()
+
 # =============================================================================
 # Ecosystem Integration Test (Issue #4 - Dependency Setup Verification)
 # =============================================================================
@@ -677,6 +685,9 @@ message(STATUS "  - benchmark_suite_test (Issue #163)")
 message(STATUS "  - memory_safety_test (Issue #163)")
 message(STATUS "  - mwl_client_test")
 message(STATUS "  - mpps_handler_test")
+if(PACS_BRIDGE_HAS_SQLITE)
+    message(STATUS "  - mpps_hl7_workflow_test (Issue #173)")
+endif()
 message(STATUS "  - ecosystem_integration_test")
 message(STATUS "")
 message(STATUS "Phase 2 Integration Tests:")
