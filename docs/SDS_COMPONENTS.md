@@ -2615,6 +2615,155 @@ outbound:
     priority: 2  # Failover destination
 ```
 
+### DES-ROUTE-004: reliable_outbound_sender
+
+**Traces to:** FR-4.3.1, FR-4.3.2, FR-4.3.3, FR-4.2.1, FR-4.2.2
+
+**Issue Reference:** [#174](https://github.com/kcenon/pacs_bridge/issues/174)
+
+```cpp
+namespace pacs::bridge::router {
+
+/**
+ * @brief Configuration for reliable outbound sender
+ */
+struct reliable_sender_config {
+    queue_config queue;                    ///< Queue manager configuration
+    outbound_router_config router;         ///< Outbound router configuration
+    bool auto_start_workers = true;        ///< Start workers on start()
+};
+
+/**
+ * @brief Request to enqueue a message for reliable delivery
+ */
+struct enqueue_request {
+    std::string destination;       ///< Target destination identifier
+    std::string payload;           ///< Message payload (HL7 content)
+    std::string correlation_id;    ///< End-to-end tracking ID
+    std::string message_type;      ///< Message type (e.g., "ORM^O01")
+    int priority = 0;              ///< Priority (lower = higher)
+};
+
+/**
+ * @brief Reliable outbound message sender with persistence and retry
+ *
+ * Integrates queue_manager (persistence/retry/DLQ) with outbound_router
+ * (destination selection + MLLP send) to provide guaranteed delivery
+ * semantics for outbound HL7 messages.
+ *
+ * Features:
+ *   - SQLite-backed persistent queue
+ *   - Automatic retry with exponential backoff
+ *   - Dead letter queue for failed messages
+ *   - Crash recovery support
+ *   - Health-aware destination selection with failover
+ */
+class reliable_outbound_sender {
+public:
+    explicit reliable_outbound_sender(const reliable_sender_config& config);
+    ~reliable_outbound_sender();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Lifecycle
+    // ═══════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<void, reliable_sender_error> start();
+    void stop();
+    [[nodiscard]] bool is_running() const noexcept;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Message Enqueueing
+    // ═══════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<std::string, reliable_sender_error>
+    enqueue(const enqueue_request& request);
+
+    [[nodiscard]] std::expected<std::string, reliable_sender_error>
+    enqueue(std::string_view destination,
+            std::string_view payload,
+            int priority = 0,
+            std::string_view correlation_id = "",
+            std::string_view message_type = "");
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Destination Management
+    // ═══════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] std::expected<void, reliable_sender_error>
+    add_destination(const outbound_destination& destination);
+    bool remove_destination(std::string_view name);
+    [[nodiscard]] std::vector<outbound_destination> destinations() const;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Queue Inspection & Dead Letter Queue
+    // ═══════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] size_t queue_depth() const;
+    [[nodiscard]] std::vector<dead_letter_entry> get_dead_letters(
+        size_t limit = 100, size_t offset = 0) const;
+    [[nodiscard]] std::expected<void, reliable_sender_error>
+    retry_dead_letter(std::string_view message_id);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Statistics & Callbacks
+    // ═══════════════════════════════════════════════════════════════════
+
+    [[nodiscard]] reliable_sender_statistics get_statistics() const;
+    void set_delivery_callback(delivery_callback callback);
+    void set_dead_letter_callback(dead_letter_callback callback);
+
+private:
+    class impl;
+    std::unique_ptr<impl> pimpl_;
+};
+
+} // namespace pacs::bridge::router
+```
+
+#### Reliable Delivery Flow
+
+The `reliable_outbound_sender` provides guaranteed message delivery:
+
+1. **Enqueue**: Messages are immediately persisted to SQLite queue
+2. **Worker Processing**: Worker threads dequeue messages by priority
+3. **Routing**: Uses `outbound_router` for health-aware destination selection
+4. **Delivery**: MLLP transmission with ACK waiting
+5. **Acknowledgment**: On success, message marked as delivered
+6. **Retry**: On failure, exponential backoff retry up to max attempts
+7. **Dead Letter**: After max retries, moved to DLQ for manual handling
+8. **Recovery**: On restart, in-progress messages are automatically recovered
+
+**Example Usage:**
+```cpp
+// Configure reliable sender
+auto config = reliable_sender_config_builder::create()
+    .database("/var/lib/pacs/queue.db")
+    .workers(4)
+    .retry_policy(5, std::chrono::seconds{5}, 2.0)
+    .add_destination(
+        destination_builder::create("RIS")
+            .host("ris.hospital.local")
+            .port(2576)
+            .message_types({"ORM^O01", "ORU^R01"})
+            .build())
+    .build();
+
+reliable_outbound_sender sender(config);
+sender.start();
+
+// Enqueue message for reliable delivery
+enqueue_request request;
+request.destination = "RIS";
+request.payload = hl7_content;
+request.correlation_id = "ORDER-12345";
+request.message_type = "ORM^O01";
+
+auto msg_id = sender.enqueue(request);
+if (msg_id) {
+    // Message persisted, delivery guaranteed or moved to DLQ
+}
+```
+
 ---
 
 ## 6. pacs_system Adapter Module
