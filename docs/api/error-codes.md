@@ -18,6 +18,7 @@
 - [EMR Client Errors](#emr-client-errors)
 - [Result Posting Errors](#result-posting-errors)
 - [Encounter Context Errors](#encounter-context-errors)
+- [Workflow Errors](#workflow-errors)
 - [Resolution Steps](#resolution-steps)
 
 ---
@@ -54,6 +55,7 @@ Where:
 
 | Range | Category | Description |
 |-------|----------|-------------|
+| 900-909 | Workflow | MPPS-HL7 workflow orchestration errors |
 | 1000-1999 | Configuration | Configuration and startup errors |
 | 2000-2999 | Connection | Network and connection errors |
 | 3000-3999 | Message Processing | HL7/FHIR message errors |
@@ -1023,6 +1025,147 @@ Error code range: -1080 to -1099
 1. Check response format
 2. Verify JSON structure
 3. Review required fields
+
+---
+
+## Workflow Errors
+
+Workflow errors occur during MPPS to HL7 workflow orchestration.
+Error code range: -900 to -909
+
+### PACS-900: Workflow Not Running
+
+**Description:** Workflow has not been started.
+
+**Cause:** Attempting to process messages before calling `start()`.
+
+**Resolution:**
+1. Call `workflow.start()` before processing
+2. Check workflow initialization sequence
+3. Verify configuration is valid
+
+---
+
+### PACS-901: Workflow Already Running
+
+**Description:** Workflow is already running.
+
+**Cause:** Attempting to start a workflow that is already started.
+
+**Resolution:**
+1. Check if workflow is already started
+2. Call `stop()` before restarting
+3. Verify lifecycle management
+
+---
+
+### PACS-902: Invalid Configuration
+
+**Description:** Workflow configuration is invalid.
+
+**Cause:** Missing required configuration fields.
+
+**Resolution:**
+1. Ensure `default_destination` is set, or routing rules cover all cases
+2. Verify configuration with `config.is_valid()`
+3. Check for empty destination names
+
+---
+
+### PACS-903: Mapping Failed
+
+**Description:** Failed to map MPPS to HL7 message.
+
+**Cause:** Invalid MPPS data or mapper error.
+
+**Resolution:**
+1. Verify MPPS dataset contains required fields
+2. Check dicom_hl7_mapper configuration
+3. Review mapper error logs
+
+---
+
+### PACS-904: No Destination
+
+**Description:** No destination found for message.
+
+**Cause:** No routing rule matched and no default destination.
+
+**Resolution:**
+1. Add routing rules for the modality/station
+2. Configure a default destination
+3. Verify routing rule patterns
+
+```cpp
+// Add default destination
+auto config = workflow_config_builder::create()
+    .default_destination("DEFAULT_HIS")  // Fallback destination
+    .build();
+```
+
+---
+
+### PACS-905: Router Not Set
+
+**Description:** Outbound router has not been configured.
+
+**Cause:** Missing `set_outbound_router()` call.
+
+**Resolution:**
+1. Call `workflow.set_outbound_router(router)` before starting
+2. Verify router is not null
+3. Check workflow initialization sequence
+
+---
+
+### PACS-906: Delivery Failed
+
+**Description:** Failed to deliver HL7 message to destination.
+
+**Cause:** Network error, destination unavailable, or timeout.
+
+**Resolution:**
+1. Check destination connectivity
+2. Verify MLLP endpoint is available
+3. If queue fallback is enabled, message will be queued for retry
+
+---
+
+### PACS-907: Queue Failed
+
+**Description:** Failed to enqueue message after delivery failure.
+
+**Cause:** Queue manager error or queue full.
+
+**Resolution:**
+1. Check queue manager status
+2. Verify queue has capacity
+3. Review queue database for errors
+
+---
+
+### PACS-908: Invalid Event
+
+**Description:** Invalid or unsupported MPPS event type.
+
+**Cause:** Unknown event type passed to process().
+
+**Resolution:**
+1. Use supported events: `in_progress`, `completed`, `discontinued`
+2. Verify event type conversion
+
+---
+
+### PACS-909: Internal Error
+
+**Description:** Internal workflow error occurred.
+
+**Cause:** Unexpected error during processing.
+
+**Resolution:**
+1. Check detailed error logs
+2. Review stack trace if available
+3. Report bug if reproducible
 
 ---
 
