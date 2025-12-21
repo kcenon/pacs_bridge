@@ -7,7 +7,11 @@
 
 #include "pacs/bridge/tracing/trace_manager.h"
 
+#ifdef PACS_BRIDGE_STANDALONE_BUILD
+#include "pacs/bridge/internal/logging_stub.h"
+#else
 #include <kcenon/common/interfaces/global_logger_registry.h>
+#endif
 
 #include <algorithm>
 #include <chrono>

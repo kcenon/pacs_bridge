@@ -1,5 +1,5 @@
 /**
- * @file global_logger_registry.h
+ * @file logging_stub.h
  * @brief Stub header for standalone builds without kcenon ecosystem
  *
  * This header provides stub implementations for the logging interfaces
@@ -10,8 +10,8 @@
  *   cmake -B build -DBRIDGE_STANDALONE_BUILD=OFF
  */
 
-#ifndef KCENON_COMMON_INTERFACES_GLOBAL_LOGGER_REGISTRY_H
-#define KCENON_COMMON_INTERFACES_GLOBAL_LOGGER_REGISTRY_H
+#ifndef PACS_BRIDGE_INTERNAL_LOGGING_STUB_H
+#define PACS_BRIDGE_INTERNAL_LOGGING_STUB_H
 
 #ifdef PACS_BRIDGE_STANDALONE_BUILD
 
@@ -19,7 +19,7 @@
 #include <string>
 #include <string_view>
 
-namespace kcenon::common::interfaces {
+namespace pacs::bridge::internal {
 
 /**
  * @brief Log levels for the logging system
@@ -79,8 +79,23 @@ inline std::shared_ptr<logger> get_logger_ptr(std::string_view /*name*/) {
     return instance;
 }
 
+}  // namespace pacs::bridge::internal
+
+// Provide compatibility aliases in the expected namespace for standalone builds
+namespace kcenon::common::interfaces {
+    using log_level = pacs::bridge::internal::log_level;
+    using logger = pacs::bridge::internal::logger;
+    using null_logger = pacs::bridge::internal::null_logger;
+
+    inline logger* get_logger(std::string_view name) {
+        return pacs::bridge::internal::get_logger(name);
+    }
+
+    inline std::shared_ptr<logger> get_logger_ptr(std::string_view name) {
+        return pacs::bridge::internal::get_logger_ptr(name);
+    }
 }  // namespace kcenon::common::interfaces
 
 #endif  // PACS_BRIDGE_STANDALONE_BUILD
 
-#endif  // KCENON_COMMON_INTERFACES_GLOBAL_LOGGER_REGISTRY_H
+#endif  // PACS_BRIDGE_INTERNAL_LOGGING_STUB_H
