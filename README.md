@@ -53,7 +53,8 @@ pacs_bridge/
 │   ├── performance/      # Performance utilities
 │   ├── testing/          # Test utilities
 │   ├── integration/      # System adapters
-│   └── concepts/         # C++20 Concepts for type constraints
+│   ├── concepts/         # C++20 Concepts for type constraints
+│   └── internal/         # Internal utilities (logging stubs)
 ├── src/                  # Implementation files
 ├── tests/
 │   ├── unit/             # Unit tests
