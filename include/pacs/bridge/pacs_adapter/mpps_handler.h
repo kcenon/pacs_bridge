@@ -16,8 +16,11 @@
  *   - Extract timing information from MPPS datasets
  *   - Parse MPPS status and attributes
  *   - Thread-safe callback invocation
+ *   - Persist MPPS records to database for recovery
+ *   - Query MPPS records by various criteria
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/23
+ * @see https://github.com/kcenon/pacs_bridge/issues/186
  * @see docs/reference_materials/06_ihe_swf_profile.md
  */
 
@@ -70,7 +73,19 @@ enum class mpps_error : int {
     invalid_sop_instance = -978,
 
     /** Unexpected MPPS operation */
-    unexpected_operation = -979
+    unexpected_operation = -979,
+
+    /** Database operation failed */
+    database_error = -980,
+
+    /** MPPS record not found in database */
+    record_not_found = -981,
+
+    /** Invalid state transition (e.g., updating final state) */
+    invalid_state_transition = -982,
+
+    /** Persistence is disabled */
+    persistence_disabled = -983
 };
 
 /**
@@ -105,6 +120,14 @@ enum class mpps_error : int {
             return "Invalid MPPS SOP Instance UID";
         case mpps_error::unexpected_operation:
             return "Unexpected MPPS operation";
+        case mpps_error::database_error:
+            return "Database operation failed";
+        case mpps_error::record_not_found:
+            return "MPPS record not found in database";
+        case mpps_error::invalid_state_transition:
+            return "Invalid MPPS state transition";
+        case mpps_error::persistence_disabled:
+            return "MPPS persistence is disabled";
         default:
             return "Unknown MPPS error";
     }
@@ -373,6 +396,22 @@ struct mpps_handler_config {
 
     /** Enable verbose logging of MPPS events */
     bool verbose_logging = false;
+
+    // =========================================================================
+    // Persistence Options
+    // =========================================================================
+
+    /** Enable MPPS record persistence to database */
+    bool enable_persistence = true;
+
+    /** Database path for MPPS persistence (empty = use shared index_database) */
+    std::string database_path;
+
+    /** Recover pending MPPS records on startup */
+    bool recover_on_startup = true;
+
+    /** Maximum age for recovering pending MPPS (0 = no limit) */
+    std::chrono::hours max_recovery_age{24};
 };
 
 // =============================================================================
@@ -615,6 +654,115 @@ public:
      * @brief Get current configuration
      */
     [[nodiscard]] virtual const mpps_handler_config& config() const noexcept = 0;
+
+    // =========================================================================
+    // Persistence Operations
+    // =========================================================================
+
+    /**
+     * @brief Query parameters for MPPS search
+     */
+    struct mpps_query_params {
+        /** MPPS SOP Instance UID (exact match) */
+        std::optional<std::string> sop_instance_uid;
+
+        /** Status filter (exact match) */
+        std::optional<mpps_event> status;
+
+        /** Station AE Title filter (exact match) */
+        std::optional<std::string> station_ae_title;
+
+        /** Modality filter (exact match) */
+        std::optional<std::string> modality;
+
+        /** Study Instance UID filter (exact match) */
+        std::optional<std::string> study_instance_uid;
+
+        /** Accession number filter (exact match) */
+        std::optional<std::string> accession_number;
+
+        /** Maximum number of results to return (0 = unlimited) */
+        size_t limit = 0;
+    };
+
+    /**
+     * @brief Check if persistence is enabled and available
+     *
+     * @return true if MPPS records are being persisted to database
+     */
+    [[nodiscard]] virtual bool is_persistence_enabled() const noexcept = 0;
+
+    /**
+     * @brief Query MPPS record by SOP Instance UID
+     *
+     * Retrieves a persisted MPPS record from the database.
+     *
+     * @param sop_instance_uid The MPPS SOP Instance UID to look up
+     * @return The MPPS dataset if found, nullopt otherwise, or error
+     */
+    [[nodiscard]] virtual std::expected<std::optional<mpps_dataset>, mpps_error>
+    query_mpps(std::string_view sop_instance_uid) const = 0;
+
+    /**
+     * @brief Query MPPS records with filter criteria
+     *
+     * Retrieves persisted MPPS records matching the query parameters.
+     *
+     * @param params Query parameters for filtering
+     * @return Vector of matching MPPS datasets, or error
+     */
+    [[nodiscard]] virtual std::expected<std::vector<mpps_dataset>, mpps_error>
+    query_mpps(const mpps_query_params& params) const = 0;
+
+    /**
+     * @brief Get all active (IN PROGRESS) MPPS records
+     *
+     * Retrieves all MPPS records that are currently in progress.
+     * Useful for recovery and monitoring.
+     *
+     * @return Vector of active MPPS datasets, or error
+     */
+    [[nodiscard]] virtual std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_active_mpps() const = 0;
+
+    /**
+     * @brief Get pending MPPS records for a station
+     *
+     * Retrieves all IN PROGRESS MPPS records for a specific station.
+     *
+     * @param station_ae_title The station AE Title to filter by
+     * @return Vector of pending MPPS datasets for the station, or error
+     */
+    [[nodiscard]] virtual std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_pending_mpps_for_station(std::string_view station_ae_title) const = 0;
+
+    /**
+     * @brief Persistence statistics
+     */
+    struct persistence_stats {
+        /** Total MPPS records persisted */
+        size_t total_persisted = 0;
+
+        /** Records with IN PROGRESS status */
+        size_t in_progress_count = 0;
+
+        /** Records with COMPLETED status */
+        size_t completed_count = 0;
+
+        /** Records with DISCONTINUED status */
+        size_t discontinued_count = 0;
+
+        /** Persistence failures */
+        size_t persistence_failures = 0;
+
+        /** Records recovered on startup */
+        size_t recovered_count = 0;
+    };
+
+    /**
+     * @brief Get persistence statistics
+     */
+    [[nodiscard]] virtual persistence_stats get_persistence_stats() const = 0;
 
 protected:
     mpps_handler() = default;

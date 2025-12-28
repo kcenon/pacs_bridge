@@ -16,6 +16,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 
 // =============================================================================
 // pacs_system Integration Headers (conditional)
@@ -25,6 +26,8 @@
 #include <pacs/core/dicom_dataset.hpp>
 #include <pacs/core/dicom_tag_constants.hpp>
 #include <pacs/services/mpps_scp.hpp>
+#include <pacs/storage/index_database.hpp>
+#include <pacs/storage/mpps_record.hpp>
 #endif  // PACS_BRIDGE_HAS_PACS_SYSTEM
 
 namespace pacs::bridge::pacs_adapter {
@@ -283,6 +286,135 @@ mpps_dataset convert_n_set_to_mpps_dataset(
     return dataset;
 }
 
+// =============================================================================
+// mpps_dataset <-> mpps_record Conversion Utilities
+// =============================================================================
+
+/**
+ * @brief Convert mpps_dataset to pacs_system mpps_record for persistence
+ */
+[[nodiscard]] pacs::storage::mpps_record
+to_mpps_record(const mpps_dataset& dataset) {
+    pacs::storage::mpps_record record;
+
+    record.mpps_uid = dataset.sop_instance_uid;
+    record.status = to_string(dataset.status);
+
+    // Combine date and time for start_datetime
+    record.start_datetime = dataset.start_date;
+    if (!dataset.start_time.empty()) {
+        record.start_datetime += dataset.start_time;
+    }
+
+    // Combine date and time for end_datetime
+    record.end_datetime = dataset.end_date;
+    if (!dataset.end_time.empty()) {
+        record.end_datetime += dataset.end_time;
+    }
+
+    record.station_ae = dataset.station_ae_title;
+    record.station_name = dataset.station_name;
+    record.modality = dataset.modality;
+    record.study_uid = dataset.study_instance_uid;
+    record.accession_no = dataset.accession_number;
+    record.scheduled_step_id = dataset.scheduled_procedure_step_id;
+    record.requested_proc_id = dataset.requested_procedure_id;
+
+    // Serialize performed series to JSON
+    if (!dataset.performed_series.empty()) {
+        std::ostringstream oss;
+        oss << "[";
+        bool first = true;
+        for (const auto& series : dataset.performed_series) {
+            if (!first) {
+                oss << ",";
+            }
+            first = false;
+            oss << "{\"uid\":\"" << series.series_instance_uid << "\","
+                << "\"protocol\":\"" << series.protocol_name << "\","
+                << "\"instances\":" << series.number_of_instances << "}";
+        }
+        oss << "]";
+        record.performed_series = oss.str();
+    }
+
+    return record;
+}
+
+/**
+ * @brief Convert pacs_system mpps_record to mpps_dataset
+ */
+[[nodiscard]] mpps_dataset
+from_mpps_record(const pacs::storage::mpps_record& record) {
+    mpps_dataset dataset;
+
+    dataset.sop_instance_uid = record.mpps_uid;
+
+    // Parse status
+    auto status_opt = parse_mpps_status(record.status);
+    dataset.status = status_opt.value_or(mpps_event::in_progress);
+
+    // Parse start_datetime (YYYYMMDDHHMMSS)
+    if (record.start_datetime.size() >= 8) {
+        dataset.start_date = record.start_datetime.substr(0, 8);
+        if (record.start_datetime.size() >= 14) {
+            dataset.start_time = record.start_datetime.substr(8, 6);
+        }
+    }
+
+    // Parse end_datetime
+    if (record.end_datetime.size() >= 8) {
+        dataset.end_date = record.end_datetime.substr(0, 8);
+        if (record.end_datetime.size() >= 14) {
+            dataset.end_time = record.end_datetime.substr(8, 6);
+        }
+    }
+
+    dataset.station_ae_title = record.station_ae;
+    dataset.station_name = record.station_name;
+    dataset.modality = record.modality;
+    dataset.study_instance_uid = record.study_uid;
+    dataset.accession_number = record.accession_no;
+    dataset.scheduled_procedure_step_id = record.scheduled_step_id;
+    dataset.requested_procedure_id = record.requested_proc_id;
+
+    // Note: performed_series JSON parsing could be added here if needed
+
+    return dataset;
+}
+
+/**
+ * @brief Convert mpps_handler::mpps_query_params to pacs_system mpps_query
+ */
+[[nodiscard]] pacs::storage::mpps_query
+to_mpps_query(const mpps_handler::mpps_query_params& params) {
+    pacs::storage::mpps_query query;
+
+    if (params.sop_instance_uid) {
+        query.mpps_uid = *params.sop_instance_uid;
+    }
+    if (params.status) {
+        query.status = to_string(*params.status);
+    }
+    if (params.station_ae_title) {
+        query.station_ae = *params.station_ae_title;
+    }
+    if (params.modality) {
+        query.modality = *params.modality;
+    }
+    if (params.study_instance_uid) {
+        query.study_uid = *params.study_instance_uid;
+    }
+    if (params.accession_number) {
+        query.accession_no = *params.accession_number;
+    }
+    if (params.limit > 0) {
+        query.limit = params.limit;
+    }
+
+    return query;
+}
+
 }  // anonymous namespace
 
 /**
@@ -300,6 +432,7 @@ public:
         , start_time_(std::chrono::steady_clock::now())
         , mpps_scp_(std::make_unique<pacs::services::mpps_scp>()) {
         setup_mpps_handlers();
+        initialize_database();
     }
 
     ~mpps_handler_real_impl() override {
@@ -408,6 +541,13 @@ public:
             processed_dataset.status = mpps_event::in_progress;
         }
 
+        // Persist MPPS record to database
+        auto persist_result = persist_mpps_create(processed_dataset);
+        if (!persist_result) {
+            // Log warning but continue - persistence failure is not fatal
+            update_persistence_error();
+        }
+
         {
             std::unique_lock lock(stats_mutex_);
             stats_.n_create_count++;
@@ -436,6 +576,13 @@ public:
         }
 
         mpps_event event = dataset.status;
+
+        // Update MPPS record in database
+        auto persist_result = persist_mpps_update(dataset);
+        if (!persist_result) {
+            // Log warning but continue - persistence failure is not fatal
+            update_persistence_error();
+        }
 
         {
             std::unique_lock lock(stats_mutex_);
@@ -495,6 +642,103 @@ public:
 
     const mpps_handler_config& config() const noexcept override {
         return config_;
+    }
+
+    // =========================================================================
+    // Persistence Operations (public interface)
+    // =========================================================================
+
+    bool is_persistence_enabled() const noexcept override {
+        return db_ != nullptr;
+    }
+
+    std::expected<std::optional<mpps_dataset>, mpps_error>
+    query_mpps(std::string_view sop_instance_uid) const override {
+        if (!db_) {
+            return std::unexpected(mpps_error::persistence_disabled);
+        }
+
+        auto record = db_->find_mpps(sop_instance_uid);
+        if (!record) {
+            return std::nullopt;
+        }
+
+        return from_mpps_record(*record);
+    }
+
+    std::expected<std::vector<mpps_dataset>, mpps_error>
+    query_mpps(const mpps_query_params& params) const override {
+        if (!db_) {
+            return std::unexpected(mpps_error::persistence_disabled);
+        }
+
+        auto query = to_mpps_query(params);
+        auto result = db_->search_mpps(query);
+
+        if (result.is_err()) {
+            return std::unexpected(mpps_error::database_error);
+        }
+
+        std::vector<mpps_dataset> datasets;
+        datasets.reserve(result.value().size());
+
+        for (const auto& record : result.value()) {
+            datasets.push_back(from_mpps_record(record));
+        }
+
+        return datasets;
+    }
+
+    std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_active_mpps() const override {
+        if (!db_) {
+            return std::unexpected(mpps_error::persistence_disabled);
+        }
+
+        pacs::storage::mpps_query query;
+        query.status = "IN PROGRESS";
+
+        auto result = db_->search_mpps(query);
+
+        if (result.is_err()) {
+            return std::unexpected(mpps_error::database_error);
+        }
+
+        std::vector<mpps_dataset> datasets;
+        datasets.reserve(result.value().size());
+
+        for (const auto& record : result.value()) {
+            datasets.push_back(from_mpps_record(record));
+        }
+
+        return datasets;
+    }
+
+    std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_pending_mpps_for_station(std::string_view station_ae_title) const override {
+        if (!db_) {
+            return std::unexpected(mpps_error::persistence_disabled);
+        }
+
+        auto result = db_->list_active_mpps(station_ae_title);
+
+        if (result.is_err()) {
+            return std::unexpected(mpps_error::database_error);
+        }
+
+        std::vector<mpps_dataset> datasets;
+        datasets.reserve(result.value().size());
+
+        for (const auto& record : result.value()) {
+            datasets.push_back(from_mpps_record(record));
+        }
+
+        return datasets;
+    }
+
+    persistence_stats get_persistence_stats() const override {
+        std::shared_lock lock(persist_stats_mutex_);
+        return persist_stats_;
     }
 
     // =========================================================================
@@ -602,6 +846,130 @@ private:
     }
 
     // =========================================================================
+    // Persistence Methods
+    // =========================================================================
+
+    void initialize_database() {
+        if (!config_.enable_persistence) {
+            return;
+        }
+
+        std::string db_path = config_.database_path;
+        if (db_path.empty()) {
+            // Use default path based on configuration
+            db_path = "mpps_bridge.db";
+        }
+
+        auto db_result = pacs::storage::index_database::open(db_path);
+        if (db_result.is_err()) {
+            // Log warning - persistence will be disabled
+            return;
+        }
+
+        db_ = std::move(db_result.value());
+
+        // Recover pending MPPS if configured
+        if (config_.recover_on_startup) {
+            recover_pending_mpps();
+        }
+    }
+
+    std::expected<void, mpps_error>
+    persist_mpps_create(const mpps_dataset& dataset) {
+        if (!db_) {
+            return std::unexpected(mpps_error::persistence_disabled);
+        }
+
+        auto record = to_mpps_record(dataset);
+        auto result = db_->create_mpps(record);
+
+        if (result.is_err()) {
+            return std::unexpected(mpps_error::database_error);
+        }
+
+        {
+            std::unique_lock lock(persist_stats_mutex_);
+            persist_stats_.total_persisted++;
+            persist_stats_.in_progress_count++;
+        }
+
+        return {};
+    }
+
+    std::expected<void, mpps_error>
+    persist_mpps_update(const mpps_dataset& dataset) {
+        if (!db_) {
+            return std::unexpected(mpps_error::persistence_disabled);
+        }
+
+        auto record = to_mpps_record(dataset);
+        auto result = db_->update_mpps(record);
+
+        if (result.is_err()) {
+            return std::unexpected(mpps_error::database_error);
+        }
+
+        {
+            std::unique_lock lock(persist_stats_mutex_);
+            if (dataset.status == mpps_event::completed) {
+                persist_stats_.completed_count++;
+                if (persist_stats_.in_progress_count > 0) {
+                    persist_stats_.in_progress_count--;
+                }
+            } else if (dataset.status == mpps_event::discontinued) {
+                persist_stats_.discontinued_count++;
+                if (persist_stats_.in_progress_count > 0) {
+                    persist_stats_.in_progress_count--;
+                }
+            }
+        }
+
+        return {};
+    }
+
+    void recover_pending_mpps() {
+        if (!db_) {
+            return;
+        }
+
+        pacs::storage::mpps_query query;
+        query.status = "IN PROGRESS";
+
+        auto result = db_->search_mpps(query);
+        if (result.is_err()) {
+            return;
+        }
+
+        const auto& records = result.value();
+
+        // Filter by max_recovery_age if configured
+        auto now = std::chrono::system_clock::now();
+        size_t recovered = 0;
+
+        for (const auto& record : records) {
+            if (config_.max_recovery_age.count() > 0) {
+                auto age = std::chrono::duration_cast<std::chrono::hours>(
+                    now - record.created_at);
+                if (age > config_.max_recovery_age) {
+                    continue;
+                }
+            }
+            recovered++;
+        }
+
+        {
+            std::unique_lock lock(persist_stats_mutex_);
+            persist_stats_.recovered_count = recovered;
+            persist_stats_.in_progress_count = recovered;
+        }
+    }
+
+    void update_persistence_error() {
+        std::unique_lock lock(persist_stats_mutex_);
+        persist_stats_.persistence_failures++;
+    }
+
+    // =========================================================================
     // Member Variables
     // =========================================================================
 
@@ -624,6 +992,11 @@ private:
 
     // pacs_system MPPS SCP service
     std::unique_ptr<pacs::services::mpps_scp> mpps_scp_;
+
+    // Database for persistence
+    std::unique_ptr<pacs::storage::index_database> db_;
+    persistence_stats persist_stats_;
+    mutable std::shared_mutex persist_stats_mutex_;
 };
 
 #endif  // PACS_BRIDGE_HAS_PACS_SYSTEM
@@ -764,6 +1137,9 @@ public:
             processed_dataset.status = mpps_event::in_progress;
         }
 
+        // Cache MPPS for in-memory persistence
+        cache_mpps(processed_dataset);
+
         // Update statistics
         {
             std::unique_lock lock(stats_mutex_);
@@ -794,6 +1170,9 @@ public:
             update_stats_error();
             return validation;
         }
+
+        // Update MPPS cache for in-memory persistence
+        cache_mpps(dataset);
 
         // Determine event type from status
         mpps_event event = dataset.status;
@@ -864,6 +1243,91 @@ public:
 
     const mpps_handler_config& config() const noexcept override {
         return config_;
+    }
+
+    // =========================================================================
+    // Persistence Operations (stub - in-memory only for standalone build)
+    // =========================================================================
+
+    bool is_persistence_enabled() const noexcept override {
+        // Stub always returns true for testing
+        return true;
+    }
+
+    std::expected<std::optional<mpps_dataset>, mpps_error>
+    query_mpps(std::string_view sop_instance_uid) const override {
+        std::shared_lock lock(mpps_cache_mutex_);
+        auto it = mpps_cache_.find(std::string(sop_instance_uid));
+        if (it != mpps_cache_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    std::expected<std::vector<mpps_dataset>, mpps_error>
+    query_mpps(const mpps_query_params& params) const override {
+        std::shared_lock lock(mpps_cache_mutex_);
+        std::vector<mpps_dataset> results;
+
+        for (const auto& [uid, dataset] : mpps_cache_) {
+            bool match = true;
+
+            if (params.sop_instance_uid && *params.sop_instance_uid != uid) {
+                match = false;
+            }
+            if (params.status && *params.status != dataset.status) {
+                match = false;
+            }
+            if (params.station_ae_title && *params.station_ae_title != dataset.station_ae_title) {
+                match = false;
+            }
+            if (params.modality && *params.modality != dataset.modality) {
+                match = false;
+            }
+
+            if (match) {
+                results.push_back(dataset);
+                if (params.limit > 0 && results.size() >= params.limit) {
+                    break;
+                }
+            }
+        }
+
+        return results;
+    }
+
+    std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_active_mpps() const override {
+        std::shared_lock lock(mpps_cache_mutex_);
+        std::vector<mpps_dataset> results;
+
+        for (const auto& [uid, dataset] : mpps_cache_) {
+            if (dataset.status == mpps_event::in_progress) {
+                results.push_back(dataset);
+            }
+        }
+
+        return results;
+    }
+
+    std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_pending_mpps_for_station(std::string_view station_ae_title) const override {
+        std::shared_lock lock(mpps_cache_mutex_);
+        std::vector<mpps_dataset> results;
+
+        for (const auto& [uid, dataset] : mpps_cache_) {
+            if (dataset.status == mpps_event::in_progress &&
+                dataset.station_ae_title == station_ae_title) {
+                results.push_back(dataset);
+            }
+        }
+
+        return results;
+    }
+
+    persistence_stats get_persistence_stats() const override {
+        std::shared_lock lock(persist_stats_mutex_);
+        return persist_stats_;
     }
 
 private:
@@ -998,6 +1462,31 @@ private:
     }
 
     // =========================================================================
+    // Persistence Helpers (stub in-memory storage)
+    // =========================================================================
+
+    void cache_mpps(const mpps_dataset& dataset) {
+        std::unique_lock lock(mpps_cache_mutex_);
+        mpps_cache_[dataset.sop_instance_uid] = dataset;
+
+        std::unique_lock stats_lock(persist_stats_mutex_);
+        if (dataset.status == mpps_event::in_progress) {
+            persist_stats_.total_persisted++;
+            persist_stats_.in_progress_count++;
+        } else if (dataset.status == mpps_event::completed) {
+            persist_stats_.completed_count++;
+            if (persist_stats_.in_progress_count > 0) {
+                persist_stats_.in_progress_count--;
+            }
+        } else if (dataset.status == mpps_event::discontinued) {
+            persist_stats_.discontinued_count++;
+            if (persist_stats_.in_progress_count > 0) {
+                persist_stats_.in_progress_count--;
+            }
+        }
+    }
+
+    // =========================================================================
     // Member Variables
     // =========================================================================
 
@@ -1023,6 +1512,12 @@ private:
     statistics stats_;
     mutable std::shared_mutex stats_mutex_;
     std::chrono::steady_clock::time_point start_time_;
+
+    // Persistence (stub - in-memory cache)
+    std::unordered_map<std::string, mpps_dataset> mpps_cache_;
+    mutable std::shared_mutex mpps_cache_mutex_;
+    persistence_stats persist_stats_;
+    mutable std::shared_mutex persist_stats_mutex_;
 };
 
 // =============================================================================
