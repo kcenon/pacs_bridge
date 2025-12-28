@@ -739,6 +739,271 @@ bool test_handler_concurrent_events() {
 }
 
 // =============================================================================
+// Persistence Tests (Issue #186)
+// =============================================================================
+
+/**
+ * @brief Test persistence enabled check
+ */
+bool test_persistence_enabled() {
+    mpps_handler_config config;
+    config.enable_persistence = true;
+
+    auto handler = mpps_handler::create(config);
+    TEST_ASSERT(handler != nullptr, "Handler should be created");
+
+    // Stub implementation always returns true for is_persistence_enabled
+    TEST_ASSERT(handler->is_persistence_enabled() == true,
+                "Persistence should be enabled");
+
+    return true;
+}
+
+/**
+ * @brief Test querying MPPS by SOP Instance UID
+ */
+bool test_query_mpps_by_sop_instance_uid() {
+    auto handler = mpps_handler::create({});
+    handler->start();
+
+    // Create an MPPS record
+    mpps_dataset dataset = create_test_mpps_dataset(
+        "1.2.3.4.5.6.7.8.9", "ACC001");
+    auto result = handler->on_n_create(dataset);
+    TEST_ASSERT(result.has_value(), "N-CREATE should succeed");
+
+    // Query by SOP Instance UID
+    auto query_result = handler->query_mpps("1.2.3.4.5.6.7.8.9");
+    TEST_ASSERT(query_result.has_value(), "Query should succeed");
+    TEST_ASSERT(query_result->has_value(), "Record should be found");
+    TEST_ASSERT(query_result->value().sop_instance_uid == "1.2.3.4.5.6.7.8.9",
+                "SOP Instance UID should match");
+    TEST_ASSERT(query_result->value().accession_number == "ACC001",
+                "Accession number should match");
+
+    // Query non-existent
+    auto not_found = handler->query_mpps("1.2.3.4.5.6.7.8.99999");
+    TEST_ASSERT(not_found.has_value(), "Query should succeed");
+    TEST_ASSERT(!not_found->has_value(), "Record should not be found");
+
+    handler->stop();
+    return true;
+}
+
+/**
+ * @brief Test querying MPPS with filter parameters
+ */
+bool test_query_mpps_with_params() {
+    auto handler = mpps_handler::create({});
+    handler->start();
+
+    // Create multiple MPPS records
+    mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.1", "ACC001");
+    dataset1.station_ae_title = "CT_SCANNER_1";
+    dataset1.modality = "CT";
+    handler->on_n_create(dataset1);
+
+    mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.2", "ACC002");
+    dataset2.station_ae_title = "MR_SCANNER_1";
+    dataset2.modality = "MR";
+    handler->on_n_create(dataset2);
+
+    mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.3", "ACC003");
+    dataset3.station_ae_title = "CT_SCANNER_1";
+    dataset3.modality = "CT";
+    handler->on_n_create(dataset3);
+
+    // Query by station AE
+    mpps_handler::mpps_query_params params;
+    params.station_ae_title = "CT_SCANNER_1";
+    auto result = handler->query_mpps(params);
+    TEST_ASSERT(result.has_value(), "Query should succeed");
+    TEST_ASSERT(result->size() == 2, "Should find 2 CT scanner records");
+
+    // Query by modality
+    params = {};
+    params.modality = "MR";
+    result = handler->query_mpps(params);
+    TEST_ASSERT(result.has_value(), "Query should succeed");
+    TEST_ASSERT(result->size() == 1, "Should find 1 MR record");
+    TEST_ASSERT((*result)[0].accession_number == "ACC002",
+                "Should be ACC002");
+
+    handler->stop();
+    return true;
+}
+
+/**
+ * @brief Test getting active (IN PROGRESS) MPPS records
+ */
+bool test_get_active_mpps() {
+    auto handler = mpps_handler::create({});
+    handler->start();
+
+    // Create some MPPS records
+    mpps_dataset dataset1 = create_test_mpps_dataset(
+        "1.2.3.1", "ACC001", mpps_event::in_progress);
+    handler->on_n_create(dataset1);
+
+    mpps_dataset dataset2 = create_test_mpps_dataset(
+        "1.2.3.2", "ACC002", mpps_event::in_progress);
+    handler->on_n_create(dataset2);
+
+    // Complete one
+    dataset1.status = mpps_event::completed;
+    dataset1.end_date = "20241201";
+    dataset1.end_time = "100000";
+    handler->on_n_set(dataset1);
+
+    // Get active MPPS
+    auto active = handler->get_active_mpps();
+    TEST_ASSERT(active.has_value(), "Query should succeed");
+    TEST_ASSERT(active->size() == 1, "Should have 1 active MPPS");
+    TEST_ASSERT((*active)[0].sop_instance_uid == "1.2.3.2",
+                "Active MPPS should be 1.2.3.2");
+
+    handler->stop();
+    return true;
+}
+
+/**
+ * @brief Test getting pending MPPS for a specific station
+ */
+bool test_get_pending_mpps_for_station() {
+    auto handler = mpps_handler::create({});
+    handler->start();
+
+    // Create MPPS records for different stations
+    mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.1", "ACC001");
+    dataset1.station_ae_title = "CT_SCANNER_1";
+    handler->on_n_create(dataset1);
+
+    mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.2", "ACC002");
+    dataset2.station_ae_title = "CT_SCANNER_2";
+    handler->on_n_create(dataset2);
+
+    mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.3", "ACC003");
+    dataset3.station_ae_title = "CT_SCANNER_1";
+    handler->on_n_create(dataset3);
+
+    // Get pending for CT_SCANNER_1
+    auto pending = handler->get_pending_mpps_for_station("CT_SCANNER_1");
+    TEST_ASSERT(pending.has_value(), "Query should succeed");
+    TEST_ASSERT(pending->size() == 2, "Should have 2 pending for CT_SCANNER_1");
+
+    // Get pending for CT_SCANNER_2
+    pending = handler->get_pending_mpps_for_station("CT_SCANNER_2");
+    TEST_ASSERT(pending.has_value(), "Query should succeed");
+    TEST_ASSERT(pending->size() == 1, "Should have 1 pending for CT_SCANNER_2");
+
+    handler->stop();
+    return true;
+}
+
+/**
+ * @brief Test persistence statistics
+ */
+bool test_persistence_statistics() {
+    auto handler = mpps_handler::create({});
+    handler->start();
+
+    // Initial stats
+    auto stats = handler->get_persistence_stats();
+    TEST_ASSERT(stats.total_persisted == 0, "Initially no records persisted");
+
+    // Create MPPS records
+    mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.1", "ACC001");
+    handler->on_n_create(dataset1);
+
+    mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.2", "ACC002");
+    handler->on_n_create(dataset2);
+
+    stats = handler->get_persistence_stats();
+    TEST_ASSERT(stats.total_persisted == 2, "Should have 2 persisted");
+    TEST_ASSERT(stats.in_progress_count == 2, "Should have 2 in progress");
+
+    // Complete one
+    dataset1.status = mpps_event::completed;
+    dataset1.end_date = "20241201";
+    dataset1.end_time = "100000";
+    handler->on_n_set(dataset1);
+
+    stats = handler->get_persistence_stats();
+    TEST_ASSERT(stats.completed_count == 1, "Should have 1 completed");
+    TEST_ASSERT(stats.in_progress_count == 1, "Should have 1 in progress");
+
+    // Discontinue another
+    dataset2.status = mpps_event::discontinued;
+    dataset2.end_date = "20241201";
+    dataset2.end_time = "103000";
+    handler->on_n_set(dataset2);
+
+    stats = handler->get_persistence_stats();
+    TEST_ASSERT(stats.discontinued_count == 1, "Should have 1 discontinued");
+    TEST_ASSERT(stats.in_progress_count == 0, "Should have 0 in progress");
+
+    handler->stop();
+    return true;
+}
+
+/**
+ * @brief Test new error codes for persistence
+ */
+bool test_persistence_error_codes() {
+    TEST_ASSERT(to_error_code(mpps_error::database_error) == -980,
+                "database_error should be -980");
+    TEST_ASSERT(to_error_code(mpps_error::record_not_found) == -981,
+                "record_not_found should be -981");
+    TEST_ASSERT(to_error_code(mpps_error::invalid_state_transition) == -982,
+                "invalid_state_transition should be -982");
+    TEST_ASSERT(to_error_code(mpps_error::persistence_disabled) == -983,
+                "persistence_disabled should be -983");
+
+    TEST_ASSERT(std::string(to_string(mpps_error::database_error)) ==
+                "Database operation failed",
+                "database_error string should match");
+    TEST_ASSERT(std::string(to_string(mpps_error::record_not_found)) ==
+                "MPPS record not found in database",
+                "record_not_found string should match");
+
+    return true;
+}
+
+/**
+ * @brief Test persistence configuration options
+ */
+bool test_persistence_configuration() {
+    mpps_handler_config config;
+
+    // Default values
+    TEST_ASSERT(config.enable_persistence == true,
+                "Persistence should be enabled by default");
+    TEST_ASSERT(config.database_path.empty(),
+                "Database path should be empty by default");
+    TEST_ASSERT(config.recover_on_startup == true,
+                "Recovery should be enabled by default");
+    TEST_ASSERT(config.max_recovery_age == std::chrono::hours{24},
+                "Max recovery age should be 24 hours");
+
+    // Custom values
+    config.enable_persistence = false;
+    config.database_path = "/custom/path/mpps.db";
+    config.recover_on_startup = false;
+    config.max_recovery_age = std::chrono::hours{48};
+
+    TEST_ASSERT(config.enable_persistence == false,
+                "Custom persistence setting");
+    TEST_ASSERT(config.database_path == "/custom/path/mpps.db",
+                "Custom database path");
+    TEST_ASSERT(config.recover_on_startup == false,
+                "Custom recovery setting");
+    TEST_ASSERT(config.max_recovery_age == std::chrono::hours{48},
+                "Custom recovery age");
+
+    return true;
+}
+
+// =============================================================================
 // Test Runner
 // =============================================================================
 
@@ -811,6 +1076,17 @@ int main() {
     // Concurrent access tests
     std::cout << "\n--- Concurrent Access Tests ---" << std::endl;
     RUN_TEST(test_handler_concurrent_events);
+
+    // Persistence tests (Issue #186)
+    std::cout << "\n--- Persistence Tests (Issue #186) ---" << std::endl;
+    RUN_TEST(test_persistence_enabled);
+    RUN_TEST(test_query_mpps_by_sop_instance_uid);
+    RUN_TEST(test_query_mpps_with_params);
+    RUN_TEST(test_get_active_mpps);
+    RUN_TEST(test_get_pending_mpps_for_station);
+    RUN_TEST(test_persistence_statistics);
+    RUN_TEST(test_persistence_error_codes);
+    RUN_TEST(test_persistence_configuration);
 
     // Summary
     std::cout << "\n========================================" << std::endl;
