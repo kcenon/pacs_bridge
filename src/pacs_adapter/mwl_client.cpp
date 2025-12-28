@@ -13,8 +13,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
+#include <ctime>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <thread>
 
@@ -172,6 +175,62 @@ to_worklist_query(const mwl_query_filter& filter) {
     }
 
     return query;
+}
+
+/**
+ * @brief Parse date string (YYYYMMDD) to system_clock time_point
+ *
+ * Converts a DICOM-format date string to a std::chrono time_point.
+ * This enables precise date-based worklist cleanup operations.
+ *
+ * @param date_str Date string in YYYYMMDD format
+ * @return time_point if parsing succeeds, nullopt otherwise
+ */
+[[nodiscard]] std::optional<std::chrono::system_clock::time_point>
+parse_date_to_timepoint(std::string_view date_str) {
+    // Validate length: YYYYMMDD (8 chars) or YYYY-MM-DD (10 chars)
+    if (date_str.length() != 8 && date_str.length() != 10) {
+        return std::nullopt;
+    }
+
+    std::tm tm = {};
+    std::string normalized(date_str);
+
+    // Handle YYYY-MM-DD format by removing dashes
+    if (date_str.length() == 10) {
+        normalized.erase(std::remove(normalized.begin(), normalized.end(), '-'),
+                        normalized.end());
+    }
+
+    if (normalized.length() != 8) {
+        return std::nullopt;
+    }
+
+    // Parse YYYYMMDD
+    try {
+        tm.tm_year = std::stoi(normalized.substr(0, 4)) - 1900;
+        tm.tm_mon = std::stoi(normalized.substr(4, 2)) - 1;
+        tm.tm_mday = std::stoi(normalized.substr(6, 2));
+        tm.tm_hour = 0;
+        tm.tm_min = 0;
+        tm.tm_sec = 0;
+        tm.tm_isdst = -1;  // Let mktime determine DST
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+
+    // Validate parsed values
+    if (tm.tm_year < 0 || tm.tm_mon < 0 || tm.tm_mon > 11 ||
+        tm.tm_mday < 1 || tm.tm_mday > 31) {
+        return std::nullopt;
+    }
+
+    auto time_t_val = std::mktime(&tm);
+    if (time_t_val == -1) {
+        return std::nullopt;
+    }
+
+    return std::chrono::system_clock::from_time_t(time_t_val);
 }
 
 }  // namespace
@@ -742,35 +801,41 @@ public:
             return std::unexpected(mwl_error::connection_failed);
         }
 
-        // Use pacs_system's cleanup_old_worklist_items API
-        // Convert date string to hours since epoch (approximate)
-        // Note: This is a simplified approach; a more accurate implementation
-        // would parse the date and calculate the exact duration
-        auto cleanup_result = db_->cleanup_old_worklist_items(std::chrono::hours(0));
+        // Parse date string (YYYYMMDD format) to time_point
+        // This provides exact date-based cleanup without timezone ambiguities
+        auto before_time = parse_date_to_timepoint(before_date);
+        if (!before_time) {
+            return std::unexpected(mwl_error::invalid_data);
+        }
+
+        // Use pacs_system's date-based cleanup API for precise cleanup
+        auto cleanup_result = db_->cleanup_worklist_items_before(*before_time);
         if (cleanup_result.is_err()) {
             return std::unexpected(mwl_error::cancel_failed);
         }
 
-        // For now, query entries before date and delete them individually
-        pacs::storage::worklist_query query;
-        query.scheduled_date_to = std::string(before_date);
-        query.include_all_status = true;
+        cancelled = cleanup_result.value();
 
-        auto query_result = db_->query_worklist(query);
-        if (query_result.is_ok()) {
-            for (const auto& wl_item : query_result.value()) {
-                auto delete_result = db_->delete_worklist_item(
-                    wl_item.step_id, wl_item.accession_no);
-                if (delete_result.is_ok()) {
-                    cancelled++;
-                    stats_.cancel_count++;
-                    monitoring::bridge_metrics_collector::instance()
-                        .record_mwl_entry_cancelled();
-                }
-            }
+        // Update statistics for each cancelled entry
+        for (size_t i = 0; i < cancelled; ++i) {
+            stats_.cancel_count++;
+            monitoring::bridge_metrics_collector::instance()
+                .record_mwl_entry_cancelled();
         }
 #else
         // Stub mode: use in-memory storage
+        // Validate date format (YYYYMMDD - 8 chars)
+        if (before_date.length() != 8) {
+            return std::unexpected(mwl_error::invalid_data);
+        }
+
+        // Check if all characters are digits
+        for (char c : before_date) {
+            if (!std::isdigit(static_cast<unsigned char>(c))) {
+                return std::unexpected(mwl_error::invalid_data);
+            }
+        }
+
         std::string before_date_str(before_date);
 
         auto it = entries_.begin();

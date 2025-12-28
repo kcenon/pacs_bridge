@@ -666,6 +666,62 @@ bool test_cancel_entries_before() {
     return true;
 }
 
+bool test_cancel_entries_before_invalid_date() {
+    mwl_client_config config;
+    mwl_client client(config);
+    client.connect();
+
+    // Empty date should fail
+    auto result = client.cancel_entries_before("");
+    TEST_ASSERT(!result.has_value(), "Empty date should fail");
+
+    // Invalid format should fail
+    result = client.cancel_entries_before("invalid");
+    TEST_ASSERT(!result.has_value(), "Invalid format should fail");
+
+    return true;
+}
+
+bool test_cancel_entries_before_various_formats() {
+    mwl_client_config config;
+    mwl_client client(config);
+    client.connect();
+
+    // Add test entry
+    auto item = create_test_mwl_item("FMTTEST001", "FMTPAT001");
+    item.scheduled_steps[0].scheduled_start_date = "20231115";
+    client.add_entry(item);
+
+    // YYYYMMDD format (standard DICOM)
+    auto result = client.cancel_entries_before("20241201");
+    TEST_ASSERT(result.has_value(), "YYYYMMDD format should succeed");
+
+    return true;
+}
+
+bool test_cancel_entries_before_exact_boundary() {
+    mwl_client_config config;
+    mwl_client client(config);
+    client.connect();
+
+    // Add entry with specific date
+    auto item = create_test_mwl_item("BOUND001", "BOUNDPAT001");
+    item.scheduled_steps[0].scheduled_start_date = "20240615";
+    client.add_entry(item);
+
+    // Cancel before exact same date - entry should remain (< not <=)
+    auto result = client.cancel_entries_before("20240615");
+    TEST_ASSERT(result.has_value(), "Boundary test should succeed");
+    TEST_ASSERT(client.exists("BOUND001"), "Entry at exact boundary should remain");
+
+    // Cancel before next day - entry should be cancelled
+    result = client.cancel_entries_before("20240616");
+    TEST_ASSERT(result.has_value(), "Day after boundary should succeed");
+    TEST_ASSERT(!client.exists("BOUND001"), "Entry before boundary should be cancelled");
+
+    return true;
+}
+
 // =============================================================================
 // Statistics Tests
 // =============================================================================
@@ -821,6 +877,9 @@ int main() {
     RUN_TEST(test_add_entries_bulk);
     RUN_TEST(test_add_entries_with_duplicates);
     RUN_TEST(test_cancel_entries_before);
+    RUN_TEST(test_cancel_entries_before_invalid_date);
+    RUN_TEST(test_cancel_entries_before_various_formats);
+    RUN_TEST(test_cancel_entries_before_exact_boundary);
 
     // Statistics Tests
     std::cout << "\n--- Statistics Tests ---" << std::endl;
