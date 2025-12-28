@@ -2852,7 +2852,7 @@ private:
 
 **Traces to:** IR-1 (mpps_scp), FR-3.2.1 - FR-3.2.5, SRS-PACS-002
 
-**Implementation Status:** ✅ Implemented (Issue #23)
+**Implementation Status:** ✅ Implemented (Issue #23, #186)
 
 ```cpp
 namespace pacs::bridge::pacs_adapter {
@@ -2918,6 +2918,12 @@ struct mpps_handler_config {
     std::string pacs_ae_title = "MPPS_SCP";
     bool auto_reconnect = true;
     std::chrono::seconds reconnect_delay{5};
+
+    // Persistence options (Issue #186)
+    bool enable_persistence = true;        // Enable database persistence
+    std::string database_path;             // Empty = use shared index_database
+    bool recover_on_startup = true;        // Recover pending MPPS on startup
+    std::chrono::hours max_recovery_age{24}; // Maximum age for recovery
 };
 
 /**
@@ -2925,6 +2931,7 @@ struct mpps_handler_config {
  *
  * Receives MPPS notifications from pacs_system and forwards to HL7.
  * Thread-safe with automatic reconnection support.
+ * Persists MPPS records to database for recovery (Issue #186).
  */
 class mpps_handler {
 public:
@@ -2967,6 +2974,42 @@ public:
      * @brief Get handler statistics
      */
     [[nodiscard]] virtual statistics get_statistics() const = 0;
+
+    // === Persistence Operations (Issue #186) ===
+
+    /**
+     * @brief Check if persistence is enabled
+     */
+    [[nodiscard]] virtual bool is_persistence_enabled() const noexcept = 0;
+
+    /**
+     * @brief Query MPPS by SOP Instance UID
+     */
+    [[nodiscard]] virtual std::expected<std::optional<mpps_dataset>, mpps_error>
+    query_mpps(std::string_view sop_instance_uid) const = 0;
+
+    /**
+     * @brief Query MPPS with filter parameters
+     */
+    [[nodiscard]] virtual std::expected<std::vector<mpps_dataset>, mpps_error>
+    query_mpps(const mpps_query_params& params) const = 0;
+
+    /**
+     * @brief Get all active (IN PROGRESS) MPPS records
+     */
+    [[nodiscard]] virtual std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_active_mpps() const = 0;
+
+    /**
+     * @brief Get pending MPPS for a specific station
+     */
+    [[nodiscard]] virtual std::expected<std::vector<mpps_dataset>, mpps_error>
+    get_pending_mpps_for_station(std::string_view station_ae_title) const = 0;
+
+    /**
+     * @brief Get persistence statistics
+     */
+    [[nodiscard]] virtual persistence_stats get_persistence_stats() const = 0;
 };
 
 } // namespace pacs::bridge::pacs_adapter
