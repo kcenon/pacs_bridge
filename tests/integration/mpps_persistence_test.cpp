@@ -78,7 +78,7 @@ bool test_n_create_persists_patient_data() {
     auto dataset = mpps_test_data_generator::create_in_progress();
     dataset.patient_id = "MPPS_PAT_FULL";
     dataset.patient_name = "PERSISTENCE^JOHN^MIDDLE";
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     auto query_result = handler->query_mpps(dataset.sop_instance_uid);
     PACS_TEST_ASSERT(query_result.has_value() && query_result->has_value(),
@@ -102,7 +102,7 @@ bool test_n_create_persists_timing() {
     auto dataset = mpps_test_data_generator::create_in_progress();
     dataset.start_date = "20241215";
     dataset.start_time = "143000";
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     auto query_result = handler->query_mpps(dataset.sop_instance_uid);
     PACS_TEST_ASSERT(query_result.has_value() && query_result->has_value(),
@@ -143,7 +143,7 @@ bool test_n_set_completed_updates_status() {
 
     // First create the record
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     // Then complete it
     dataset.status = pacs_adapter::mpps_event::completed;
@@ -174,7 +174,7 @@ bool test_n_set_discontinued_updates_status() {
     auto handler = create_test_handler();
 
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     dataset.status = pacs_adapter::mpps_event::discontinued;
     dataset.end_date = mpps_test_data_generator::get_today_date();
@@ -225,13 +225,13 @@ bool test_n_set_final_state_fails() {
     auto handler = create_test_handler();
 
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     // Complete the record
     dataset.status = pacs_adapter::mpps_event::completed;
     dataset.end_date = mpps_test_data_generator::get_today_date();
     dataset.end_time = mpps_test_data_generator::get_offset_time(30);
-    handler->on_n_set(dataset);
+    (void)handler->on_n_set(dataset);
 
     // Try to update again (should fail)
     dataset.status = pacs_adapter::mpps_event::discontinued;
@@ -257,7 +257,7 @@ bool test_query_by_sop_uid() {
     auto handler = create_test_handler();
 
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     auto result = handler->query_mpps(dataset.sop_instance_uid);
     PACS_TEST_ASSERT(result.has_value(), "Query should succeed");
@@ -280,9 +280,9 @@ bool test_query_with_filter() {
     auto dataset2 = mpps_test_data_generator::create_with_station("MR_SCANNER_1");
     auto dataset3 = mpps_test_data_generator::create_with_station("CT_SCANNER_1");
 
-    handler->on_n_create(dataset1);
-    handler->on_n_create(dataset2);
-    handler->on_n_create(dataset3);
+    (void)handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset3);
 
     // Query by station
     pacs_adapter::mpps_handler::mpps_query_params params;
@@ -309,14 +309,14 @@ bool test_query_by_status() {
 
     // Create in-progress and completed records
     auto in_progress = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(in_progress);
+    (void)handler->on_n_create(in_progress);
 
     auto completed = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(completed);
+    (void)handler->on_n_create(completed);
     completed.status = pacs_adapter::mpps_event::completed;
     completed.end_date = mpps_test_data_generator::get_today_date();
     completed.end_time = mpps_test_data_generator::get_offset_time(30);
-    handler->on_n_set(completed);
+    (void)handler->on_n_set(completed);
 
     // Query only in-progress
     pacs_adapter::mpps_handler::mpps_query_params params;
@@ -345,15 +345,15 @@ bool test_get_active_mpps() {
     auto active2 = mpps_test_data_generator::create_in_progress();
     auto completed = mpps_test_data_generator::create_in_progress();
 
-    handler->on_n_create(active1);
-    handler->on_n_create(active2);
-    handler->on_n_create(completed);
+    (void)handler->on_n_create(active1);
+    (void)handler->on_n_create(active2);
+    (void)handler->on_n_create(completed);
 
     // Complete one
     completed.status = pacs_adapter::mpps_event::completed;
     completed.end_date = mpps_test_data_generator::get_today_date();
     completed.end_time = mpps_test_data_generator::get_offset_time(30);
-    handler->on_n_set(completed);
+    (void)handler->on_n_set(completed);
 
     auto result = handler->get_active_mpps();
     PACS_TEST_ASSERT(result.has_value(), "Get active should succeed");
@@ -377,8 +377,8 @@ bool test_get_pending_for_station() {
     auto ct_active = mpps_test_data_generator::create_with_station("CT_SCANNER_1");
     auto mr_active = mpps_test_data_generator::create_with_station("MR_SCANNER_1");
 
-    handler->on_n_create(ct_active);
-    handler->on_n_create(mr_active);
+    (void)handler->on_n_create(ct_active);
+    (void)handler->on_n_create(mr_active);
 
     auto result = handler->get_pending_mpps_for_station("CT_SCANNER_1");
     PACS_TEST_ASSERT(result.has_value(), "Query should succeed");
@@ -408,20 +408,20 @@ bool test_persistence_statistics() {
     auto dataset1 = mpps_test_data_generator::create_in_progress();
     auto dataset2 = mpps_test_data_generator::create_in_progress();
 
-    handler->on_n_create(dataset1);
-    handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset2);
 
     // Complete one
     dataset1.status = pacs_adapter::mpps_event::completed;
     dataset1.end_date = mpps_test_data_generator::get_today_date();
     dataset1.end_time = mpps_test_data_generator::get_offset_time(30);
-    handler->on_n_set(dataset1);
+    (void)handler->on_n_set(dataset1);
 
     // Discontinue one
     dataset2.status = pacs_adapter::mpps_event::discontinued;
     dataset2.end_date = mpps_test_data_generator::get_today_date();
     dataset2.end_time = mpps_test_data_generator::get_offset_time(10);
-    handler->on_n_set(dataset2);
+    (void)handler->on_n_set(dataset2);
 
     auto stats = handler->get_persistence_stats();
     PACS_TEST_ASSERT(stats.total_persisted >= 2,
@@ -458,7 +458,7 @@ bool test_callback_on_n_create() {
         });
 
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     PACS_TEST_ASSERT(callback_invoked, "Callback should be invoked");
     PACS_TEST_ASSERT(received_event == pacs_adapter::mpps_event::in_progress,
@@ -485,12 +485,12 @@ bool test_callback_on_n_set_completed() {
         });
 
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     dataset.status = pacs_adapter::mpps_event::completed;
     dataset.end_date = mpps_test_data_generator::get_today_date();
     dataset.end_time = mpps_test_data_generator::get_offset_time(30);
-    handler->on_n_set(dataset);
+    (void)handler->on_n_set(dataset);
 
     PACS_TEST_ASSERT(last_event == pacs_adapter::mpps_event::completed,
                      "Last event should be COMPLETED");
@@ -517,13 +517,13 @@ bool test_handler_statistics() {
     auto dataset1 = mpps_test_data_generator::create_in_progress();
     auto dataset2 = mpps_test_data_generator::create_in_progress();
 
-    handler->on_n_create(dataset1);
-    handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset2);
 
     dataset1.status = pacs_adapter::mpps_event::completed;
     dataset1.end_date = mpps_test_data_generator::get_today_date();
     dataset1.end_time = mpps_test_data_generator::get_offset_time(30);
-    handler->on_n_set(dataset1);
+    (void)handler->on_n_set(dataset1);
 
     auto stats = handler->get_statistics();
     PACS_TEST_ASSERT(stats.n_create_count >= 2,
