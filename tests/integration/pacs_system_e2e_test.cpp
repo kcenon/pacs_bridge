@@ -20,6 +20,7 @@
 
 #include "pacs_system_test_base.h"
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <mutex>
