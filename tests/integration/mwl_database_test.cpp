@@ -65,7 +65,7 @@ bool test_add_entry_persists_to_database() {
 bool test_add_entry_with_full_patient_data() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = mwl_test_data_generator::create_sample_item();
     item.patient.patient_id = "FULL_PAT_001";
@@ -94,7 +94,7 @@ bool test_add_entry_with_full_patient_data() {
 bool test_add_entry_duplicate_rejected() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     std::string accession = pacs_system_test_fixture::generate_unique_accession();
     auto item1 = mwl_test_data_generator::create_item_with_accession(accession);
@@ -119,7 +119,7 @@ bool test_add_entry_duplicate_rejected() {
 bool test_add_entry_invalid_data_rejected() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     mapping::mwl_item invalid_item;  // Empty item with no accession
 
@@ -142,7 +142,7 @@ bool test_add_entry_invalid_data_rejected() {
 bool test_query_all_entries() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add multiple entries
     auto items = mwl_test_data_generator::create_batch(5);
@@ -168,14 +168,14 @@ bool test_query_all_entries() {
 bool test_query_by_patient_id() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     std::string unique_patient_id = "UNIQUE_PAT_" +
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 
     auto item = mwl_test_data_generator::create_item_with_patient(
         unique_patient_id, "UNIQUE^PATIENT");
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     pacs_adapter::mwl_query_filter filter;
     filter.patient_id = unique_patient_id;
@@ -197,16 +197,16 @@ bool test_query_by_patient_id() {
 bool test_query_by_modality() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add entries with different modalities
     auto ct_item = mwl_test_data_generator::create_item_with_modality("CT");
     auto mr_item = mwl_test_data_generator::create_item_with_modality("MR");
     auto us_item = mwl_test_data_generator::create_item_with_modality("US");
 
-    client.add_entry(ct_item);
-    client.add_entry(mr_item);
-    client.add_entry(us_item);
+    (void)client.add_entry(ct_item);
+    (void)client.add_entry(mr_item);
+    (void)client.add_entry(us_item);
 
     // Query CT modality
     pacs_adapter::mwl_query_filter filter;
@@ -233,7 +233,7 @@ bool test_query_by_modality() {
 bool test_query_by_scheduled_date() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     std::string today = mwl_test_data_generator::get_today_date();
     std::string tomorrow = mwl_test_data_generator::get_date_offset(1);
@@ -241,8 +241,8 @@ bool test_query_by_scheduled_date() {
     auto today_item = mwl_test_data_generator::create_item_with_date(today);
     auto tomorrow_item = mwl_test_data_generator::create_item_with_date(tomorrow);
 
-    client.add_entry(today_item);
-    client.add_entry(tomorrow_item);
+    (void)client.add_entry(today_item);
+    (void)client.add_entry(tomorrow_item);
 
     pacs_adapter::mwl_query_filter filter;
     filter.scheduled_date = today;
@@ -262,12 +262,12 @@ bool test_query_by_scheduled_date() {
 bool test_query_with_max_results() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add 10 entries
     auto items = mwl_test_data_generator::create_batch(10);
     for (const auto& item : items) {
-        client.add_entry(item);
+        (void)client.add_entry(item);
     }
 
     pacs_adapter::mwl_query_filter filter;
@@ -292,11 +292,11 @@ bool test_query_with_max_results() {
 bool test_update_entry_success() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = mwl_test_data_generator::create_sample_item();
     std::string accession = item.imaging_service_request.accession_number;
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     // Update patient name
     mapping::mwl_item updates;
@@ -321,7 +321,7 @@ bool test_update_entry_success() {
 bool test_update_entry_not_found() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     mapping::mwl_item updates;
     updates.patient.patient_name = "NEW^NAME";
@@ -345,11 +345,11 @@ bool test_update_entry_not_found() {
 bool test_cancel_entry_success() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = mwl_test_data_generator::create_sample_item();
     std::string accession = item.imaging_service_request.accession_number;
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     PACS_TEST_ASSERT(client.exists(accession), "Entry should exist");
 
@@ -369,7 +369,7 @@ bool test_cancel_entry_success() {
 bool test_cancel_entry_not_found() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto result = client.cancel_entry("NONEXISTENT_ACC");
     PACS_TEST_ASSERT(!result.has_value(), "Cancel should fail");
@@ -390,7 +390,7 @@ bool test_cancel_entry_not_found() {
 bool test_bulk_add_entries() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto items = mwl_test_data_generator::create_batch(10);
 
@@ -415,21 +415,21 @@ bool test_bulk_add_entries() {
 bool test_cancel_entries_before_date() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add old entry (30 days ago)
     auto old_item = mwl_test_data_generator::create_item_with_date(
         mwl_test_data_generator::get_date_offset(-30));
     std::string old_accession =
         old_item.imaging_service_request.accession_number;
-    client.add_entry(old_item);
+    (void)client.add_entry(old_item);
 
     // Add recent entry (today)
     auto recent_item = mwl_test_data_generator::create_item_with_date(
         mwl_test_data_generator::get_today_date());
     std::string recent_accession =
         recent_item.imaging_service_request.accession_number;
-    client.add_entry(recent_item);
+    (void)client.add_entry(recent_item);
 
     // Cancel entries before 7 days ago
     std::string cutoff = mwl_test_data_generator::get_date_offset(-7);
@@ -452,7 +452,7 @@ bool test_cancel_entries_before_date() {
 bool test_cancel_entries_before_invalid_date() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto result = client.cancel_entries_before("");
     PACS_TEST_ASSERT(!result.has_value(), "Empty date should fail");
@@ -494,10 +494,10 @@ bool test_connection_lifecycle() {
 bool test_reconnection() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = mwl_test_data_generator::create_sample_item();
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     auto reconnect_result = client.reconnect();
     PACS_TEST_ASSERT(reconnect_result.has_value(), "Reconnect should succeed");
@@ -523,23 +523,23 @@ bool test_reconnection() {
 bool test_statistics_tracking() {
     auto config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Perform various operations
     auto item1 = mwl_test_data_generator::create_sample_item();
     auto item2 = mwl_test_data_generator::create_sample_item();
 
-    client.add_entry(item1);
-    client.add_entry(item2);
+    (void)client.add_entry(item1);
+    (void)client.add_entry(item2);
 
     mapping::mwl_item updates;
     updates.patient.patient_name = "UPDATED";
-    client.update_entry(item1.imaging_service_request.accession_number, updates);
+    (void)client.update_entry(item1.imaging_service_request.accession_number, updates);
 
-    client.cancel_entry(item2.imaging_service_request.accession_number);
+    (void)client.cancel_entry(item2.imaging_service_request.accession_number);
 
     pacs_adapter::mwl_query_filter filter;
-    client.query(filter);
+    (void)client.query(filter);
 
     auto stats = client.get_statistics();
     PACS_TEST_ASSERT(stats.add_count >= 2, "Should have at least 2 adds");
