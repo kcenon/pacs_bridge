@@ -575,6 +575,21 @@ public:
             return validation;
         }
 
+        // Check if record exists
+        auto existing = db_ ? db_->find_mpps(dataset.sop_instance_uid)
+                            : std::nullopt;
+        if (!existing.has_value()) {
+            update_stats_error();
+            return std::unexpected(mpps_error::record_not_found);
+        }
+
+        // Check state transition validity - COMPLETED/DISCONTINUED are final
+        if (existing->status == "COMPLETED" ||
+            existing->status == "DISCONTINUED") {
+            update_stats_error();
+            return std::unexpected(mpps_error::invalid_state_transition);
+        }
+
         mpps_event event = dataset.status;
 
         // Update MPPS record in database
@@ -1171,15 +1186,33 @@ public:
             return validation;
         }
 
+        // Check if record exists in cache
+        std::optional<mpps_dataset> existing;
+        {
+            std::shared_lock lock(mpps_cache_mutex_);
+            auto it = mpps_cache_.find(dataset.sop_instance_uid);
+            if (it != mpps_cache_.end()) {
+                existing = it->second;
+            }
+        }
+
+        if (!existing.has_value()) {
+            update_stats_error();
+            return std::unexpected(mpps_error::record_not_found);
+        }
+
+        // Check state transition validity - COMPLETED/DISCONTINUED are final
+        if (existing->status == mpps_event::completed ||
+            existing->status == mpps_event::discontinued) {
+            update_stats_error();
+            return std::unexpected(mpps_error::invalid_state_transition);
+        }
+
         // Update MPPS cache for in-memory persistence
         cache_mpps(dataset);
 
         // Determine event type from status
         mpps_event event = dataset.status;
-        if (event == mpps_event::in_progress) {
-            // N-SET with IN PROGRESS is unusual but valid (status update)
-            // Some systems send this for intermediate updates
-        }
 
         // Update statistics
         {
