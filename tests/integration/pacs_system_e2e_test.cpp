@@ -50,9 +50,9 @@ public:
 
     size_t count_type(const std::string& type) const {
         std::lock_guard<std::mutex> lock(mutex_);
-        return std::count_if(
+        return static_cast<size_t>(std::count_if(
             messages_.begin(), messages_.end(),
-            [&type](const auto& msg) { return msg.first == type; });
+            [&type](const auto& msg) { return msg.first == type; }));
     }
 
     void clear() {
@@ -82,7 +82,7 @@ private:
 bool test_order_creates_mwl_entry() {
     auto mwl_config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client mwl_client(mwl_config);
-    mwl_client.connect();
+    (void)mwl_client.connect();
 
     // Simulate order data (would come from HL7 ORM^O01)
     std::string accession = pacs_system_test_fixture::generate_unique_accession();
@@ -118,7 +118,7 @@ bool test_order_creates_mwl_entry() {
 bool test_modality_queries_mwl() {
     auto mwl_config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client mwl_client(mwl_config);
-    mwl_client.connect();
+    (void)mwl_client.connect();
 
     // Create entries for different stations
     auto ct_item = mwl_test_data_generator::create_item_with_modality("CT");
@@ -131,8 +131,8 @@ bool test_modality_queries_mwl() {
         mr_item.scheduled_steps[0].scheduled_station_ae_title = "MR_SCANNER_1";
     }
 
-    mwl_client.add_entry(ct_item);
-    mwl_client.add_entry(mr_item);
+    (void)mwl_client.add_entry(ct_item);
+    (void)mwl_client.add_entry(mr_item);
 
     // Simulate CT modality querying
     pacs_adapter::mwl_query_filter filter;
@@ -236,7 +236,7 @@ bool test_mpps_discontinuation_workflow() {
 
     // Step 1: Create MPPS
     auto dataset = mpps_test_data_generator::create_in_progress();
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     // Step 2: Discontinue (patient refused)
     dataset.status = pacs_adapter::mpps_event::discontinued;
@@ -274,11 +274,11 @@ bool test_mwl_mpps_correlation() {
     // Create MWL entry
     auto mwl_config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client mwl_client(mwl_config);
-    mwl_client.connect();
+    (void)mwl_client.connect();
 
     std::string accession = pacs_system_test_fixture::generate_unique_accession();
     auto mwl_item = mwl_test_data_generator::create_item_with_accession(accession);
-    mwl_client.add_entry(mwl_item);
+    (void)mwl_client.add_entry(mwl_item);
 
     // Create MPPS handler
     auto mpps_handler = pacs_adapter::mpps_handler::create(
@@ -289,7 +289,7 @@ bool test_mwl_mpps_correlation() {
     mpps_dataset.accession_number = accession;
     mpps_dataset.patient_id = mwl_item.patient.patient_id;
 
-    mpps_handler->on_n_create(mpps_dataset);
+    (void)mpps_handler->on_n_create(mpps_dataset);
 
     // Query both by accession number
     pacs_adapter::mwl_query_filter mwl_filter;
@@ -344,9 +344,9 @@ bool test_concurrent_procedures() {
     auto mr_dataset = mpps_test_data_generator::create_with_station("MR_SCANNER_1");
     auto us_dataset = mpps_test_data_generator::create_with_station("US_SCANNER_1");
 
-    mpps_handler->on_n_create(ct_dataset);
-    mpps_handler->on_n_create(mr_dataset);
-    mpps_handler->on_n_create(us_dataset);
+    (void)mpps_handler->on_n_create(ct_dataset);
+    (void)mpps_handler->on_n_create(mr_dataset);
+    (void)mpps_handler->on_n_create(us_dataset);
 
     PACS_TEST_ASSERT(in_progress_count == 3,
                      "Should have 3 IN PROGRESS callbacks");
@@ -360,17 +360,17 @@ bool test_concurrent_procedures() {
     mr_dataset.status = pacs_adapter::mpps_event::completed;
     mr_dataset.end_date = mpps_test_data_generator::get_today_date();
     mr_dataset.end_time = mpps_test_data_generator::get_offset_time(20);
-    mpps_handler->on_n_set(mr_dataset);
+    (void)mpps_handler->on_n_set(mr_dataset);
 
     ct_dataset.status = pacs_adapter::mpps_event::completed;
     ct_dataset.end_date = mpps_test_data_generator::get_today_date();
     ct_dataset.end_time = mpps_test_data_generator::get_offset_time(40);
-    mpps_handler->on_n_set(ct_dataset);
+    (void)mpps_handler->on_n_set(ct_dataset);
 
     us_dataset.status = pacs_adapter::mpps_event::completed;
     us_dataset.end_date = mpps_test_data_generator::get_today_date();
     us_dataset.end_time = mpps_test_data_generator::get_offset_time(15);
-    mpps_handler->on_n_set(us_dataset);
+    (void)mpps_handler->on_n_set(us_dataset);
 
     PACS_TEST_ASSERT(completed_count == 3,
                      "Should have 3 COMPLETED callbacks");
@@ -404,7 +404,7 @@ bool test_workflow_resilience_on_error() {
 
     // Create valid procedure
     auto valid = mpps_test_data_generator::create_in_progress();
-    mpps_handler->on_n_create(valid);
+    (void)mpps_handler->on_n_create(valid);
 
     // Try to create invalid (will fail)
     pacs_adapter::mpps_dataset invalid;
@@ -413,7 +413,7 @@ bool test_workflow_resilience_on_error() {
 
     // Create another valid procedure
     auto valid2 = mpps_test_data_generator::create_in_progress();
-    mpps_handler->on_n_create(valid2);
+    (void)mpps_handler->on_n_create(valid2);
 
     PACS_TEST_ASSERT(successful_creates == 2,
                      "Should have 2 successful creates despite 1 failure");
@@ -432,7 +432,7 @@ bool test_workflow_resilience_on_error() {
 bool test_high_volume_workflow() {
     auto mwl_config = pacs_system_test_fixture::create_mwl_test_config();
     pacs_adapter::mwl_client mwl_client(mwl_config);
-    mwl_client.connect();
+    (void)mwl_client.connect();
 
     auto mpps_handler = pacs_adapter::mpps_handler::create(
         pacs_system_test_fixture::create_mpps_test_config());
@@ -450,18 +450,18 @@ bool test_high_volume_workflow() {
     // Create MWL entries and MPPS records
     for (size_t i = 0; i < num_procedures; ++i) {
         auto mwl_item = mwl_test_data_generator::create_sample_item();
-        mwl_client.add_entry(mwl_item);
+        (void)mwl_client.add_entry(mwl_item);
 
         auto mpps_dataset = mpps_test_data_generator::create_in_progress();
         mpps_dataset.accession_number =
             mwl_item.imaging_service_request.accession_number;
-        mpps_handler->on_n_create(mpps_dataset);
+        (void)mpps_handler->on_n_create(mpps_dataset);
 
         // Complete immediately
         mpps_dataset.status = pacs_adapter::mpps_event::completed;
         mpps_dataset.end_date = mpps_test_data_generator::get_today_date();
         mpps_dataset.end_time = mpps_test_data_generator::get_offset_time(30);
-        mpps_handler->on_n_set(mpps_dataset);
+        (void)mpps_handler->on_n_set(mpps_dataset);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
