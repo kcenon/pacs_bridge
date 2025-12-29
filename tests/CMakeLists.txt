@@ -488,6 +488,23 @@ add_integration_test(phase2_e2e_test "integration;e2e;phase2;mpps;mllp;recovery"
 add_integration_test(monitoring_integration_test "integration;monitoring;metrics;phase4" 180)
 
 # =============================================================================
+# pacs_system Integration Tests (Issue #188)
+# Tests pacs_bridge <-> pacs_system database operations
+# =============================================================================
+
+# MWL Database Integration Tests (Issue #192)
+# Tests MWL add/query/update/cancel operations with real database
+add_integration_test(mwl_database_test "integration;pacs_system;mwl;phase2" 300)
+
+# MPPS Persistence Integration Tests (Issue #193)
+# Tests MPPS record persistence, status updates, and recovery
+add_integration_test(mpps_persistence_test "integration;pacs_system;mpps;persistence;phase2" 300)
+
+# pacs_system E2E Workflow Tests (Issue #194)
+# Tests complete workflow: HL7 -> MWL -> MPPS -> HL7
+add_integration_test(pacs_system_e2e_test "integration;pacs_system;e2e;workflow;phase2" 600)
+
+# =============================================================================
 # Messaging Pattern Tests (Issue #146, #142)
 # =============================================================================
 
@@ -713,6 +730,11 @@ message(STATUS "  - mllp_connection_test (Issue #161)")
 message(STATUS "  - pacs_worklist_test (Issue #161)")
 message(STATUS "  - e2e_scenario_test (Issue #161)")
 message(STATUS "  - phase2_e2e_test (Issue #176)")
+message(STATUS "")
+message(STATUS "pacs_system Integration Tests (Issue #188):")
+message(STATUS "  - mwl_database_test (Issue #192)")
+message(STATUS "  - mpps_persistence_test (Issue #193)")
+message(STATUS "  - pacs_system_e2e_test (Issue #194)")
 message(STATUS "")
 message(STATUS "Phase 4 Integration Tests:")
 message(STATUS "  - monitoring_integration_test")

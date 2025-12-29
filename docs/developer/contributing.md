@@ -299,6 +299,21 @@ auto& message = result.value();
 | `failover_test.cpp` | RIS failover scenarios | `integration;failover` |
 | `disaster_recovery_test.cpp` | Network failures, message loss, retry logic, resilience | `integration;disaster-recovery;resilience` |
 
+#### pacs_system Integration Tests (Issue #188)
+
+Tests for pacs_bridge <-> pacs_system database operations:
+
+| Test File | Focus Area | Labels |
+|-----------|------------|--------|
+| `mwl_database_test.cpp` | MWL add/query/update/cancel with database | `integration;pacs_system;mwl` |
+| `mpps_persistence_test.cpp` | MPPS record persistence and status updates | `integration;pacs_system;mpps;persistence` |
+| `pacs_system_e2e_test.cpp` | Complete workflow: HL7->MWL->MPPS->HL7 | `integration;pacs_system;e2e;workflow` |
+
+Shared test infrastructure in `tests/integration/pacs_system_test_base.h`:
+- `mwl_test_data_generator` - Creates test MWL items
+- `mpps_test_data_generator` - Creates test MPPS datasets
+- `pacs_system_test_fixture` - Common setup with in-memory SQLite
+
 ### Writing Tests
 
 ```cpp
