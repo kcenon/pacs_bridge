@@ -33,6 +33,11 @@
 #include <string_view>
 #include <vector>
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 namespace pacs::bridge::pacs_adapter {
 
 // =============================================================================
@@ -412,6 +417,15 @@ struct mpps_handler_config {
 
     /** Maximum age for recovering pending MPPS (0 = no limit) */
     std::chrono::hours max_recovery_age{24};
+
+    // =========================================================================
+    // Executor Options (IExecutor integration)
+    // =========================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for task execution (nullptr = use internal std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 };
 
 // =============================================================================
