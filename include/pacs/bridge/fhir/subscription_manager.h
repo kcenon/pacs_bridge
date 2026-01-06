@@ -25,6 +25,11 @@
 #include <string>
 #include <vector>
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 namespace pacs::bridge::fhir {
 
 // =============================================================================
@@ -197,6 +202,11 @@ struct delivery_config {
 
     /** Enable delivery (can be disabled for testing) */
     bool enabled = true;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for delivery and retry task execution (nullptr = use internal std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 };
 
 // =============================================================================

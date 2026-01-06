@@ -24,6 +24,11 @@
 #include <memory>
 #include <string>
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 namespace pacs::bridge::monitoring {
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -146,6 +151,11 @@ public:
 
         /** Path for metrics endpoint */
         std::string metrics_path = "/metrics";
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        /** Optional executor for accept and handler task execution (nullptr = use internal std::thread) */
+        std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
     };
 
     /**

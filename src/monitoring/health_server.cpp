@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <future>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -49,6 +50,60 @@ constexpr socket_t INVALID_SOCKET_VALUE = -1;
 #endif
 
 namespace pacs::bridge::monitoring {
+
+// =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for health server accept loop execution
+ *
+ * Wraps a single accept iteration for execution via IExecutor.
+ */
+class health_accept_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit health_accept_job(std::function<void()> work_func)
+        : work_func_(std::move(work_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (work_func_) {
+            work_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "health_accept"; }
+
+private:
+    std::function<void()> work_func_;
+};
+
+/**
+ * @brief Job implementation for health server connection handler execution
+ *
+ * Wraps connection handling for execution via IExecutor.
+ */
+class health_handler_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit health_handler_job(std::function<void()> handler_func)
+        : handler_func_(std::move(handler_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (handler_func_) {
+            handler_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "health_handler"; }
+
+private:
+    std::function<void()> handler_func_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HTTP Utilities
@@ -196,7 +251,16 @@ public:
         // Start accept thread
         running_ = true;
         stop_requested_ = false;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            schedule_accept_job();
+        } else {
+            accept_thread_ = std::thread([this] { accept_loop(); });
+        }
+#else
         accept_thread_ = std::thread([this] { accept_loop(); });
+#endif
 
         return true;
     }
@@ -215,6 +279,24 @@ public:
             CLOSE_SOCKET(server_socket_);
             server_socket_ = INVALID_SOCKET_VALUE;
         }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based jobs to complete
+        if (config_.executor) {
+            if (accept_future_.valid()) {
+                accept_future_.wait_for(std::chrono::seconds{5});
+            }
+            {
+                std::lock_guard lock(handler_futures_mutex_);
+                for (auto& future : handler_futures_) {
+                    if (future.valid()) {
+                        future.wait_for(std::chrono::seconds{5});
+                    }
+                }
+                handler_futures_.clear();
+            }
+        }
+#endif
 
         // Wait for accept thread
         if (accept_thread_.joinable()) {
@@ -595,6 +677,106 @@ private:
     // Metrics
     mutable std::mutex metrics_mutex_;
     metrics_provider metrics_provider_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Futures for tracking executor-based jobs
+    std::future<void> accept_future_;
+    std::vector<std::future<void>> handler_futures_;
+    std::mutex handler_futures_mutex_;
+
+    /**
+     * @brief Schedule accept job using IExecutor
+     *
+     * Accepts connections and reschedules itself for continuous operation.
+     */
+    void schedule_accept_job() {
+        if (stop_requested_.load() || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<health_accept_job>([this]() {
+            if (stop_requested_.load()) {
+                return;
+            }
+
+            // Check max connections
+            {
+                std::lock_guard lock(stats_mutex_);
+                if (stats_.active_connections >= config_.max_connections) {
+                    // Reschedule with small delay
+                    schedule_accept_job();
+                    return;
+                }
+            }
+
+            // Accept with poll timeout
+#ifndef _WIN32
+            struct pollfd pfd {};
+            pfd.fd = server_socket_;
+            pfd.events = POLLIN;
+            int poll_result = poll(&pfd, 1, 100);  // 100ms timeout
+
+            if (poll_result <= 0 || stop_requested_.load()) {
+                schedule_accept_job();
+                return;
+            }
+#endif
+
+            struct sockaddr_in client_addr {};
+            socklen_t client_len = sizeof(client_addr);
+
+            socket_t client_socket = ::accept(
+                server_socket_,
+                reinterpret_cast<struct sockaddr*>(&client_addr),
+                &client_len);
+
+            if (client_socket == INVALID_SOCKET_VALUE) {
+                if (!stop_requested_.load()) {
+                    schedule_accept_job();
+                }
+                return;
+            }
+
+            // Update active connections
+            {
+                std::lock_guard lock(stats_mutex_);
+                stats_.active_connections++;
+            }
+
+            // Handle connection via executor
+            schedule_handler_job(client_socket);
+
+            // Reschedule accept
+            schedule_accept_job();
+        });
+
+        auto result = config_.executor->execute(std::move(job));
+        if (result.is_ok()) {
+            accept_future_ = std::move(result.value());
+        }
+    }
+
+    /**
+     * @brief Schedule handler job using IExecutor
+     *
+     * Handles a single client connection.
+     */
+    void schedule_handler_job(socket_t client_socket) {
+        if (!config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<health_handler_job>([this, client_socket]() {
+            handle_connection(client_socket);
+        });
+
+        auto result = config_.executor->execute(std::move(job));
+        if (result.is_ok()) {
+            std::lock_guard lock(handler_futures_mutex_);
+            handler_futures_.push_back(std::move(result.value()));
+        }
+    }
+#endif
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
