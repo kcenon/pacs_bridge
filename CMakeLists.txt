@@ -495,63 +495,73 @@ endif()
 # =============================================================================
 # Installation
 # =============================================================================
+#
+# Note: Installation is only available in standalone mode (BRIDGE_STANDALONE_BUILD=ON).
+# When using FetchContent (BRIDGE_STANDALONE_BUILD=OFF), dependencies cannot be exported
+# because FetchContent-downloaded targets are not exportable. This is a CMake limitation.
+# The non-standalone build is intended for development and local builds only.
 
 include(GNUInstallDirs)
 
-# Determine which targets to install
-set(PACS_BRIDGE_INSTALL_TARGETS
-    pacs_bridge
-    pacs_bridge_compile_options
-    pacs_bridge_dependencies
-)
+if(BRIDGE_STANDALONE_BUILD)
+    # Determine which targets to install
+    set(PACS_BRIDGE_INSTALL_TARGETS
+        pacs_bridge
+        pacs_bridge_compile_options
+        pacs_bridge_dependencies
+    )
 
-# Add stub library to install targets if in standalone mode
-if(BRIDGE_STANDALONE_BUILD AND TARGET kcenon_stubs)
-    list(APPEND PACS_BRIDGE_INSTALL_TARGETS kcenon_stubs)
+    # Add stub library to install targets
+    if(TARGET kcenon_stubs)
+        list(APPEND PACS_BRIDGE_INSTALL_TARGETS kcenon_stubs)
+    endif()
+
+    install(TARGETS ${PACS_BRIDGE_INSTALL_TARGETS}
+        EXPORT pacs_bridge_targets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    install(DIRECTORY include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.h"
+    )
+
+    install(EXPORT pacs_bridge_targets
+        FILE pacs_bridge-targets.cmake
+        NAMESPACE pacs::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pacs_bridge
+    )
+
+    # =============================================================================
+    # Package Configuration
+    # =============================================================================
+
+    include(CMakePackageConfigHelpers)
+
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config-version.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pacs_bridge-config.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config.cmake"
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pacs_bridge
+    )
+
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config-version.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pacs_bridge
+    )
+else()
+    message(STATUS "Installation is disabled in FetchContent mode (BRIDGE_STANDALONE_BUILD=OFF)")
+    message(STATUS "FetchContent dependencies cannot be exported - use standalone mode for installation")
 endif()
-
-install(TARGETS ${PACS_BRIDGE_INSTALL_TARGETS}
-    EXPORT pacs_bridge_targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
-install(DIRECTORY include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.h"
-)
-
-install(EXPORT pacs_bridge_targets
-    FILE pacs_bridge-targets.cmake
-    NAMESPACE pacs::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pacs_bridge
-)
-
-# =============================================================================
-# Package Configuration
-# =============================================================================
-
-include(CMakePackageConfigHelpers)
-
-write_basic_package_version_file(
-    "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config-version.cmake"
-    VERSION ${PROJECT_VERSION}
-    COMPATIBILITY SameMajorVersion
-)
-
-configure_package_config_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pacs_bridge-config.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config.cmake"
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pacs_bridge
-)
-
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/pacs_bridge-config-version.cmake"
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/pacs_bridge
-)
 
 # =============================================================================
 # Build Summary

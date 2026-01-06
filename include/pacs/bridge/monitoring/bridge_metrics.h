@@ -23,7 +23,7 @@
 #ifdef PACS_BRIDGE_HAS_MONITORING_SYSTEM
 #include <kcenon/monitoring/core/performance_monitor.h>
 #include <kcenon/monitoring/exporters/metric_exporters.h>
-#include <kcenon/monitoring/interfaces/monitoring_interface.h>
+#include <kcenon/monitoring/interfaces/monitoring_core.h>
 #endif
 
 namespace pacs::bridge::monitoring {

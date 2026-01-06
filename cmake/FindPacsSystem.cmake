@@ -62,11 +62,75 @@ if(BRIDGE_STANDALONE_BUILD)
 
 else()
     # =============================================================================
+    # Global Build Options for FetchContent Dependencies
+    # =============================================================================
+    # These must be set BEFORE FetchContent_MakeAvailable to take effect.
+    # Setting them here ensures all fetched dependencies have tests/examples disabled.
+
+    set(BUILD_TESTING OFF CACHE BOOL "Disable tests for fetched dependencies" FORCE)
+
+    # Common system options
+    set(COMMON_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(COMMON_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(COMMON_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(COMMON_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(COMMON_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
+    # Thread system options
+    set(THREAD_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(THREAD_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(THREAD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(THREAD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(THREAD_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
+    # Messaging system options
+    set(MESSAGING_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(MESSAGING_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(MESSAGING_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(MESSAGING_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(MESSAGING_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
+    # Container system options
+    set(CONTAINER_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(CONTAINER_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(CONTAINER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(CONTAINER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(CONTAINER_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
+    # Monitoring system options
+    set(MONITORING_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(MONITORING_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(MONITORING_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(MONITORING_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(MONITORING_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
+    # PACS system options
+    set(PACS_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(PACS_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(PACS_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(PACS_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(PACS_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
+    # =============================================================================
     # Component Fetching Function
     # =============================================================================
 
     function(fetch_kcenon_component name)
         string(TOUPPER ${name} NAME_UPPER)
+        string(TOLOWER ${name} NAME_LOWER)
+
+        # Check if already fetched by FetchContent (prevents duplicate targets)
+        FetchContent_GetProperties(${name})
+        if(${NAME_LOWER}_POPULATED)
+            message(STATUS "Skipping ${name} - already populated by FetchContent")
+            return()
+        endif()
+
+        # Check if target already exists (may have been added by another dependency)
+        if(TARGET ${name})
+            message(STATUS "Skipping ${name} - target already exists")
+            return()
+        endif()
 
         # Check if already available via find_package
         find_package(${name} QUIET CONFIG)
@@ -86,11 +150,6 @@ else()
                 GIT_SHALLOW TRUE
             )
 
-            # Set options before making available
-            set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-            set(${NAME_UPPER}_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-            set(${NAME_UPPER}_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-
             FetchContent_MakeAvailable(${name})
 
             message(STATUS "Fetched ${name} successfully")
@@ -106,14 +165,53 @@ else()
     # Common system (always required for logging)
     fetch_kcenon_component(common_system)
 
+    # Set common_system paths for downstream dependencies.
+    # Different packages use different variable names, so we set multiple:
+    #   - COMMON_SYSTEM_INCLUDE_DIR: Used by thread_system
+    #   - COMMON_SYSTEM_ROOT: Used by pacs_system (environment variable style)
+    if(common_system_SOURCE_DIR)
+        set(COMMON_SYSTEM_INCLUDE_DIR "${common_system_SOURCE_DIR}/include"
+            CACHE PATH "common_system include directory" FORCE)
+        # Also set as environment variable for packages that check ENV{COMMON_SYSTEM_ROOT}
+        set(ENV{COMMON_SYSTEM_ROOT} "${common_system_SOURCE_DIR}")
+        # Set CMake variable as well for packages that check CMake variable
+        set(COMMON_SYSTEM_ROOT "${common_system_SOURCE_DIR}" CACHE PATH "common_system root directory" FORCE)
+        message(STATUS "Set COMMON_SYSTEM_INCLUDE_DIR: ${COMMON_SYSTEM_INCLUDE_DIR}")
+        message(STATUS "Set COMMON_SYSTEM_ROOT: ${COMMON_SYSTEM_ROOT}")
+    endif()
+
     # Thread system (always required for thread pools)
     fetch_kcenon_component(thread_system)
+
+    # Set thread_system paths for downstream dependencies
+    if(thread_system_SOURCE_DIR)
+        set(THREAD_SYSTEM_INCLUDE_DIR "${thread_system_SOURCE_DIR}/include"
+            CACHE PATH "thread_system include directory" FORCE)
+        set(ENV{THREAD_SYSTEM_ROOT} "${thread_system_SOURCE_DIR}")
+        set(THREAD_SYSTEM_ROOT "${thread_system_SOURCE_DIR}" CACHE PATH "thread_system root directory" FORCE)
+    endif()
 
     # Messaging system (required for network communication)
     fetch_kcenon_component(messaging_system)
 
+    # Set messaging_system paths for downstream dependencies
+    if(messaging_system_SOURCE_DIR)
+        set(MESSAGING_SYSTEM_INCLUDE_DIR "${messaging_system_SOURCE_DIR}/include"
+            CACHE PATH "messaging_system include directory" FORCE)
+        set(ENV{MESSAGING_SYSTEM_ROOT} "${messaging_system_SOURCE_DIR}")
+        set(MESSAGING_SYSTEM_ROOT "${messaging_system_SOURCE_DIR}" CACHE PATH "messaging_system root directory" FORCE)
+    endif()
+
     # Container system (required for data structures)
     fetch_kcenon_component(container_system)
+
+    # Set container_system paths for downstream dependencies
+    if(container_system_SOURCE_DIR)
+        set(CONTAINER_SYSTEM_INCLUDE_DIR "${container_system_SOURCE_DIR}/include"
+            CACHE PATH "container_system include directory" FORCE)
+        set(ENV{CONTAINER_SYSTEM_ROOT} "${container_system_SOURCE_DIR}")
+        set(CONTAINER_SYSTEM_ROOT "${container_system_SOURCE_DIR}" CACHE PATH "container_system root directory" FORCE)
+    endif()
 
     # Monitoring system (optional, for metrics and observability)
     option(BRIDGE_BUILD_MONITORING "Enable monitoring_system integration for metrics export" ON)
