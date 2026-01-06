@@ -25,6 +25,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <future>
 #include <mutex>
 #include <queue>
 #include <set>
@@ -60,6 +61,37 @@ constexpr socket_t INVALID_SOCKET_VALUE = -1;
 #endif
 
 namespace pacs::bridge::mllp {
+
+// =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for health check execution
+ *
+ * Wraps a single health check iteration for execution via IExecutor.
+ */
+class mllp_health_check_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit mllp_health_check_job(std::function<void()> check_func)
+        : check_func_(std::move(check_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (check_func_) {
+            check_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "mllp_health_check"; }
+
+private:
+    std::function<void()> check_func_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // MLLP Client Implementation
@@ -896,14 +928,29 @@ public:
             create_connection();
         }
 
-        // Start health check thread
+        // Start health check
         running_ = true;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            schedule_health_check();
+        } else {
+            health_check_thread_ = std::thread([this] { health_check_loop(); });
+        }
+#else
         health_check_thread_ = std::thread([this] { health_check_loop(); });
+#endif
     }
 
     ~impl() {
         running_ = false;
         cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based health check to complete
+        if (config_.executor && health_check_future_.valid()) {
+            health_check_future_.wait_for(std::chrono::seconds{5});
+        }
+#endif
 
         if (health_check_thread_.joinable()) {
             health_check_thread_.join();
@@ -1008,6 +1055,61 @@ private:
         }
     }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Schedule health check using IExecutor with delayed execution
+     */
+    void schedule_health_check() {
+        if (!running_ || !config_.executor) {
+            return;
+        }
+
+        auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(
+            config_.health_check_interval);
+
+        auto job = std::make_unique<mllp_health_check_job>([this]() {
+            if (!running_) {
+                return;
+            }
+
+            // Perform health check
+            {
+                std::lock_guard lock(mutex_);
+
+                // Check and close idle connections that are stale
+                std::queue<std::unique_ptr<mllp_client>> valid_connections;
+
+                while (!idle_connections_.empty()) {
+                    auto client = std::move(idle_connections_.front());
+                    idle_connections_.pop();
+
+                    if (client->is_connected()) {
+                        valid_connections.push(std::move(client));
+                    } else {
+                        total_closed_++;
+                    }
+                }
+
+                idle_connections_ = std::move(valid_connections);
+
+                // Ensure minimum connections
+                while (idle_connections_.size() + active_connections_.size() <
+                       config_.min_connections) {
+                    create_connection();
+                }
+            }
+
+            // Reschedule next health check
+            schedule_health_check();
+        });
+
+        auto result = config_.executor->execute_delayed(std::move(job), delay);
+        if (result) {
+            health_check_future_ = std::move(*result);
+        }
+    }
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
+
     void health_check_loop() {
         while (running_) {
             std::this_thread::sleep_for(config_.health_check_interval);
@@ -1017,7 +1119,6 @@ private:
             std::lock_guard lock(mutex_);
 
             // Check and close idle connections that are stale
-            size_t idle_count = idle_connections_.size();
             std::queue<std::unique_ptr<mllp_client>> valid_connections;
 
             while (!idle_connections_.empty()) {
@@ -1050,6 +1151,11 @@ private:
 
     std::atomic<bool> running_{false};
     std::thread health_check_thread_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Future for tracking executor-based health check job
+    std::future<void> health_check_future_;
+#endif
 
     size_t total_created_ = 0;
     size_t total_closed_ = 0;

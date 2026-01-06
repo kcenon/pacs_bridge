@@ -26,6 +26,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <future>
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
@@ -58,6 +59,37 @@ constexpr socket_t INVALID_SOCKET_VALUE = -1;
 #endif
 
 namespace pacs::bridge::mllp {
+
+// =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for session handling
+ *
+ * Wraps a session processing task for execution via IExecutor.
+ */
+class mllp_session_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit mllp_session_job(std::function<void()> handler)
+        : handler_(std::move(handler)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (handler_) {
+            handler_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "mllp_session"; }
+
+private:
+    std::function<void()> handler_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // Internal Session State
@@ -246,7 +278,7 @@ public:
 
         close_all_sessions_internal(false);
 
-        // Wait for all session threads to complete
+        // Wait for all session threads/futures to complete
         {
             std::unique_lock lock(threads_mutex_);
             for (auto& t : session_threads_) {
@@ -255,6 +287,16 @@ public:
                 }
             }
             session_threads_.clear();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+            // Wait for executor-based session tasks
+            for (auto& f : session_futures_) {
+                if (f.valid()) {
+                    f.wait_for(std::chrono::seconds{5});
+                }
+            }
+            session_futures_.clear();
+#endif
         }
 
         // Cleanup TLS
@@ -639,13 +681,31 @@ private:
                 metrics.set_mllp_active_connections(sessions_.size());
             }
 
-            // Start session handler thread
+            // Start session handler
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+            if (config_.executor) {
+                auto job = std::make_unique<mllp_session_job>([this, session_id] {
+                    handle_session(session_id);
+                });
+                auto result = config_.executor->execute(std::move(job));
+                if (result) {
+                    std::lock_guard lock(threads_mutex_);
+                    session_futures_.push_back(std::move(*result));
+                }
+            } else {
+                std::lock_guard lock(threads_mutex_);
+                session_threads_.emplace_back([this, session_id] {
+                    handle_session(session_id);
+                });
+            }
+#else
             {
                 std::lock_guard lock(threads_mutex_);
                 session_threads_.emplace_back([this, session_id] {
                     handle_session(session_id);
                 });
             }
+#endif
         }
     }
 
@@ -920,6 +980,11 @@ private:
     std::thread accept_thread_;
     std::mutex threads_mutex_;
     std::vector<std::thread> session_threads_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Futures for executor-based session tasks
+    std::vector<std::future<void>> session_futures_;
+#endif
 
     // Sessions
     mutable std::shared_mutex sessions_mutex_;

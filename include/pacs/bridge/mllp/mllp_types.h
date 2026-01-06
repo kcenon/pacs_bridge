@@ -22,9 +22,15 @@
 
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
+
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
 
 namespace pacs::bridge::mllp {
 
@@ -156,6 +162,11 @@ struct mllp_server_config {
 
     /** TLS configuration (disabled by default) */
     security::tls_config tls;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for task execution (nullptr = use internal std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 
     /** Validate configuration */
     [[nodiscard]] bool is_valid() const noexcept {

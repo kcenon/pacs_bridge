@@ -298,6 +298,11 @@ struct mllp_pool_config {
 
     /** Health check interval */
     std::chrono::seconds health_check_interval{30};
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for task execution (nullptr = use internal std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 };
 
 /**
