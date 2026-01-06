@@ -1,9 +1,15 @@
 /**
  * @file exporter_factory.cpp
  * @brief Implementation of trace exporter factory
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/208
  */
 
 #include "pacs/bridge/tracing/exporter_factory.h"
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include "pacs/bridge/integration/executor_adapter.h"
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -196,7 +202,25 @@ public:
         : inner_(std::move(inner))
         , config_(config)
         , running_(true)
+        , use_executor_(false)
         , export_thread_(&impl::export_loop, this) {}
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    impl(std::unique_ptr<trace_exporter> inner,
+         std::shared_ptr<kcenon::common::interfaces::IExecutor> executor,
+         const batch_config& config)
+        : inner_(std::move(inner))
+        , config_(config)
+        , executor_(std::move(executor))
+        , running_(true)
+        , use_executor_(executor_ && executor_->is_running()) {
+        if (use_executor_) {
+            schedule_export_task();
+        } else {
+            export_thread_ = std::thread(&impl::export_loop, this);
+        }
+    }
+#endif
 
     ~impl() {
         shutdown();
@@ -259,9 +283,9 @@ public:
         // Flush remaining spans
         flush(std::chrono::milliseconds{5000});
 
-        // Stop export thread
+        // Stop export thread (only if using std::thread)
         queue_cv_.notify_all();
-        if (export_thread_.joinable()) {
+        if (!use_executor_ && export_thread_.joinable()) {
             export_thread_.join();
         }
 
@@ -361,7 +385,12 @@ private:
     std::unique_ptr<trace_exporter> inner_;
     batch_config config_;
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor_;
+#endif
+
     std::atomic<bool> running_;
+    bool use_executor_ = false;
     std::thread export_thread_;
 
     mutable std::mutex queue_mutex_;
@@ -372,11 +401,65 @@ private:
 
     mutable std::mutex stats_mutex_;
     exporter_statistics stats_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    void schedule_export_task() {
+        if (!running_ || !executor_ || !executor_->is_running()) {
+            return;
+        }
+
+        auto job = std::make_unique<integration::lambda_job>(
+            [this]() -> kcenon::common::VoidResult {
+                if (!running_) {
+                    return kcenon::common::VoidResult(std::monostate{});
+                }
+
+                std::vector<span_data> batch;
+
+                // Extract batch
+                {
+                    std::unique_lock lock(queue_mutex_);
+
+                    while (!queue_.empty() && batch.size() < config_.max_batch_size) {
+                        batch.push_back(std::move(queue_.front()));
+                        queue_.pop();
+                    }
+                }
+
+                // Export batch
+                if (!batch.empty()) {
+                    export_batch_with_retry(batch);
+                }
+
+                // Notify flush completion
+                if (flush_requested_) {
+                    flush_complete_cv_.notify_all();
+                }
+
+                // Schedule next export task
+                schedule_export_task();
+
+                return kcenon::common::VoidResult(std::monostate{});
+            },
+            "batch_exporter",
+            0);
+
+        executor_->execute_delayed(std::move(job), config_.max_export_delay);
+    }
+#endif
 };
 
 batch_exporter::batch_exporter(std::unique_ptr<trace_exporter> inner,
                                const batch_config& config)
     : pimpl_(std::make_unique<impl>(std::move(inner), config)) {}
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+batch_exporter::batch_exporter(
+    std::unique_ptr<trace_exporter> inner,
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor,
+    const batch_config& config)
+    : pimpl_(std::make_unique<impl>(std::move(inner), std::move(executor), config)) {}
+#endif
 
 batch_exporter::~batch_exporter() = default;
 

@@ -52,6 +52,10 @@
 #include "config_loader.h"
 #include "pacs/bridge/concepts/bridge_concepts.h"
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 #include <atomic>
 #include <chrono>
 #include <concepts>
@@ -147,6 +151,19 @@ public:
     config_manager(const bridge_config& initial_config,
                    const std::filesystem::path& config_path);
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Constructor with initial configuration and executor (Issue #208)
+     *
+     * @param initial_config The initial configuration to manage
+     * @param config_path Path to configuration file for reloads
+     * @param executor IExecutor for file watcher task execution
+     */
+    config_manager(const bridge_config& initial_config,
+                   const std::filesystem::path& config_path,
+                   std::shared_ptr<kcenon::common::interfaces::IExecutor> executor);
+#endif
+
     /**
      * @brief Constructor with configuration file path
      *
@@ -156,6 +173,20 @@ public:
      * @throws std::runtime_error if configuration loading fails
      */
     explicit config_manager(const std::filesystem::path& config_path);
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Constructor with configuration file path and executor (Issue #208)
+     *
+     * Loads the configuration from the specified file.
+     *
+     * @param config_path Path to configuration file
+     * @param executor IExecutor for file watcher task execution
+     * @throws std::runtime_error if configuration loading fails
+     */
+    config_manager(const std::filesystem::path& config_path,
+                   std::shared_ptr<kcenon::common::interfaces::IExecutor> executor);
+#endif
 
     /**
      * @brief Destructor
