@@ -21,13 +21,15 @@ namespace pacs::bridge::integration {
 thread_pool_executor_adapter::thread_pool_executor_adapter(
     std::shared_ptr<kcenon::thread::thread_pool> pool)
     : pool_(std::move(pool))
-    , worker_count_(pool_ ? pool_->worker_count() : 0) {
+    , worker_count_(pool_ ? pool_->get_thread_count() : 0) {
     start_delay_thread();
 }
 
 thread_pool_executor_adapter::thread_pool_executor_adapter(std::size_t worker_count)
-    : pool_(std::make_shared<kcenon::thread::thread_pool>(worker_count))
+    : pool_(std::make_shared<kcenon::thread::thread_pool>("executor_pool"))
     , worker_count_(worker_count) {
+    // Note: thread_pool manages its own workers internally via start()
+    // The worker_count is stored for reporting purposes
     start_delay_thread();
 }
 

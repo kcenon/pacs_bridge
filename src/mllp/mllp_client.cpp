@@ -82,7 +82,7 @@ public:
         if (check_func_) {
             check_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "mllp_health_check"; }
@@ -1104,8 +1104,8 @@ private:
         });
 
         auto result = config_.executor->execute_delayed(std::move(job), delay);
-        if (result) {
-            health_check_future_ = std::move(*result);
+        if (result.is_ok()) {
+            health_check_future_ = std::move(result.value());
         }
     }
 #endif  // PACS_BRIDGE_STANDALONE_BUILD

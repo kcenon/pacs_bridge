@@ -333,6 +333,15 @@ private:
     void worker_loop();
     void delay_thread_loop();
 
+    struct delayed_task {
+        std::chrono::steady_clock::time_point execute_at;
+        std::function<void()> task;
+
+        bool operator>(const delayed_task& other) const {
+            return execute_at > other.execute_at;
+        }
+    };
+
     std::size_t worker_count_;
     std::vector<std::thread> workers_;
     std::thread delay_thread_;
@@ -348,15 +357,6 @@ private:
 
     std::atomic<bool> running_{true};
     std::atomic<std::size_t> pending_count_{0};
-
-    struct delayed_task {
-        std::chrono::steady_clock::time_point execute_at;
-        std::function<void()> task;
-
-        bool operator>(const delayed_task& other) const {
-            return execute_at > other.execute_at;
-        }
-    };
 };
 
 // =============================================================================

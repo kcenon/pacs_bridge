@@ -750,7 +750,7 @@ healthcare_audit_logger& global_healthcare_audit_logger() {
 
 void init_global_healthcare_audit_logger(const healthcare_audit_config& config) {
     g_audit_logger = std::make_unique<healthcare_audit_logger>(config);
-    g_audit_logger->start();
+    (void)g_audit_logger->start();
 }
 
 void shutdown_global_healthcare_audit_logger() {
