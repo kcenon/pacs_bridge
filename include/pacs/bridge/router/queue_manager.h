@@ -28,6 +28,11 @@
 #include <string_view>
 #include <vector>
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 namespace pacs::bridge::router {
 
 // =============================================================================
@@ -188,6 +193,11 @@ struct queue_config {
 
     /** Enable WAL mode for better concurrent access */
     bool enable_wal_mode = true;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for worker and cleanup task execution (nullptr = use internal std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 
     /**
      * @brief Validate configuration

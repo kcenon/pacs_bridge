@@ -27,6 +27,11 @@
 #include "pacs/bridge/router/outbound_router.h"
 #include "pacs/bridge/router/queue_manager.h"
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 #include <chrono>
 #include <expected>
 #include <functional>
@@ -311,6 +316,11 @@ struct mpps_hl7_workflow_config {
 
     /** DICOM to HL7 mapper configuration */
     mapping::dicom_hl7_mapper_config mapper_config;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for async worker task execution (nullptr = use internal std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 
     /**
      * @brief Validate configuration

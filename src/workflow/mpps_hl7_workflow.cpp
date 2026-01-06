@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <future>
 #include <mutex>
 #include <queue>
 #include <random>
@@ -18,6 +19,37 @@
 #include <utility>
 
 namespace pacs::bridge::workflow {
+
+// =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for async workflow worker execution
+ *
+ * Wraps a single worker iteration for execution via IExecutor.
+ */
+class mpps_workflow_worker_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit mpps_workflow_worker_job(std::function<void()> work_func)
+        : work_func_(std::move(work_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (work_func_) {
+            work_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "mpps_workflow_worker"; }
+
+private:
+    std::function<void()> work_func_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // workflow_result Implementation
@@ -105,9 +137,23 @@ public:
         // Start async workers if configured
         if (config_.async_delivery) {
             stop_workers_ = false;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+            if (config_.executor) {
+                // Use IExecutor for worker tasks
+                for (size_t i = 0; i < config_.async_workers; ++i) {
+                    schedule_worker_job();
+                }
+            } else {
+                // Fallback to std::thread
+                for (size_t i = 0; i < config_.async_workers; ++i) {
+                    workers_.emplace_back([this] { worker_loop(); });
+                }
+            }
+#else
             for (size_t i = 0; i < config_.async_workers; ++i) {
                 workers_.emplace_back([this] { worker_loop(); });
             }
+#endif
         }
 
         running_ = true;
@@ -126,6 +172,18 @@ public:
         // Stop async workers
         stop_workers_ = true;
         queue_cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based worker jobs to complete
+        if (config_.executor) {
+            for (auto& future : worker_futures_) {
+                if (future.valid()) {
+                    future.wait_for(std::chrono::seconds{5});
+                }
+            }
+            worker_futures_.clear();
+        }
+#endif
 
         for (auto& worker : workers_) {
             if (worker.joinable()) {
@@ -558,6 +616,60 @@ private:
         }
     }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Schedule worker job using IExecutor
+     *
+     * Processes a single work item and reschedules itself for continuous operation.
+     */
+    void schedule_worker_job() {
+        if (stop_workers_ || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<mpps_workflow_worker_job>([this]() {
+            if (stop_workers_) {
+                return;
+            }
+
+            // Try to get a work item
+            async_work_item item;
+            {
+                std::unique_lock lock(queue_mutex_);
+                // Use timed wait to allow periodic checks for stop signal
+                queue_cv_.wait_for(lock, std::chrono::milliseconds{100},
+                                   [this] { return stop_workers_ || !async_queue_.empty(); });
+
+                if (stop_workers_) {
+                    return;
+                }
+
+                if (!async_queue_.empty()) {
+                    item = std::move(async_queue_.front());
+                    async_queue_.pop();
+                }
+            }
+
+            // Process the item if we got one
+            if (item.callback || !item.mpps.sop_instance_uid.empty()) {
+                auto result = process(item.event, item.mpps);
+                if (item.callback) {
+                    item.callback(result ? *result
+                                         : workflow_result::error("", to_string(result.error())));
+                }
+            }
+
+            // Reschedule for next iteration
+            schedule_worker_job();
+        });
+
+        auto result = config_.executor->execute(std::move(job));
+        if (result) {
+            worker_futures_.push_back(std::move(*result));
+        }
+    }
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
+
     // =========================================================================
     // Member Variables
     // =========================================================================
@@ -589,6 +701,11 @@ private:
     std::mutex queue_mutex_;
     std::condition_variable queue_cv_;
     std::vector<std::thread> workers_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Futures for tracking executor-based worker jobs
+    std::vector<std::future<void>> worker_futures_;
+#endif
 };
 
 // =============================================================================
