@@ -3731,6 +3731,10 @@ public:
         std::string bind_address = "0.0.0.0";
         int connection_timeout_seconds = 30;
         size_t max_connections = 100;
+        // Optional IExecutor for thread management (see #207)
+        // When provided, uses executor for accept and handler threads
+        // When nullptr, uses internal std::thread
+        std::shared_ptr<IExecutor> executor = nullptr;
     };
 
     health_server(health_checker& checker, const config& cfg = {});
