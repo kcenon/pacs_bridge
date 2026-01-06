@@ -2230,6 +2230,88 @@ public:
 } // namespace pacs::bridge::integration
 ```
 
+### DES-INT-004: executor_adapter
+
+**추적 대상:** IR-2 (common_system), Issue #198, Issue #210
+
+```cpp
+namespace pacs::bridge::integration {
+
+/**
+ * @brief IExecutor 어댑터 구현
+ *
+ * common_system의 IExecutor 인터페이스와 pacs_bridge의 스레드 인프라를
+ * 연결하는 어댑터를 제공합니다. 워크플로우 모듈이 기존 스레드 풀 구현을
+ * 활용하면서 표준화된 IExecutor 인터페이스를 사용할 수 있게 합니다.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/198
+ * @see https://github.com/kcenon/pacs_bridge/issues/210
+ */
+
+/**
+ * @class lambda_job
+ * @brief 호출 가능한 객체를 래핑하는 IJob 구현
+ */
+class lambda_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit lambda_job(
+        std::function<kcenon::common::VoidResult()> func,
+        std::string name = "lambda_job",
+        int priority = 0);
+
+    kcenon::common::VoidResult execute() override;
+    [[nodiscard]] std::string get_name() const override;
+    [[nodiscard]] int get_priority() const override;
+};
+
+/**
+ * @class simple_executor
+ * @brief 내부 스레드 풀을 가진 경량 IExecutor 구현
+ */
+class simple_executor : public kcenon::common::interfaces::IExecutor {
+public:
+    explicit simple_executor(std::size_t worker_count = std::thread::hardware_concurrency());
+
+    [[nodiscard]] kcenon::common::Result<std::future<void>> execute(
+        std::unique_ptr<kcenon::common::interfaces::IJob>&& job) override;
+
+    [[nodiscard]] kcenon::common::Result<std::future<void>> execute_delayed(
+        std::unique_ptr<kcenon::common::interfaces::IJob>&& job,
+        std::chrono::milliseconds delay) override;
+
+    [[nodiscard]] std::size_t worker_count() const override;
+    [[nodiscard]] bool is_running() const override;
+    [[nodiscard]] std::size_t pending_tasks() const override;
+    void shutdown(bool wait_for_completion = true) override;
+};
+
+/**
+ * @class thread_pool_executor_adapter
+ * @brief kcenon::thread::thread_pool을 사용하는 IExecutor 구현
+ */
+class thread_pool_executor_adapter : public kcenon::common::interfaces::IExecutor {
+public:
+    explicit thread_pool_executor_adapter(
+        std::shared_ptr<kcenon::thread::thread_pool> pool);
+
+    // ... IExecutor 인터페이스 구현
+};
+
+/**
+ * @brief 워커 수로 executor를 생성하는 팩토리 함수
+ */
+[[nodiscard]] std::shared_ptr<kcenon::common::interfaces::IExecutor>
+make_executor(std::size_t worker_count = std::thread::hardware_concurrency());
+
+/**
+ * @brief 기존 스레드 풀에서 executor를 생성하는 팩토리 함수
+ */
+[[nodiscard]] std::shared_ptr<kcenon::common::interfaces::IExecutor>
+make_executor(std::shared_ptr<kcenon::thread::thread_pool> pool);
+
+} // namespace pacs::bridge::integration
+```
+
 ---
 
 *문서 버전: 0.1.0.0*

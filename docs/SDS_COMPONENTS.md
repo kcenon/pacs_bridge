@@ -3452,6 +3452,89 @@ public:
 } // namespace pacs::bridge::integration
 ```
 
+### DES-INT-004: executor_adapter
+
+**Traces to:** IR-2 (common_system), Issue #198, Issue #210
+
+```cpp
+namespace pacs::bridge::integration {
+
+/**
+ * @brief IExecutor adapter implementations
+ *
+ * Provides adapters that bridge common_system's IExecutor interface
+ * with pacs_bridge's thread infrastructure. Enables workflow modules
+ * to use the standardized IExecutor interface while leveraging existing
+ * thread pool implementations.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/198
+ * @see https://github.com/kcenon/pacs_bridge/issues/210
+ */
+
+/**
+ * @class lambda_job
+ * @brief IJob implementation that wraps a callable
+ */
+class lambda_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit lambda_job(
+        std::function<kcenon::common::VoidResult()> func,
+        std::string name = "lambda_job",
+        int priority = 0);
+
+    kcenon::common::VoidResult execute() override;
+    [[nodiscard]] std::string get_name() const override;
+    [[nodiscard]] int get_priority() const override;
+};
+
+/**
+ * @class simple_executor
+ * @brief Lightweight IExecutor implementation with internal thread pool
+ */
+class simple_executor : public kcenon::common::interfaces::IExecutor {
+public:
+    explicit simple_executor(std::size_t worker_count = std::thread::hardware_concurrency());
+
+    [[nodiscard]] kcenon::common::Result<std::future<void>> execute(
+        std::unique_ptr<kcenon::common::interfaces::IJob>&& job) override;
+
+    [[nodiscard]] kcenon::common::Result<std::future<void>> execute_delayed(
+        std::unique_ptr<kcenon::common::interfaces::IJob>&& job,
+        std::chrono::milliseconds delay) override;
+
+    [[nodiscard]] std::size_t worker_count() const override;
+    [[nodiscard]] bool is_running() const override;
+    [[nodiscard]] std::size_t pending_tasks() const override;
+    void shutdown(bool wait_for_completion = true) override;
+};
+
+/**
+ * @class thread_pool_executor_adapter
+ * @brief IExecutor implementation using kcenon::thread::thread_pool
+ */
+class thread_pool_executor_adapter : public kcenon::common::interfaces::IExecutor {
+public:
+    explicit thread_pool_executor_adapter(
+        std::shared_ptr<kcenon::thread::thread_pool> pool);
+
+    // ... IExecutor interface implementation
+};
+
+/**
+ * @brief Factory function to create executor with worker count
+ */
+[[nodiscard]] std::shared_ptr<kcenon::common::interfaces::IExecutor>
+make_executor(std::size_t worker_count = std::thread::hardware_concurrency());
+
+/**
+ * @brief Factory function to create executor from existing thread pool
+ */
+[[nodiscard]] std::shared_ptr<kcenon::common::interfaces::IExecutor>
+make_executor(std::shared_ptr<kcenon::thread::thread_pool> pool);
+
+} // namespace pacs::bridge::integration
+```
+
 ---
 
 ## 9. Monitoring Module
