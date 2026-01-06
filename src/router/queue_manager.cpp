@@ -12,6 +12,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <ctime>
+#include <future>
 #include <iomanip>
 #include <mutex>
 #include <random>
@@ -24,6 +25,60 @@
 #include <sqlite3.h>
 
 namespace pacs::bridge::router {
+
+// =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for queue worker execution
+ *
+ * Wraps a single worker iteration for execution via IExecutor.
+ */
+class queue_worker_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit queue_worker_job(std::function<void()> work_func)
+        : work_func_(std::move(work_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (work_func_) {
+            work_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "queue_worker"; }
+
+private:
+    std::function<void()> work_func_;
+};
+
+/**
+ * @brief Job implementation for cleanup task execution
+ *
+ * Wraps periodic cleanup operations for execution via IExecutor.
+ */
+class queue_cleanup_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit queue_cleanup_job(std::function<void()> cleanup_func)
+        : cleanup_func_(std::move(cleanup_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (cleanup_func_) {
+            cleanup_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "queue_cleanup"; }
+
+private:
+    std::function<void()> cleanup_func_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 namespace {
 
@@ -153,6 +208,12 @@ public:
     std::condition_variable cleanup_cv_;
     std::mutex cleanup_mutex_;
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Futures for tracking executor-based jobs
+    std::vector<std::future<void>> worker_futures_;
+    std::future<void> cleanup_future_;
+#endif
+
     explicit impl(const queue_config& config) : config_(config) {}
 
     ~impl() { stop(); }
@@ -161,6 +222,14 @@ public:
         // Stop cleanup thread
         cleanup_running_ = false;
         cleanup_cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based cleanup job to complete
+        if (config_.executor && cleanup_future_.valid()) {
+            cleanup_future_.wait_for(std::chrono::seconds{5});
+        }
+#endif
+
         if (cleanup_thread_.joinable()) {
             cleanup_thread_.join();
         }
@@ -183,6 +252,19 @@ public:
     void stop_workers() {
         workers_running_ = false;
         worker_cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based worker jobs to complete
+        if (config_.executor) {
+            for (auto& future : worker_futures_) {
+                if (future.valid()) {
+                    future.wait_for(std::chrono::seconds{5});
+                }
+            }
+            worker_futures_.clear();
+        }
+#endif
+
         for (auto& worker : worker_threads_) {
             if (worker.joinable()) {
                 worker.join();
@@ -213,7 +295,15 @@ public:
 
         // Start cleanup thread
         cleanup_running_ = true;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            schedule_cleanup_job();
+        } else {
+            cleanup_thread_ = std::thread([this]() { cleanup_loop(); });
+        }
+#else
         cleanup_thread_ = std::thread([this]() { cleanup_loop(); });
+#endif
 
         return {};
     }
@@ -939,9 +1029,21 @@ public:
         if (workers_running_) return;
 
         workers_running_ = true;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            for (size_t i = 0; i < config_.worker_count; ++i) {
+                schedule_worker_job();
+            }
+        } else {
+            for (size_t i = 0; i < config_.worker_count; ++i) {
+                worker_threads_.emplace_back([this]() { worker_loop(); });
+            }
+        }
+#else
         for (size_t i = 0; i < config_.worker_count; ++i) {
             worker_threads_.emplace_back([this]() { worker_loop(); });
         }
+#endif
     }
 
     std::vector<dead_letter_entry> get_dead_letters_internal(size_t limit, size_t offset) const {
@@ -1037,6 +1139,117 @@ public:
 
         return results;
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Schedule worker job using IExecutor
+     *
+     * Processes messages and reschedules itself for continuous operation.
+     */
+    void schedule_worker_job() {
+        if (!workers_running_ || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<queue_worker_job>([this]() {
+            if (!workers_running_) {
+                return;
+            }
+
+            std::optional<queued_message> msg;
+
+            {
+                std::shared_lock<std::shared_mutex> lock(db_mutex_);
+                worker_cv_.wait_for(lock, std::chrono::milliseconds{100}, [this]() {
+                    return !workers_running_ || queue_depth_internal("") > 0;
+                });
+
+                if (!workers_running_) {
+                    return;
+                }
+            }
+
+            msg = dequeue_internal("");
+            if (msg && sender_) {
+                auto start = std::chrono::steady_clock::now();
+                auto result = sender_(*msg);
+                auto end = std::chrono::steady_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+                if (result) {
+                    ack_internal(msg->id);
+
+                    // Update average delivery time
+                    {
+                        std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+                        double total = stats_.avg_delivery_time_ms *
+                                       (stats_.total_delivered > 0 ? stats_.total_delivered - 1 : 0);
+                        stats_.avg_delivery_time_ms =
+                            (total + static_cast<double>(duration.count())) /
+                            std::max(stats_.total_delivered, size_t{1});
+                    }
+
+                    if (delivery_callback_) {
+                        delivery_callback_(*msg, true, "");
+                    }
+                } else {
+                    nack_internal(msg->id, result.error());
+
+                    if (delivery_callback_) {
+                        delivery_callback_(*msg, false, result.error());
+                    }
+                }
+            }
+
+            // Reschedule for next iteration
+            schedule_worker_job();
+        });
+
+        auto result = config_.executor->execute(std::move(job));
+        if (result) {
+            worker_futures_.push_back(std::move(*result));
+        }
+    }
+
+    /**
+     * @brief Schedule cleanup job using IExecutor with delayed execution
+     *
+     * Performs periodic cleanup and reschedules itself.
+     */
+    void schedule_cleanup_job() {
+        if (!cleanup_running_ || !config_.executor) {
+            return;
+        }
+
+        // Queue depth update interval (5 seconds as per issue requirement)
+        constexpr auto metrics_update_interval = std::chrono::milliseconds{5000};
+
+        auto job = std::make_unique<queue_cleanup_job>([this]() {
+            if (!cleanup_running_) {
+                return;
+            }
+
+            // Update queue depth metrics
+            update_queue_depth_metrics();
+
+            // Check if cleanup interval has passed (handled by delayed scheduling)
+            static auto last_cleanup = std::chrono::steady_clock::now();
+            auto now = std::chrono::steady_clock::now();
+            if (now - last_cleanup >= config_.cleanup_interval) {
+                cleanup_expired_internal();
+                last_cleanup = now;
+            }
+
+            // Reschedule for next iteration
+            schedule_cleanup_job();
+        });
+
+        auto result = config_.executor->execute_delayed(std::move(job), metrics_update_interval);
+        if (result) {
+            cleanup_future_ = std::move(*result);
+        }
+    }
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 };
 
 // =============================================================================

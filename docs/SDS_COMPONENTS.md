@@ -2385,6 +2385,10 @@ struct queue_config {
     double retry_backoff_multiplier = 2.0;
     std::chrono::seconds max_retry_delay{300};
     std::chrono::hours message_ttl{24};
+
+    // Optional IExecutor for worker/cleanup task execution
+    // When nullptr, uses internal std::thread (standalone mode)
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
 };
 
 /**
