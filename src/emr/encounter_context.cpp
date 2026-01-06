@@ -172,7 +172,7 @@ public:
 
         // Query FHIR server
         auto response = config_.client->read("Encounter", encounter_id);
-        if (!response.has_value()) {
+        if (response.is_err()) {
             return encounter_error::not_found;
         }
 
@@ -223,7 +223,7 @@ public:
         params.add("identifier", identifier_value);
 
         auto response = config_.client->search("Encounter", params);
-        if (!response.has_value()) {
+        if (response.is_err()) {
             return encounter_error::query_failed;
         }
 
@@ -263,7 +263,7 @@ public:
               .add("status", "in-progress,arrived,triaged");
 
         auto response = config_.client->search("Encounter", params);
-        if (!response.has_value()) {
+        if (response.is_err()) {
             return encounter_error::query_failed;
         }
 
@@ -303,7 +303,7 @@ public:
         }
 
         auto response = config_.client->search("Encounter", params);
-        if (!response.has_value()) {
+        if (response.is_err()) {
             return encounter_error::query_failed;
         }
 

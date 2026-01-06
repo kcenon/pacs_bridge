@@ -16,7 +16,7 @@ namespace pacs::bridge::emr {
 auto http_client_adapter::get(
     std::string_view url,
     const std::vector<std::pair<std::string, std::string>>& headers,
-    std::chrono::seconds timeout) -> std::expected<http_response, emr_error> {
+    std::chrono::seconds timeout) -> Result<http_response> {
     http_request request;
     request.method = http_method::get;
     request.url = std::string(url);
@@ -28,7 +28,7 @@ auto http_client_adapter::get(
 auto http_client_adapter::post(
     std::string_view url, std::string_view body, std::string_view content_type,
     const std::vector<std::pair<std::string, std::string>>& headers,
-    std::chrono::seconds timeout) -> std::expected<http_response, emr_error> {
+    std::chrono::seconds timeout) -> Result<http_response> {
     http_request request;
     request.method = http_method::post;
     request.url = std::string(url);
@@ -42,7 +42,7 @@ auto http_client_adapter::post(
 auto http_client_adapter::put(
     std::string_view url, std::string_view body, std::string_view content_type,
     const std::vector<std::pair<std::string, std::string>>& headers,
-    std::chrono::seconds timeout) -> std::expected<http_response, emr_error> {
+    std::chrono::seconds timeout) -> Result<http_response> {
     http_request request;
     request.method = http_method::put;
     request.url = std::string(url);
@@ -56,7 +56,7 @@ auto http_client_adapter::put(
 auto http_client_adapter::del(
     std::string_view url,
     const std::vector<std::pair<std::string, std::string>>& headers,
-    std::chrono::seconds timeout) -> std::expected<http_response, emr_error> {
+    std::chrono::seconds timeout) -> Result<http_response> {
     http_request request;
     request.method = http_method::delete_method;
     request.url = std::string(url);
@@ -68,7 +68,7 @@ auto http_client_adapter::del(
 auto http_client_adapter::patch(
     std::string_view url, std::string_view body, std::string_view content_type,
     const std::vector<std::pair<std::string, std::string>>& headers,
-    std::chrono::seconds timeout) -> std::expected<http_response, emr_error> {
+    std::chrono::seconds timeout) -> Result<http_response> {
     http_request request;
     request.method = http_method::patch;
     request.url = std::string(url);
@@ -87,9 +87,9 @@ callback_http_client::callback_http_client(execute_callback callback)
     : callback_(std::move(callback)) {}
 
 auto callback_http_client::execute(const http_request& request)
-    -> std::expected<http_response, emr_error> {
+    -> Result<http_response> {
     if (!callback_) {
-        return std::unexpected(emr_error::invalid_configuration);
+        return Result<http_response>::err(to_error_info(emr_error::invalid_configuration));
     }
     return callback_(request);
 }
@@ -103,8 +103,8 @@ std::unique_ptr<http_client_adapter> create_http_client(
     // Default implementation returns a no-op client
     // Real implementation would use cURL or other HTTP library
     return create_http_client(
-        [](const http_request&) -> std::expected<http_response, emr_error> {
-            return std::unexpected(emr_error::not_supported);
+        [](const http_request&) -> Result<http_response> {
+            return Result<http_response>::err(to_error_info(emr_error::not_supported));
         });
 }
 

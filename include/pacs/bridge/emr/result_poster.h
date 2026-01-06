@@ -24,7 +24,6 @@
 #include "fhir_client.h"
 
 #include <chrono>
-#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -179,6 +178,24 @@ enum class result_error : int {
             return "Result tracker operation failed";
     }
     return "Unknown result error";
+}
+
+/**
+ * @brief Convert result_error to error_info for Result<T>
+ *
+ * @param error Result error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    result_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "emr.result",
+        details
+    };
 }
 
 // =============================================================================
@@ -412,7 +429,7 @@ public:
      * @return Posted result reference or error
      */
     [[nodiscard]] auto post_result(const study_result& result)
-        -> std::expected<posted_result, result_error>;
+        -> Result<posted_result>;
 
     /**
      * @brief Update an existing result
@@ -426,7 +443,7 @@ public:
      */
     [[nodiscard]] auto update_result(std::string_view report_id,
                                      const study_result& result)
-        -> std::expected<void, result_error>;
+        -> VoidResult;
 
     /**
      * @brief Update result status only
@@ -440,7 +457,7 @@ public:
      */
     [[nodiscard]] auto update_status(std::string_view report_id,
                                      result_status new_status)
-        -> std::expected<void, result_error>;
+        -> VoidResult;
 
     // =========================================================================
     // Query Operations
@@ -456,7 +473,7 @@ public:
      * @return Report ID if found, nullopt if not found, or error
      */
     [[nodiscard]] auto find_by_accession(std::string_view accession_number)
-        -> std::expected<std::optional<std::string>, result_error>;
+        -> Result<std::optional<std::string>>;
 
     /**
      * @brief Find existing DiagnosticReport by Study Instance UID
@@ -465,7 +482,7 @@ public:
      * @return Report ID if found, nullopt if not found, or error
      */
     [[nodiscard]] auto find_by_study_uid(std::string_view study_uid)
-        -> std::expected<std::optional<std::string>, result_error>;
+        -> Result<std::optional<std::string>>;
 
     /**
      * @brief Get a posted result by report ID
@@ -474,7 +491,7 @@ public:
      * @return Posted result data or error
      */
     [[nodiscard]] auto get_result(std::string_view report_id)
-        -> std::expected<posted_result, result_error>;
+        -> Result<posted_result>;
 
     // =========================================================================
     // Tracking

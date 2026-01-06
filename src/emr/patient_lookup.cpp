@@ -59,7 +59,7 @@ public:
         , matcher_(std::make_shared<patient_matcher>()) {}
 
     auto get_by_mrn(std::string_view mrn)
-        -> std::expected<patient_record, patient_error> {
+        -> Result<patient_record> {
         std::string mrn_str(mrn);
 
         // Check cache first
@@ -70,7 +70,7 @@ public:
             }
             if (is_negative_cached(mrn_str)) {
                 ++stats_.cache_hits;
-                return std::unexpected(patient_error::not_found);
+                return to_error_info(patient_error::not_found);
             }
             ++stats_.cache_misses;
         }
@@ -89,12 +89,12 @@ public:
 
         // Execute search
         auto result = client_->search("Patient", params);
-        if (!result) {
+        if (result.is_err()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
 
-        auto& bundle = result->value;
+        auto& bundle = result.value().value;
 
         if (bundle.empty()) {
             // Cache negative result
@@ -102,14 +102,14 @@ public:
                 add_negative_cache(mrn_str);
             }
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::not_found);
+            return to_error_info(patient_error::not_found);
         }
 
         // Parse the patient
         auto patients = parse_patient_bundle(bundle);
         if (patients.empty()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::parse_failed);
+            return to_error_info(patient_error::parse_failed);
         }
 
         auto& patient = patients.front();
@@ -129,7 +129,7 @@ public:
     }
 
     auto get_by_identifier(std::string_view system, std::string_view value)
-        -> std::expected<patient_record, patient_error> {
+        -> Result<patient_record> {
         std::string cache_key = std::string(system) + "|" + std::string(value);
 
         // Check cache
@@ -150,21 +150,21 @@ public:
         params.count(1);
 
         auto result = client_->search("Patient", params);
-        if (!result) {
+        if (result.is_err()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
 
-        auto& bundle = result->value;
+        auto& bundle = result.value().value;
         if (bundle.empty()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::not_found);
+            return to_error_info(patient_error::not_found);
         }
 
         auto patients = parse_patient_bundle(bundle);
         if (patients.empty()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::parse_failed);
+            return to_error_info(patient_error::parse_failed);
         }
 
         auto& patient = patients.front();
@@ -187,7 +187,7 @@ public:
     }
 
     auto get_by_id(std::string_view id)
-        -> std::expected<patient_record, patient_error> {
+        -> Result<patient_record> {
         std::string id_str(id);
 
         ++stats_.total_queries;
@@ -195,27 +195,27 @@ public:
 
         // Direct read by ID
         auto result = client_->read("Patient", id);
-        if (!result) {
+        if (result.is_err()) {
             ++stats_.failed_queries;
-            if (result.error() == emr_error::resource_not_found) {
-                return std::unexpected(patient_error::not_found);
+            if (result.error().code == static_cast<int>(emr_error::resource_not_found)) {
+                return to_error_info(patient_error::not_found);
             }
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
 
-        auto& resource = result->value;
+        auto& resource = result.value().value;
         if (!resource.is_valid()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::invalid_data);
+            return to_error_info(patient_error::invalid_data);
         }
 
         auto patient_result = parse_fhir_patient(resource.json);
-        if (!patient_result) {
+        if (patient_result.is_err()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::parse_failed);
+            return to_error_info(patient_error::parse_failed);
         }
 
-        auto& patient = *patient_result;
+        auto& patient = patient_result.value();
         patient.cached_at = std::chrono::system_clock::now();
 
         if (config_.enable_cache && !patient.mrn.empty()) {
@@ -231,9 +231,9 @@ public:
     }
 
     auto find_patient(const patient_query& query)
-        -> std::expected<patient_record, patient_error> {
+        -> Result<patient_record> {
         if (query.is_empty()) {
-            return std::unexpected(patient_error::invalid_query);
+            return to_error_info(patient_error::invalid_query);
         }
 
         // If it's a simple MRN lookup, use the direct method
@@ -247,14 +247,14 @@ public:
 
         // Otherwise, do a search
         auto search_result = search_patients(query);
-        if (!search_result) {
-            return std::unexpected(search_result.error());
+        if (search_result.is_err()) {
+            return search_result.error();
         }
 
-        auto& matches = *search_result;
+        auto& matches = search_result.value();
 
         if (matches.empty()) {
-            return std::unexpected(patient_error::not_found);
+            return to_error_info(patient_error::not_found);
         }
 
         if (matches.size() == 1) {
@@ -286,13 +286,13 @@ public:
             }
         }
 
-        return std::unexpected(patient_error::multiple_found);
+        return to_error_info(patient_error::multiple_found);
     }
 
     auto search_patients(const patient_query& query)
-        -> std::expected<std::vector<patient_match>, patient_error> {
+        -> Result<std::vector<patient_match>> {
         if (query.is_empty()) {
-            return std::unexpected(patient_error::invalid_query);
+            return to_error_info(patient_error::invalid_query);
         }
 
         ++stats_.total_queries;
@@ -336,12 +336,12 @@ public:
 
         // Execute search
         auto result = client_->search("Patient", params);
-        if (!result) {
+        if (result.is_err()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
 
-        auto& bundle = result->value;
+        auto& bundle = result.value().value;
         auto patients = parse_patient_bundle(bundle);
 
         // Score the results
@@ -380,16 +380,16 @@ public:
     }
 
     auto search_with_params(const search_params& params)
-        -> std::expected<std::vector<patient_record>, patient_error> {
+        -> Result<std::vector<patient_record>> {
         ++stats_.total_queries;
 
         auto result = client_->search("Patient", params);
-        if (!result) {
+        if (result.is_err()) {
             ++stats_.failed_queries;
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
 
-        auto patients = parse_patient_bundle(result->value);
+        auto patients = parse_patient_bundle(result.value().value);
         ++stats_.successful_queries;
 
         return patients;
@@ -411,7 +411,7 @@ public:
         size_t count = 0;
         for (const auto& mrn : mrns) {
             auto result = get_by_mrn(mrn);
-            if (result) {
+            if (result.is_ok()) {
                 ++count;
             }
         }
@@ -540,33 +540,33 @@ emr_patient_lookup::emr_patient_lookup(emr_patient_lookup&&) noexcept = default;
 emr_patient_lookup& emr_patient_lookup::operator=(emr_patient_lookup&&) noexcept = default;
 
 auto emr_patient_lookup::get_by_mrn(std::string_view mrn)
-    -> std::expected<patient_record, patient_error> {
+    -> Result<patient_record> {
     return impl_->get_by_mrn(mrn);
 }
 
 auto emr_patient_lookup::get_by_identifier(std::string_view system,
                                             std::string_view value)
-    -> std::expected<patient_record, patient_error> {
+    -> Result<patient_record> {
     return impl_->get_by_identifier(system, value);
 }
 
 auto emr_patient_lookup::get_by_id(std::string_view id)
-    -> std::expected<patient_record, patient_error> {
+    -> Result<patient_record> {
     return impl_->get_by_id(id);
 }
 
 auto emr_patient_lookup::find_patient(const patient_query& query)
-    -> std::expected<patient_record, patient_error> {
+    -> Result<patient_record> {
     return impl_->find_patient(query);
 }
 
 auto emr_patient_lookup::search_patients(const patient_query& query)
-    -> std::expected<std::vector<patient_match>, patient_error> {
+    -> Result<std::vector<patient_match>> {
     return impl_->search_patients(query);
 }
 
 auto emr_patient_lookup::search_with_params(const search_params& params)
-    -> std::expected<std::vector<patient_record>, patient_error> {
+    -> Result<std::vector<patient_record>> {
     return impl_->search_with_params(params);
 }
 

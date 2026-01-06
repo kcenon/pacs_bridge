@@ -13,6 +13,8 @@
  * @see https://www.hl7.org/fhir/patient.html
  */
 
+#include "emr_types.h"
+
 #include <chrono>
 #include <optional>
 #include <string>
@@ -91,6 +93,24 @@ enum class patient_error : int {
         default:
             return "Unknown patient error";
     }
+}
+
+/**
+ * @brief Convert patient_error to error_info for Result<T>
+ *
+ * @param error Patient error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    patient_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "emr.patient",
+        details
+    };
 }
 
 // =============================================================================

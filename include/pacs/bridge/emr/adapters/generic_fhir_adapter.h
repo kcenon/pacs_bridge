@@ -72,7 +72,7 @@ public:
     // Connection Management (emr_adapter interface)
     // =========================================================================
 
-    [[nodiscard]] std::expected<void, adapter_error> initialize() override;
+    [[nodiscard]] VoidResult initialize() override;
     void shutdown() noexcept override;
     [[nodiscard]] bool is_initialized() const noexcept override;
     [[nodiscard]] bool is_connected() const noexcept override;
@@ -81,7 +81,7 @@ public:
     // Health Check (emr_adapter interface)
     // =========================================================================
 
-    [[nodiscard]] std::expected<adapter_health_status, adapter_error>
+    [[nodiscard]] Result<adapter_health_status>
     health_check() override;
 
     [[nodiscard]] adapter_health_status
@@ -91,20 +91,20 @@ public:
     // Patient Operations (emr_adapter interface)
     // =========================================================================
 
-    [[nodiscard]] std::expected<patient_record, patient_error>
+    [[nodiscard]] Result<patient_record>
     query_patient(const patient_query& query) override;
 
-    [[nodiscard]] std::expected<std::vector<patient_match>, patient_error>
+    [[nodiscard]] Result<std::vector<patient_match>>
     search_patients(const patient_query& query) override;
 
     // =========================================================================
     // Result Operations (emr_adapter interface)
     // =========================================================================
 
-    [[nodiscard]] std::expected<posted_result, result_error>
+    [[nodiscard]] Result<posted_result>
     post_result(const study_result& result) override;
 
-    [[nodiscard]] std::expected<void, result_error>
+    [[nodiscard]] VoidResult
     update_result(std::string_view report_id,
                   const study_result& result) override;
 
@@ -112,10 +112,10 @@ public:
     // Encounter Operations (emr_adapter interface)
     // =========================================================================
 
-    [[nodiscard]] std::expected<encounter_info, encounter_error>
+    [[nodiscard]] Result<encounter_info>
     get_encounter(std::string_view encounter_id) override;
 
-    [[nodiscard]] std::expected<std::optional<encounter_info>, encounter_error>
+    [[nodiscard]] Result<std::optional<encounter_info>>
     find_active_encounter(std::string_view patient_id) override;
 
     // =========================================================================
@@ -124,7 +124,7 @@ public:
 
     [[nodiscard]] const emr_adapter_config& config() const noexcept override;
 
-    [[nodiscard]] std::expected<void, adapter_error>
+    [[nodiscard]] VoidResult
     set_config(const emr_adapter_config& config) override;
 
     // =========================================================================
@@ -147,7 +147,7 @@ protected:
     /**
      * @brief Create FHIR client from configuration
      */
-    [[nodiscard]] std::expected<std::shared_ptr<fhir_client>, adapter_error>
+    [[nodiscard]] Result<std::shared_ptr<fhir_client>>
     create_fhir_client();
 
     /**

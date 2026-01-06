@@ -409,13 +409,13 @@ std::string find_mrn(const std::vector<patient_identifier>& identifiers) {
 // Public Functions
 // =============================================================================
 
-std::expected<patient_record, patient_error> parse_fhir_patient(
+Result<patient_record> parse_fhir_patient(
     std::string_view json_str) {
 
     // Verify resource type
     auto resource_type = get_string_field(json_str, "resourceType");
     if (!resource_type.has_value() || *resource_type != "Patient") {
-        return std::unexpected(patient_error::invalid_data);
+        return to_error_info(patient_error::invalid_data);
     }
 
     patient_record patient;
@@ -515,17 +515,18 @@ std::vector<patient_record> parse_patient_bundle(const fhir_bundle& bundle) {
         }
 
         auto result = parse_fhir_patient(entry.resource);
-        if (result) {
+        if (result.is_ok()) {
+            auto patient = result.value();
             // Use entry's full_url as ID if not present
-            if (result->id.empty() && entry.full_url.has_value()) {
+            if (patient.id.empty() && entry.full_url.has_value()) {
                 auto& full_url = *entry.full_url;
                 auto pos = full_url.rfind('/');
                 if (pos != std::string::npos) {
-                    result->id = full_url.substr(pos + 1);
+                    patient.id = full_url.substr(pos + 1);
                 }
             }
 
-            patients.push_back(std::move(*result));
+            patients.push_back(std::move(patient));
         }
     }
 

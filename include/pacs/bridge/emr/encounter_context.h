@@ -14,6 +14,8 @@
  * @see https://www.hl7.org/fhir/encounter.html
  */
 
+#include "emr_types.h"
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -104,6 +106,24 @@ enum class encounter_error : int {
         default:
             return "Unknown encounter error";
     }
+}
+
+/**
+ * @brief Convert encounter_error to error_info for Result<T>
+ *
+ * @param error Encounter error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    encounter_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "emr.encounter",
+        details
+    };
 }
 
 // =============================================================================

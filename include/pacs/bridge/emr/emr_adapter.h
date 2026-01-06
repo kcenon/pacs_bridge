@@ -28,7 +28,6 @@
 #include "result_poster.h"
 
 #include <chrono>
-#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -113,6 +112,24 @@ enum class adapter_error : int {
         default:
             return "Unknown adapter error";
     }
+}
+
+/**
+ * @brief Convert adapter_error to error_info for Result<T>
+ *
+ * @param error Adapter error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    adapter_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "emr.adapter",
+        details
+    };
 }
 
 // =============================================================================
@@ -404,7 +421,7 @@ public:
      *
      * @return Success or error
      */
-    [[nodiscard]] virtual std::expected<void, adapter_error> initialize() = 0;
+    [[nodiscard]] virtual VoidResult initialize() = 0;
 
     /**
      * @brief Shutdown the adapter
@@ -432,7 +449,7 @@ public:
      *
      * @return Health status or error
      */
-    [[nodiscard]] virtual std::expected<adapter_health_status, adapter_error>
+    [[nodiscard]] virtual Result<adapter_health_status>
     health_check() = 0;
 
     /**
@@ -451,7 +468,7 @@ public:
      * @param query Patient query parameters
      * @return Patient record or error
      */
-    [[nodiscard]] virtual std::expected<patient_record, patient_error>
+    [[nodiscard]] virtual Result<patient_record>
     query_patient(const patient_query& query) = 0;
 
     /**
@@ -460,7 +477,7 @@ public:
      * @param query Search query
      * @return List of matching patients or error
      */
-    [[nodiscard]] virtual std::expected<std::vector<patient_match>, patient_error>
+    [[nodiscard]] virtual Result<std::vector<patient_match>>
     search_patients(const patient_query& query) = 0;
 
     // =========================================================================
@@ -475,7 +492,7 @@ public:
      * @param result Study result data
      * @return Posted result reference or error
      */
-    [[nodiscard]] virtual std::expected<posted_result, result_error>
+    [[nodiscard]] virtual Result<posted_result>
     post_result(const study_result& result) = 0;
 
     /**
@@ -485,7 +502,7 @@ public:
      * @param result Updated result data
      * @return Success or error
      */
-    [[nodiscard]] virtual std::expected<void, result_error>
+    [[nodiscard]] virtual VoidResult
     update_result(std::string_view report_id,
                   const study_result& result) = 0;
 
@@ -499,7 +516,7 @@ public:
      * @param encounter_id Encounter resource ID
      * @return Encounter info or error
      */
-    [[nodiscard]] virtual std::expected<encounter_info, encounter_error>
+    [[nodiscard]] virtual Result<encounter_info>
     get_encounter(std::string_view encounter_id) = 0;
 
     /**
@@ -508,8 +525,7 @@ public:
      * @param patient_id Patient ID or reference
      * @return Active encounter (if exists) or error
      */
-    [[nodiscard]] virtual std::expected<std::optional<encounter_info>,
-                                        encounter_error>
+    [[nodiscard]] virtual Result<std::optional<encounter_info>>
     find_active_encounter(std::string_view patient_id) = 0;
 
     // =========================================================================
@@ -529,7 +545,7 @@ public:
      * @param config New configuration
      * @return Success or error
      */
-    [[nodiscard]] virtual std::expected<void, adapter_error>
+    [[nodiscard]] virtual VoidResult
     set_config(const emr_adapter_config& config) = 0;
 
     // =========================================================================
@@ -595,7 +611,7 @@ protected:
  * }
  * ```
  */
-[[nodiscard]] std::expected<std::unique_ptr<emr_adapter>, adapter_error>
+[[nodiscard]] Result<std::unique_ptr<emr_adapter>>
 create_emr_adapter(const emr_adapter_config& config);
 
 /**
@@ -605,7 +621,7 @@ create_emr_adapter(const emr_adapter_config& config);
  * @param base_url FHIR server base URL
  * @return Unique pointer to adapter or error
  */
-[[nodiscard]] std::expected<std::unique_ptr<emr_adapter>, adapter_error>
+[[nodiscard]] Result<std::unique_ptr<emr_adapter>>
 create_emr_adapter(emr_vendor vendor, std::string_view base_url);
 
 }  // namespace pacs::bridge::emr

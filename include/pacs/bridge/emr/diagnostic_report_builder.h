@@ -407,7 +407,7 @@ public:
      *
      * @return JSON string or error message
      */
-    [[nodiscard]] std::expected<std::string, std::string> build_validated() const;
+    [[nodiscard]] Result<std::string> build_validated() const;
 
     /**
      * @brief Validate the current builder state
