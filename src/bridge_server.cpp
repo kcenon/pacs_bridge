@@ -9,6 +9,9 @@
 #include "pacs/bridge/bridge_server.h"
 
 #include "pacs/bridge/config/config_loader.h"
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include "pacs/bridge/integration/executor_adapter.h"
+#endif
 #include "pacs/bridge/monitoring/health_checker.h"
 #include "pacs/bridge/pacs_adapter/mpps_handler.h"
 #include "pacs/bridge/router/reliable_outbound_sender.h"
@@ -53,7 +56,19 @@ class bridge_server::impl {
 public:
     explicit impl(const config::bridge_config& config) : config_(config) {
         validate_config();
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        init_executor(nullptr);
+#endif
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    impl(const config::bridge_config& config,
+         std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+        : config_(config) {
+        validate_config();
+        init_executor(std::move(executor));
+    }
+#endif
 
     explicit impl(const std::filesystem::path& config_path) {
         auto load_result = config::config_loader::load(config_path);
@@ -64,7 +79,25 @@ public:
         config_ = std::move(*load_result);
         config_path_ = config_path;
         validate_config();
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        init_executor(nullptr);
+#endif
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    impl(const std::filesystem::path& config_path,
+         std::shared_ptr<kcenon::common::interfaces::IExecutor> executor) {
+        auto load_result = config::config_loader::load(config_path);
+        if (!load_result) {
+            throw std::runtime_error("Failed to load configuration: " +
+                                     load_result.error().to_string());
+        }
+        config_ = std::move(*load_result);
+        config_path_ = config_path;
+        validate_config();
+        init_executor(std::move(executor));
+    }
+#endif
 
     ~impl() {
         if (running_.load(std::memory_order_acquire)) {
@@ -337,6 +370,22 @@ private:
         }
     }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    void init_executor(std::shared_ptr<kcenon::common::interfaces::IExecutor> executor) {
+        if (executor) {
+            executor_ = std::move(executor);
+            owns_executor_ = false;
+        } else {
+            // Create internal executor with reasonable thread count
+            auto worker_count = config_.queue.worker_count > 0
+                                    ? config_.queue.worker_count
+                                    : std::thread::hardware_concurrency();
+            executor_ = integration::make_executor(worker_count);
+            owns_executor_ = true;
+        }
+    }
+#endif
+
     std::expected<void, bridge_server_error> init_health_checker() {
         monitoring::health_config health_config;
         health_checker_ =
@@ -474,10 +523,23 @@ private:
         workflow_.reset();
         outbound_sender_.reset();
         health_checker_.reset();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Shutdown executor if we own it
+        if (owns_executor_ && executor_) {
+            executor_->shutdown(true);
+        }
+#endif
     }
 
     config::bridge_config config_;
     std::filesystem::path config_path_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Executor for task execution (Issue #198)
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor_;
+    bool owns_executor_ = false;
+#endif
 
     std::unique_ptr<monitoring::health_checker> health_checker_;
     std::unique_ptr<router::reliable_outbound_sender> outbound_sender_;
@@ -495,8 +557,22 @@ private:
 bridge_server::bridge_server(const config::bridge_config& config)
     : pimpl_(std::make_unique<impl>(config)) {}
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+bridge_server::bridge_server(
+    const config::bridge_config& config,
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+    : pimpl_(std::make_unique<impl>(config, std::move(executor))) {}
+#endif
+
 bridge_server::bridge_server(const std::filesystem::path& config_path)
     : pimpl_(std::make_unique<impl>(config_path)) {}
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+bridge_server::bridge_server(
+    const std::filesystem::path& config_path,
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+    : pimpl_(std::make_unique<impl>(config_path, std::move(executor))) {}
+#endif
 
 bridge_server::~bridge_server() = default;
 

@@ -25,6 +25,10 @@
 #include "pacs/bridge/config/bridge_config.h"
 #include "pacs/bridge/monitoring/health_types.h"
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 #include <chrono>
 #include <expected>
 #include <filesystem>
@@ -318,6 +322,20 @@ public:
      */
     explicit bridge_server(const config::bridge_config& config);
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Construct bridge server with configuration and executor
+     *
+     * @param config Bridge configuration
+     * @param executor IExecutor for task execution (optional, creates internal if null)
+     * @throws std::invalid_argument if config is invalid
+     * @see https://github.com/kcenon/pacs_bridge/issues/198
+     */
+    bridge_server(
+        const config::bridge_config& config,
+        std::shared_ptr<kcenon::common::interfaces::IExecutor> executor);
+#endif
+
     /**
      * @brief Construct bridge server from configuration file
      *
@@ -327,6 +345,20 @@ public:
      * @throws std::runtime_error if file cannot be loaded or parsed
      */
     explicit bridge_server(const std::filesystem::path& config_path);
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Construct bridge server from configuration file with executor
+     *
+     * @param config_path Path to configuration file
+     * @param executor IExecutor for task execution (optional, creates internal if null)
+     * @throws std::runtime_error if file cannot be loaded or parsed
+     * @see https://github.com/kcenon/pacs_bridge/issues/198
+     */
+    bridge_server(
+        const std::filesystem::path& config_path,
+        std::shared_ptr<kcenon::common::interfaces::IExecutor> executor);
+#endif
 
     /**
      * @brief Destructor - stops server if running
