@@ -14,6 +14,10 @@
 
 #include "tracing_types.h"
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 #include <expected>
 #include <functional>
 #include <memory>
@@ -238,6 +242,22 @@ public:
      */
     batch_exporter(std::unique_ptr<trace_exporter> inner,
                    const batch_config& config = {});
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Create a batch exporter with IExecutor (Issue #208)
+     *
+     * Uses the provided executor for export thread management instead
+     * of creating a dedicated std::thread.
+     *
+     * @param inner Inner exporter to batch
+     * @param executor IExecutor for task scheduling
+     * @param config Batch configuration
+     */
+    batch_exporter(std::unique_ptr<trace_exporter> inner,
+                   std::shared_ptr<kcenon::common::interfaces::IExecutor> executor,
+                   const batch_config& config = {});
+#endif
 
     ~batch_exporter() override;
 

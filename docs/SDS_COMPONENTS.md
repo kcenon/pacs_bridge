@@ -3274,6 +3274,15 @@ public:
     explicit config_manager(const std::filesystem::path& config_path);
 
     /**
+     * @brief Constructor with configuration file path and IExecutor (Issue #208)
+     *
+     * Uses the provided executor for file watcher task scheduling instead
+     * of creating a dedicated std::thread.
+     */
+    config_manager(const std::filesystem::path& config_path,
+                   std::shared_ptr<IExecutor> executor);
+
+    /**
      * @brief Get the current configuration
      */
     [[nodiscard]] const bridge_config& get() const;
@@ -3458,7 +3467,7 @@ public:
 
 ### DES-INT-004: executor_adapter
 
-**Traces to:** IR-2 (common_system), Issue #198, Issue #210
+**Traces to:** IR-2 (common_system), Issue #198, Issue #208, Issue #210
 
 ```cpp
 namespace pacs::bridge::integration {
@@ -3471,7 +3480,12 @@ namespace pacs::bridge::integration {
  * to use the standardized IExecutor interface while leveraging existing
  * thread pool implementations.
  *
+ * Integrated Components (Issue #208):
+ * - config_manager: File watcher uses IExecutor for periodic checks
+ * - batch_exporter: Export loop uses IExecutor for task scheduling
+ *
  * @see https://github.com/kcenon/pacs_bridge/issues/198
+ * @see https://github.com/kcenon/pacs_bridge/issues/208
  * @see https://github.com/kcenon/pacs_bridge/issues/210
  */
 

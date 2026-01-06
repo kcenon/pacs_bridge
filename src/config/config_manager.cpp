@@ -11,6 +11,10 @@
 
 #include "pacs/bridge/config/config_manager.h"
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include "pacs/bridge/integration/executor_adapter.h"
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -57,6 +61,18 @@ public:
         update_file_mtime();
     }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    impl(const bridge_config& initial_config,
+         const std::filesystem::path& config_path,
+         std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+        : config_(initial_config),
+          config_path_(config_path),
+          executor_(std::move(executor)),
+          last_load_time_(std::chrono::system_clock::now()) {
+        update_file_mtime();
+    }
+#endif
+
     explicit impl(const std::filesystem::path& config_path)
         : config_path_(config_path) {
         auto result = config_loader::load(config_path);
@@ -68,6 +84,22 @@ public:
         last_load_time_ = std::chrono::system_clock::now();
         update_file_mtime();
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    impl(const std::filesystem::path& config_path,
+         std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+        : config_path_(config_path),
+          executor_(std::move(executor)) {
+        auto result = config_loader::load(config_path);
+        if (!result) {
+            throw std::runtime_error("Failed to load configuration: " +
+                                     result.error().to_string());
+        }
+        config_ = std::move(result.value());
+        last_load_time_ = std::chrono::system_clock::now();
+        update_file_mtime();
+    }
+#endif
 
     ~impl() {
         disable_file_watcher();
@@ -315,6 +347,17 @@ public:
         }
 
         file_watcher_running_ = true;
+        file_watcher_interval_ = check_interval;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Use IExecutor for file watching if available (Issue #208)
+        if (executor_ && executor_->is_running()) {
+            schedule_file_watcher_task();
+            return true;
+        }
+#endif
+
+        // Fallback to std::thread for standalone builds
         file_watcher_thread_ = std::thread([this, check_interval] {
             while (file_watcher_running_) {
                 {
@@ -355,6 +398,39 @@ public:
     [[nodiscard]] bool is_file_watcher_enabled() const noexcept {
         return file_watcher_running_;
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+private:
+    void schedule_file_watcher_task() {
+        if (!file_watcher_running_ || !executor_ || !executor_->is_running()) {
+            return;
+        }
+
+        auto job = std::make_unique<integration::lambda_job>(
+            [this]() -> kcenon::common::VoidResult {
+                if (!file_watcher_running_) {
+                    return kcenon::common::VoidResult(std::monostate{});
+                }
+
+                if (has_file_changed()) {
+                    (void)reload();
+                }
+
+                // Schedule next check
+                schedule_file_watcher_task();
+
+                return kcenon::common::VoidResult(std::monostate{});
+            },
+            "config_file_watcher",
+            0);
+
+        auto delay_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            file_watcher_interval_);
+        executor_->execute_delayed(std::move(job), delay_ms);
+    }
+
+public:
+#endif
 
     // =========================================================================
     // Statistics
@@ -624,6 +700,11 @@ private:
     std::filesystem::path config_path_;
     mutable std::shared_mutex config_mutex_;
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Executor for file watcher (Issue #208)
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor_;
+#endif
+
     // Timestamps
     std::chrono::system_clock::time_point last_load_time_;
     std::filesystem::file_time_type last_file_mtime_;
@@ -642,6 +723,7 @@ private:
     std::thread file_watcher_thread_;
     std::mutex file_watcher_mutex_;
     std::condition_variable file_watcher_cv_;
+    std::chrono::seconds file_watcher_interval_{5};
 
     // Statistics
     mutable std::mutex stats_mutex_;
@@ -656,8 +738,23 @@ config_manager::config_manager(const bridge_config& initial_config,
                                const std::filesystem::path& config_path)
     : pimpl_(std::make_unique<impl>(initial_config, config_path)) {}
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+config_manager::config_manager(
+    const bridge_config& initial_config,
+    const std::filesystem::path& config_path,
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+    : pimpl_(std::make_unique<impl>(initial_config, config_path, std::move(executor))) {}
+#endif
+
 config_manager::config_manager(const std::filesystem::path& config_path)
     : pimpl_(std::make_unique<impl>(config_path)) {}
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+config_manager::config_manager(
+    const std::filesystem::path& config_path,
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor)
+    : pimpl_(std::make_unique<impl>(config_path, std::move(executor))) {}
+#endif
 
 config_manager::~config_manager() = default;
 
