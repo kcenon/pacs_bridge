@@ -14,6 +14,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <future>
 #include <iomanip>
 #include <mutex>
 #include <queue>
@@ -24,6 +25,60 @@
 #include <unordered_map>
 
 namespace pacs::bridge::fhir {
+
+// =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for subscription delivery execution
+ *
+ * Wraps a single delivery iteration for execution via IExecutor.
+ */
+class subscription_delivery_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit subscription_delivery_job(std::function<void()> work_func)
+        : work_func_(std::move(work_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (work_func_) {
+            work_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "subscription_delivery"; }
+
+private:
+    std::function<void()> work_func_;
+};
+
+/**
+ * @brief Job implementation for subscription retry execution
+ *
+ * Wraps periodic retry operations for execution via IExecutor.
+ */
+class subscription_retry_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit subscription_retry_job(std::function<void()> retry_func)
+        : retry_func_(std::move(retry_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (retry_func_) {
+            retry_func_();
+        }
+        return {};
+    }
+
+    std::string get_name() const override { return "subscription_retry"; }
+
+private:
+    std::function<void()> retry_func_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // Utility Functions
@@ -265,8 +320,18 @@ public:
             return false;  // Already running
         }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            schedule_delivery_job();
+            schedule_retry_job();
+        } else {
+            delivery_thread_ = std::thread([this] { delivery_loop(); });
+            retry_thread_ = std::thread([this] { retry_loop(); });
+        }
+#else
         delivery_thread_ = std::thread([this] { delivery_loop(); });
         retry_thread_ = std::thread([this] { retry_loop(); });
+#endif
 
         return true;
     }
@@ -286,6 +351,18 @@ public:
 
         queue_cv_.notify_all();
         retry_cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based jobs to complete
+        if (config_.executor) {
+            if (delivery_future_.valid()) {
+                delivery_future_.wait_for(std::chrono::seconds{5});
+            }
+            if (retry_future_.valid()) {
+                retry_future_.wait_for(std::chrono::seconds{5});
+            }
+        }
+#endif
 
         if (delivery_thread_.joinable()) {
             delivery_thread_.join();
@@ -682,6 +759,115 @@ private:
     subscription_event_callback callback_;
 
     mutable subscription_manager_stats stats_;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Futures for tracking executor-based jobs
+    std::future<void> delivery_future_;
+    std::future<void> retry_future_;
+
+    /**
+     * @brief Schedule delivery job using IExecutor
+     *
+     * Processes notifications and reschedules itself for continuous operation.
+     */
+    void schedule_delivery_job() {
+        if (!running_.load() || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<subscription_delivery_job>([this]() {
+            if (!running_.load()) {
+                return;
+            }
+
+            pending_notification notification;
+            bool has_notification = false;
+
+            {
+                std::unique_lock lock(queue_mutex_);
+                queue_cv_.wait_for(lock, std::chrono::milliseconds{100}, [this] {
+                    return !pending_queue_.empty() || !running_.load();
+                });
+
+                if (!running_.load()) {
+                    return;
+                }
+
+                if (!pending_queue_.empty()) {
+                    notification = std::move(pending_queue_.front());
+                    pending_queue_.pop();
+                    --stats_.pending_notifications;
+                    has_notification = true;
+                }
+            }
+
+            if (has_notification) {
+                deliver_notification(notification);
+            }
+
+            // Reschedule for next iteration
+            schedule_delivery_job();
+        });
+
+        auto result = config_.executor->execute(std::move(job));
+        if (result.is_ok()) {
+            delivery_future_ = std::move(result.value());
+        }
+    }
+
+    /**
+     * @brief Schedule retry job using IExecutor with delayed execution
+     *
+     * Processes retry queue and reschedules itself.
+     */
+    void schedule_retry_job() {
+        if (!running_.load() || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<subscription_retry_job>([this]() {
+            if (!running_.load()) {
+                return;
+            }
+
+            // Process retry queue
+            auto now = std::chrono::system_clock::now();
+            std::vector<pending_notification> to_retry;
+
+            {
+                std::lock_guard retry_lock(retry_queue_mutex_);
+                auto it = retry_queue_.begin();
+                while (it != retry_queue_.end()) {
+                    if (it->next_retry_at <= now) {
+                        to_retry.push_back(std::move(*it));
+                        it = retry_queue_.erase(it);
+                    } else {
+                        ++it;
+                    }
+                }
+            }
+
+            // Re-queue for delivery
+            for (auto& notification : to_retry) {
+                {
+                    std::lock_guard lock(queue_mutex_);
+                    pending_queue_.push(std::move(notification));
+                    ++stats_.pending_notifications;
+                }
+                queue_cv_.notify_one();
+            }
+
+            // Reschedule for next iteration
+            schedule_retry_job();
+        });
+
+        auto result = config_.executor->execute_delayed(
+            std::move(job), std::chrono::milliseconds{1000});
+        if (result.is_ok()) {
+            retry_future_ = std::move(result.value());
+        }
+    }
+#endif
 };
 
 // =============================================================================
