@@ -16,7 +16,6 @@
 #include "hl7_message.h"
 #include "hl7_types.h"
 
-#include <expected>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -371,14 +370,14 @@ public:
      *
      * @return Built message or error if validation fails
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> build();
+    [[nodiscard]] Result<hl7_message> build();
 
     /**
      * @brief Build and serialize to string
      *
      * @return Serialized message or error
      */
-    [[nodiscard]] std::expected<std::string, hl7_error> build_string();
+    [[nodiscard]] Result<std::string> build_string();
 
     /**
      * @brief Get current message being built (for inspection)

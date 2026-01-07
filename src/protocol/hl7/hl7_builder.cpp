@@ -572,23 +572,23 @@ hl7_segment* hl7_builder::get_segment(std::string_view segment_id,
 }
 
 // Build
-std::expected<hl7_message, hl7_error> hl7_builder::build() {
+Result<hl7_message> hl7_builder::build() {
     if (pimpl_->options_.validate_before_build) {
         auto validation = pimpl_->message_.validate();
         if (!validation.valid) {
-            return std::unexpected(hl7_error::validation_failed);
+            return to_error_info(hl7_error::validation_failed);
         }
     }
 
     return pimpl_->message_.clone();
 }
 
-std::expected<std::string, hl7_error> hl7_builder::build_string() {
+Result<std::string> hl7_builder::build_string() {
     auto result = build();
-    if (!result) {
-        return std::unexpected(result.error());
+    if (!result.is_ok()) {
+        return result.error();
     }
-    return result->serialize();
+    return result.value().serialize();
 }
 
 const hl7_message& hl7_builder::message() const {
