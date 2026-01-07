@@ -406,6 +406,11 @@ private:
         sender_config.queue.message_ttl = config_.queue.message_ttl;
         sender_config.queue.worker_count = config_.queue.worker_count;
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Pass executor to queue for worker task execution (Issue #198)
+        sender_config.queue.executor = executor_;
+#endif
+
         // Configure destinations
         for (const auto& dest : config_.hl7.outbound_destinations) {
             router::outbound_destination router_dest;
@@ -429,6 +434,11 @@ private:
         wf_config.enable_queue_fallback = true;
         wf_config.enable_tracing = true;
         wf_config.enable_metrics = true;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Pass executor to workflow for async task execution (Issue #198)
+        wf_config.executor = executor_;
+#endif
 
         // Configure routing rules
         for (const auto& rule : config_.routing_rules) {
