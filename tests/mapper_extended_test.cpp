@@ -734,12 +734,12 @@ bool test_reverse_name_conversion() {
 bool test_reverse_date_conversion() {
     // Test DICOM date to HL7 format
     auto result = dicom_hl7_mapper::dicom_date_to_hl7("20240115");
-    TEST_ASSERT(result.has_value(), "Date conversion should succeed");
-    TEST_ASSERT(*result == "20240115", "Date should be preserved");
+    TEST_ASSERT(result.is_ok(), "Date conversion should succeed");
+    TEST_ASSERT(result.unwrap() == "20240115", "Date should be preserved");
 
     // Test invalid date
     result = dicom_hl7_mapper::dicom_date_to_hl7("invalid");
-    TEST_ASSERT(!result.has_value(), "Invalid date should fail");
+    TEST_ASSERT(result.is_err(), "Invalid date should fail");
 
     return true;
 }
@@ -747,12 +747,12 @@ bool test_reverse_date_conversion() {
 bool test_reverse_time_conversion() {
     // Test DICOM time to HL7 format
     auto result = dicom_hl7_mapper::dicom_time_to_hl7("120000");
-    TEST_ASSERT(result.has_value(), "Time conversion should succeed");
-    TEST_ASSERT(*result == "120000", "Time should be preserved");
+    TEST_ASSERT(result.is_ok(), "Time conversion should succeed");
+    TEST_ASSERT(result.unwrap() == "120000", "Time should be preserved");
 
     // Test with fractional seconds
     result = dicom_hl7_mapper::dicom_time_to_hl7("120000.123456");
-    TEST_ASSERT(result.has_value(), "Time with fractions should convert");
+    TEST_ASSERT(result.is_ok(), "Time with fractions should convert");
 
     return true;
 }

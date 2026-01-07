@@ -225,23 +225,23 @@ bool test_status_to_order_control_mapping() {
 bool test_dicom_date_to_hl7() {
     // Valid date
     auto result = dicom_hl7_mapper::dicom_date_to_hl7("20240115");
-    TEST_ASSERT(result.has_value(), "Valid date should convert");
-    TEST_ASSERT(*result == "20240115", "Date should be preserved");
+    TEST_ASSERT(result.is_ok(), "Valid date should convert");
+    TEST_ASSERT(result.unwrap() == "20240115", "Date should be preserved");
 
     // Invalid date (wrong length)
     result = dicom_hl7_mapper::dicom_date_to_hl7("2024011");
-    TEST_ASSERT(!result.has_value(), "Short date should fail");
+    TEST_ASSERT(result.is_err(), "Short date should fail");
 
     result = dicom_hl7_mapper::dicom_date_to_hl7("202401150");
-    TEST_ASSERT(!result.has_value(), "Long date should fail");
+    TEST_ASSERT(result.is_err(), "Long date should fail");
 
     // Empty date
     result = dicom_hl7_mapper::dicom_date_to_hl7("");
-    TEST_ASSERT(!result.has_value(), "Empty date should fail");
+    TEST_ASSERT(result.is_err(), "Empty date should fail");
 
     // Non-numeric date
     result = dicom_hl7_mapper::dicom_date_to_hl7("2024AB15");
-    TEST_ASSERT(!result.has_value(), "Non-numeric date should fail");
+    TEST_ASSERT(result.is_err(), "Non-numeric date should fail");
 
     return true;
 }
@@ -249,27 +249,27 @@ bool test_dicom_date_to_hl7() {
 bool test_dicom_time_to_hl7() {
     // Simple time without fractional seconds
     auto result = dicom_hl7_mapper::dicom_time_to_hl7("120000");
-    TEST_ASSERT(result.has_value(), "Simple time should convert");
-    TEST_ASSERT(*result == "120000", "Time should be preserved");
+    TEST_ASSERT(result.is_ok(), "Simple time should convert");
+    TEST_ASSERT(result.unwrap() == "120000", "Time should be preserved");
 
     // Time with fractional seconds
     result = dicom_hl7_mapper::dicom_time_to_hl7("120000.123456");
-    TEST_ASSERT(result.has_value(), "Fractional time should convert");
-    TEST_ASSERT(*result == "120000.1234", "Fractional should be truncated to 4 digits");
+    TEST_ASSERT(result.is_ok(), "Fractional time should convert");
+    TEST_ASSERT(result.unwrap() == "120000.1234", "Fractional should be truncated to 4 digits");
 
     // Time with short fractional seconds
     result = dicom_hl7_mapper::dicom_time_to_hl7("120000.12");
-    TEST_ASSERT(result.has_value(), "Short fractional should convert");
-    TEST_ASSERT(*result == "120000.12", "Short fractional should be preserved");
+    TEST_ASSERT(result.is_ok(), "Short fractional should convert");
+    TEST_ASSERT(result.unwrap() == "120000.12", "Short fractional should be preserved");
 
     // Short time (just hours)
     result = dicom_hl7_mapper::dicom_time_to_hl7("12");
-    TEST_ASSERT(result.has_value(), "Short time should convert");
-    TEST_ASSERT(*result == "12", "Short time should be preserved");
+    TEST_ASSERT(result.is_ok(), "Short time should convert");
+    TEST_ASSERT(result.unwrap() == "12", "Short time should be preserved");
 
     // Empty time
     result = dicom_hl7_mapper::dicom_time_to_hl7("");
-    TEST_ASSERT(!result.has_value(), "Empty time should fail");
+    TEST_ASSERT(result.is_err(), "Empty time should fail");
 
     return true;
 }
@@ -277,23 +277,25 @@ bool test_dicom_time_to_hl7() {
 bool test_dicom_datetime_to_hl7_timestamp() {
     // Full datetime
     auto result = dicom_hl7_mapper::dicom_datetime_to_hl7_timestamp("20240115", "120000");
-    TEST_ASSERT(result.has_value(), "Full datetime should convert");
-    TEST_ASSERT(result->year == 2024, "Year should be 2024");
-    TEST_ASSERT(result->month == 1, "Month should be 1");
-    TEST_ASSERT(result->day == 15, "Day should be 15");
-    TEST_ASSERT(result->hour == 12, "Hour should be 12");
-    TEST_ASSERT(result->minute == 0, "Minute should be 0");
-    TEST_ASSERT(result->second == 0, "Second should be 0");
+    TEST_ASSERT(result.is_ok(), "Full datetime should convert");
+    const auto& ts1 = result.unwrap();
+    TEST_ASSERT(ts1.year == 2024, "Year should be 2024");
+    TEST_ASSERT(ts1.month == 1, "Month should be 1");
+    TEST_ASSERT(ts1.day == 15, "Day should be 15");
+    TEST_ASSERT(ts1.hour == 12, "Hour should be 12");
+    TEST_ASSERT(ts1.minute == 0, "Minute should be 0");
+    TEST_ASSERT(ts1.second == 0, "Second should be 0");
 
     // With fractional seconds
     result = dicom_hl7_mapper::dicom_datetime_to_hl7_timestamp("20240115", "120030.123");
-    TEST_ASSERT(result.has_value(), "Datetime with milliseconds should convert");
-    TEST_ASSERT(result->second == 30, "Second should be 30");
-    TEST_ASSERT(result->millisecond == 123, "Millisecond should be 123");
+    TEST_ASSERT(result.is_ok(), "Datetime with milliseconds should convert");
+    const auto& ts2 = result.unwrap();
+    TEST_ASSERT(ts2.second == 30, "Second should be 30");
+    TEST_ASSERT(ts2.millisecond == 123, "Millisecond should be 123");
 
     // Invalid date
     result = dicom_hl7_mapper::dicom_datetime_to_hl7_timestamp("2024", "120000");
-    TEST_ASSERT(!result.has_value(), "Short date should fail");
+    TEST_ASSERT(result.is_err(), "Short date should fail");
 
     return true;
 }
@@ -338,21 +340,22 @@ bool test_mpps_in_progress_to_orm() {
     auto mpps = create_sample_mpps();
 
     auto result = mapper.mpps_in_progress_to_orm(mpps);
-    TEST_ASSERT(result.has_value(), "IN PROGRESS mapping should succeed");
+    TEST_ASSERT(result.is_ok(), "IN PROGRESS mapping should succeed");
 
-    TEST_ASSERT(result->order_control == "SC",
+    const auto& orm = result.unwrap();
+    TEST_ASSERT(orm.order_control == "SC",
                 "Order control should be SC");
-    TEST_ASSERT(result->order_status == "IP",
+    TEST_ASSERT(orm.order_status == "IP",
                 "Order status should be IP");
-    TEST_ASSERT(result->mpps_status == pacs_adapter::mpps_event::in_progress,
+    TEST_ASSERT(orm.mpps_status == pacs_adapter::mpps_event::in_progress,
                 "MPPS status should be in_progress");
-    TEST_ASSERT(result->accession_number == "ACC001",
+    TEST_ASSERT(orm.accession_number == "ACC001",
                 "Accession number should match");
-    TEST_ASSERT(!result->control_id.empty(),
+    TEST_ASSERT(!orm.control_id.empty(),
                 "Control ID should be generated");
 
     // Verify message structure
-    const auto& msg = result->message;
+    const auto& msg = orm.message;
     TEST_ASSERT(msg.get_value("MSH.9.1") == "ORM",
                 "Message type should be ORM");
     TEST_ASSERT(msg.get_value("MSH.9.2") == "O01",
@@ -372,17 +375,18 @@ bool test_mpps_completed_to_orm() {
     auto mpps = create_completed_mpps();
 
     auto result = mapper.mpps_completed_to_orm(mpps);
-    TEST_ASSERT(result.has_value(), "COMPLETED mapping should succeed");
+    TEST_ASSERT(result.is_ok(), "COMPLETED mapping should succeed");
 
-    TEST_ASSERT(result->order_control == "SC",
+    const auto& orm = result.unwrap();
+    TEST_ASSERT(orm.order_control == "SC",
                 "Order control should be SC");
-    TEST_ASSERT(result->order_status == "CM",
+    TEST_ASSERT(orm.order_status == "CM",
                 "Order status should be CM");
-    TEST_ASSERT(result->mpps_status == pacs_adapter::mpps_event::completed,
+    TEST_ASSERT(orm.mpps_status == pacs_adapter::mpps_event::completed,
                 "MPPS status should be completed");
 
     // Verify message structure
-    const auto& msg = result->message;
+    const auto& msg = orm.message;
     TEST_ASSERT(msg.get_value("ORC.5") == "CM",
                 "ORC-5 should be CM");
     TEST_ASSERT(msg.get_value("OBR.25") == "CM",
@@ -400,17 +404,18 @@ bool test_mpps_discontinued_to_orm() {
     auto mpps = create_discontinued_mpps();
 
     auto result = mapper.mpps_discontinued_to_orm(mpps);
-    TEST_ASSERT(result.has_value(), "DISCONTINUED mapping should succeed");
+    TEST_ASSERT(result.is_ok(), "DISCONTINUED mapping should succeed");
 
-    TEST_ASSERT(result->order_control == "DC",
+    const auto& orm = result.unwrap();
+    TEST_ASSERT(orm.order_control == "DC",
                 "Order control should be DC for discontinued");
-    TEST_ASSERT(result->order_status == "CA",
+    TEST_ASSERT(orm.order_status == "CA",
                 "Order status should be CA");
-    TEST_ASSERT(result->mpps_status == pacs_adapter::mpps_event::discontinued,
+    TEST_ASSERT(orm.mpps_status == pacs_adapter::mpps_event::discontinued,
                 "MPPS status should be discontinued");
 
     // Verify message structure
-    const auto& msg = result->message;
+    const auto& msg = orm.message;
     TEST_ASSERT(msg.get_value("ORC.1") == "DC",
                 "ORC-1 should be DC");
     TEST_ASSERT(msg.get_value("ORC.5") == "CA",
@@ -431,16 +436,16 @@ bool test_mpps_to_orm_generic() {
     // Test IN PROGRESS
     mpps.status = pacs_adapter::mpps_event::in_progress;
     auto result = mapper.mpps_to_orm(mpps, pacs_adapter::mpps_event::in_progress);
-    TEST_ASSERT(result.has_value(), "Generic mapping should succeed");
-    TEST_ASSERT(result->order_status == "IP", "Status should be IP");
+    TEST_ASSERT(result.is_ok(), "Generic mapping should succeed");
+    TEST_ASSERT(result.unwrap().order_status == "IP", "Status should be IP");
 
     // Test COMPLETED
     mpps.status = pacs_adapter::mpps_event::completed;
     mpps.end_date = "20240115";
     mpps.end_time = "123500";
     result = mapper.mpps_to_orm(mpps, pacs_adapter::mpps_event::completed);
-    TEST_ASSERT(result.has_value(), "Generic completed mapping should succeed");
-    TEST_ASSERT(result->order_status == "CM", "Status should be CM");
+    TEST_ASSERT(result.is_ok(), "Generic completed mapping should succeed");
+    TEST_ASSERT(result.unwrap().order_status == "CM", "Status should be CM");
 
     return true;
 }
@@ -483,8 +488,8 @@ bool test_mpps_mapping_with_warnings() {
     // Missing patient_id - should generate warning
 
     auto result = mapper.mpps_in_progress_to_orm(mpps);
-    TEST_ASSERT(result.has_value(), "Partial mapping should succeed");
-    TEST_ASSERT(result->has_warnings(), "Should have warnings for missing fields");
+    TEST_ASSERT(result.is_ok(), "Partial mapping should succeed");
+    TEST_ASSERT(result.unwrap().has_warnings(), "Should have warnings for missing fields");
 
     return true;
 }
@@ -501,10 +506,10 @@ bool test_series_info_in_orm() {
     auto mpps = create_completed_mpps();
 
     auto result = mapper.mpps_completed_to_orm(mpps);
-    TEST_ASSERT(result.has_value(), "Mapping with series info should succeed");
+    TEST_ASSERT(result.is_ok(), "Mapping with series info should succeed");
 
     // Check for OBX segments with series information
-    const auto& msg = result->message;
+    const auto& msg = result.unwrap().message;
     auto obx_segments = msg.segments("OBX");
     TEST_ASSERT(!obx_segments.empty(), "Should have OBX segments");
 
@@ -519,10 +524,10 @@ bool test_no_series_info_when_disabled() {
     auto mpps = create_completed_mpps();
 
     auto result = mapper.mpps_completed_to_orm(mpps);
-    TEST_ASSERT(result.has_value(), "Mapping without series info should succeed");
+    TEST_ASSERT(result.is_ok(), "Mapping without series info should succeed");
 
     // Should not have OBX segments for series
-    const auto& msg = result->message;
+    const auto& msg = result.unwrap().message;
     auto obx_segments = msg.segments("OBX");
     TEST_ASSERT(obx_segments.empty(), "Should not have OBX segments when disabled");
 
