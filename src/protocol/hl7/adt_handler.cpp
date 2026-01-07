@@ -32,7 +32,7 @@ public:
     // Message Handling
     // =========================================================================
 
-    std::expected<adt_result, adt_error> handle(const hl7_message& message) {
+    Result<adt_result> handle(const hl7_message& message) {
         std::lock_guard<std::mutex> lock(mutex_);
 
         // Record message received metric
@@ -46,21 +46,21 @@ public:
         auto header = message.header();
         if (header.type != message_type::ADT) {
             metrics.record_hl7_error("ADT", "not_adt_message");
-            return std::unexpected(adt_error::not_adt_message);
+            return to_error_info(adt_error::not_adt_message);
         }
 
         // Parse trigger event
         auto trigger = parse_adt_trigger(header.trigger_event);
         if (trigger == adt_trigger_event::unknown) {
             metrics.record_hl7_error("ADT", "unsupported_trigger_event");
-            return std::unexpected(adt_error::unsupported_trigger_event);
+            return to_error_info(adt_error::unsupported_trigger_event);
         }
 
         // Update statistics
         stats_.total_processed++;
 
         // Dispatch to appropriate handler
-        std::expected<adt_result, adt_error> result;
+        Result<adt_result> result = Result<adt_result>::uninitialized();
         switch (trigger) {
             case adt_trigger_event::A01:
                 result = handle_admit_impl(message);
@@ -80,7 +80,7 @@ public:
                 break;
             default:
                 metrics.record_hl7_error("ADT", "unsupported_trigger_event");
-                return std::unexpected(adt_error::unsupported_trigger_event);
+                return to_error_info(adt_error::unsupported_trigger_event);
         }
 
         // Record processing duration
@@ -90,7 +90,7 @@ public:
         metrics.record_hl7_processing_duration("ADT", duration);
 
         // Update statistics based on result
-        if (result) {
+        if (result.is_ok()) {
             stats_.success_count++;
             // Record ACK sent
             metrics.record_hl7_message_sent("ADT_ACK");
@@ -120,29 +120,29 @@ public:
     // Individual Event Handlers
     // =========================================================================
 
-    std::expected<adt_result, adt_error> handle_admit_impl(
+    Result<adt_result> handle_admit_impl(
         const hl7_message& message) {
         return create_or_update_patient(message, adt_trigger_event::A01,
                                          config_.allow_a01_update);
     }
 
-    std::expected<adt_result, adt_error> handle_register_impl(
+    Result<adt_result> handle_register_impl(
         const hl7_message& message) {
         // A04 always creates (for outpatient registration)
         return create_or_update_patient(message, adt_trigger_event::A04, true);
     }
 
-    std::expected<adt_result, adt_error> handle_update_impl(
+    Result<adt_result> handle_update_impl(
         const hl7_message& message) {
         // Extract patient data
         auto patient_result = mapper_.to_patient(message);
         if (!patient_result) {
-            return std::unexpected(adt_error::invalid_patient_data);
+            return to_error_info(adt_error::invalid_patient_data);
         }
 
         auto& patient = *patient_result;
         if (patient.patient_id.empty()) {
-            return std::unexpected(adt_error::missing_patient_id);
+            return to_error_info(adt_error::missing_patient_id);
         }
 
         // Check if patient exists
@@ -152,19 +152,19 @@ public:
                 // Create if configured to allow
                 return create_patient(message, patient, adt_trigger_event::A08);
             }
-            return std::unexpected(adt_error::patient_not_found);
+            return to_error_info(adt_error::patient_not_found);
         }
 
         // Update patient
         return update_patient(message, *existing, patient);
     }
 
-    std::expected<adt_result, adt_error> handle_merge_impl(
+    Result<adt_result> handle_merge_impl(
         const hl7_message& message) {
         // Extract merge information from MRG segment
         auto merge_info_opt = extract_merge_info(message);
         if (!merge_info_opt) {
-            return std::unexpected(adt_error::merge_failed);
+            return to_error_info(adt_error::merge_failed);
         }
 
         auto& merge = *merge_info_opt;
@@ -172,12 +172,12 @@ public:
         // Get primary patient data from PID segment
         auto patient_result = mapper_.to_patient(message);
         if (!patient_result) {
-            return std::unexpected(adt_error::invalid_patient_data);
+            return to_error_info(adt_error::invalid_patient_data);
         }
 
         auto& primary_patient = *patient_result;
         if (primary_patient.patient_id.empty()) {
-            return std::unexpected(adt_error::missing_patient_id);
+            return to_error_info(adt_error::missing_patient_id);
         }
 
         // Perform merge in cache
@@ -216,25 +216,25 @@ public:
     // Helper Methods
     // =========================================================================
 
-    std::expected<adt_result, adt_error> create_or_update_patient(
+    Result<adt_result> create_or_update_patient(
         const hl7_message& message, adt_trigger_event trigger,
         bool allow_update) {
         // Extract patient data
         auto patient_result = mapper_.to_patient(message);
         if (!patient_result) {
-            return std::unexpected(adt_error::invalid_patient_data);
+            return to_error_info(adt_error::invalid_patient_data);
         }
 
         auto& patient = *patient_result;
         if (patient.patient_id.empty()) {
-            return std::unexpected(adt_error::missing_patient_id);
+            return to_error_info(adt_error::missing_patient_id);
         }
 
         // Validate if configured
         if (config_.validate_patient_data) {
             auto validation_errors = validate_patient(patient);
             if (!validation_errors.empty()) {
-                return std::unexpected(adt_error::invalid_patient_data);
+                return to_error_info(adt_error::invalid_patient_data);
             }
         }
 
@@ -244,13 +244,13 @@ public:
             if (allow_update) {
                 return update_patient(message, *existing, patient);
             }
-            return std::unexpected(adt_error::duplicate_patient);
+            return to_error_info(adt_error::duplicate_patient);
         }
 
         return create_patient(message, patient, trigger);
     }
 
-    std::expected<adt_result, adt_error> create_patient(
+    Result<adt_result> create_patient(
         const hl7_message& message, const mapping::dicom_patient& patient,
         adt_trigger_event trigger) {
         // Add to cache
@@ -282,7 +282,7 @@ public:
         return result;
     }
 
-    std::expected<adt_result, adt_error> update_patient(
+    Result<adt_result> update_patient(
         const hl7_message& message, const mapping::dicom_patient& old_patient,
         const mapping::dicom_patient& new_patient) {
         // Update in cache
@@ -462,7 +462,7 @@ adt_handler::~adt_handler() = default;
 adt_handler::adt_handler(adt_handler&&) noexcept = default;
 adt_handler& adt_handler::operator=(adt_handler&&) noexcept = default;
 
-std::expected<adt_result, adt_error> adt_handler::handle(
+Result<adt_result> adt_handler::handle(
     const hl7_message& message) {
     return pimpl_->handle(message);
 }
@@ -475,22 +475,22 @@ std::vector<std::string> adt_handler::supported_triggers() const {
     return pimpl_->supported_triggers();
 }
 
-std::expected<adt_result, adt_error> adt_handler::handle_admit(
+Result<adt_result> adt_handler::handle_admit(
     const hl7_message& message) {
     return pimpl_->handle_admit_impl(message);
 }
 
-std::expected<adt_result, adt_error> adt_handler::handle_register(
+Result<adt_result> adt_handler::handle_register(
     const hl7_message& message) {
     return pimpl_->handle_register_impl(message);
 }
 
-std::expected<adt_result, adt_error> adt_handler::handle_update(
+Result<adt_result> adt_handler::handle_update(
     const hl7_message& message) {
     return pimpl_->handle_update_impl(message);
 }
 
-std::expected<adt_result, adt_error> adt_handler::handle_merge(
+Result<adt_result> adt_handler::handle_merge(
     const hl7_message& message) {
     return pimpl_->handle_merge_impl(message);
 }

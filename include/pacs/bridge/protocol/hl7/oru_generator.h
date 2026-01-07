@@ -24,7 +24,6 @@
 #include "hl7_message.h"
 #include "hl7_types.h"
 
-#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -288,7 +287,7 @@ public:
      * @param status Report status
      * @return Generated HL7 message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> generate(
+    [[nodiscard]] Result<hl7_message> generate(
         const oru_study_info& study,
         std::string_view report_text,
         report_status status) const;
@@ -300,7 +299,7 @@ public:
      * @param report_text Report text content
      * @return Generated HL7 message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_preliminary(
+    [[nodiscard]] Result<hl7_message> generate_preliminary(
         const oru_study_info& study,
         std::string_view report_text) const;
 
@@ -311,7 +310,7 @@ public:
      * @param report_text Report text content
      * @return Generated HL7 message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_final(
+    [[nodiscard]] Result<hl7_message> generate_final(
         const oru_study_info& study,
         std::string_view report_text) const;
 
@@ -322,7 +321,7 @@ public:
      * @param report_text Report text content
      * @return Generated HL7 message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_corrected(
+    [[nodiscard]] Result<hl7_message> generate_corrected(
         const oru_study_info& study,
         std::string_view report_text) const;
 
@@ -333,7 +332,7 @@ public:
      * @param cancellation_reason Reason for cancellation (optional)
      * @return Generated HL7 message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> generate_cancelled(
+    [[nodiscard]] Result<hl7_message> generate_cancelled(
         const oru_study_info& study,
         std::string_view cancellation_reason = "") const;
 
@@ -349,7 +348,7 @@ public:
      * @param status Report status
      * @return Serialized HL7 message string or error
      */
-    [[nodiscard]] static std::expected<std::string, hl7_error> generate_string(
+    [[nodiscard]] static Result<std::string> generate_string(
         const oru_study_info& study,
         std::string_view report_text,
         report_status status);
