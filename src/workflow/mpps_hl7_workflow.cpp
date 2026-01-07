@@ -226,12 +226,12 @@ public:
 
         // Step 1: Map MPPS to HL7
         auto mapping_result = mapper_.mpps_to_orm(mpps, event);
-        if (!mapping_result) {
+        if (mapping_result.is_err()) {
             update_failure_stats(true, false, false);
             return std::unexpected(workflow_error::mapping_failed);
         }
 
-        const auto& hl7_result = mapping_result.value();
+        const auto& hl7_result = mapping_result.unwrap();
 
         // Step 2: Select destination
         auto dest = select_destination(mpps);

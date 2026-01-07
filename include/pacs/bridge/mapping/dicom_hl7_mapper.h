@@ -29,7 +29,12 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
-#include <expected>
+#ifdef PACS_BRIDGE_STANDALONE_BUILD
+#include <pacs/bridge/internal/result_stub.h>
+#else
+#include <kcenon/common/patterns/result.h>
+#endif
+
 #include <functional>
 #include <memory>
 #include <optional>
@@ -38,6 +43,15 @@
 #include <vector>
 
 namespace pacs::bridge::mapping {
+
+// =============================================================================
+// Result Type Aliases
+// =============================================================================
+
+template<typename T>
+using Result = kcenon::common::Result<T>;
+using VoidResult = kcenon::common::VoidResult;
+using error_info = kcenon::common::error_info;
 
 // =============================================================================
 // Error Codes (-930 to -939)
@@ -243,7 +257,7 @@ public:
      * Takes source value, returns transformed value or error.
      */
     using transform_function =
-        std::function<std::expected<std::string, dicom_hl7_error>(std::string_view)>;
+        std::function<Result<std::string>(std::string_view)>;
 
     /**
      * @brief Default constructor with default configuration
@@ -282,7 +296,7 @@ public:
      * @param event MPPS event type
      * @return Mapping result with ORM message or error
      */
-    [[nodiscard]] std::expected<mpps_mapping_result, dicom_hl7_error>
+    [[nodiscard]] Result<mpps_mapping_result>
     mpps_to_orm(const pacs_adapter::mpps_dataset& mpps,
                 pacs_adapter::mpps_event event) const;
 
@@ -295,7 +309,7 @@ public:
      * @param mpps MPPS dataset
      * @return Mapping result or error
      */
-    [[nodiscard]] std::expected<mpps_mapping_result, dicom_hl7_error>
+    [[nodiscard]] Result<mpps_mapping_result>
     mpps_in_progress_to_orm(const pacs_adapter::mpps_dataset& mpps) const;
 
     /**
@@ -307,7 +321,7 @@ public:
      * @param mpps MPPS dataset
      * @return Mapping result or error
      */
-    [[nodiscard]] std::expected<mpps_mapping_result, dicom_hl7_error>
+    [[nodiscard]] Result<mpps_mapping_result>
     mpps_completed_to_orm(const pacs_adapter::mpps_dataset& mpps) const;
 
     /**
@@ -319,7 +333,7 @@ public:
      * @param mpps MPPS dataset
      * @return Mapping result or error
      */
-    [[nodiscard]] std::expected<mpps_mapping_result, dicom_hl7_error>
+    [[nodiscard]] Result<mpps_mapping_result>
     mpps_discontinued_to_orm(const pacs_adapter::mpps_dataset& mpps) const;
 
     // =========================================================================
@@ -335,7 +349,7 @@ public:
      * @param dicom_date DICOM date string
      * @return HL7 date string or error
      */
-    [[nodiscard]] static std::expected<std::string, dicom_hl7_error>
+    [[nodiscard]] static Result<std::string>
     dicom_date_to_hl7(std::string_view dicom_date);
 
     /**
@@ -347,7 +361,7 @@ public:
      * @param dicom_time DICOM time string
      * @return HL7 time string or error
      */
-    [[nodiscard]] static std::expected<std::string, dicom_hl7_error>
+    [[nodiscard]] static Result<std::string>
     dicom_time_to_hl7(std::string_view dicom_time);
 
     /**
@@ -359,7 +373,7 @@ public:
      * @param dicom_time DICOM time (HHMMSS[.FFFFFF])
      * @return HL7 timestamp or error
      */
-    [[nodiscard]] static std::expected<hl7::hl7_timestamp, dicom_hl7_error>
+    [[nodiscard]] static Result<hl7::hl7_timestamp>
     dicom_datetime_to_hl7_timestamp(std::string_view dicom_date,
                                      std::string_view dicom_time);
 

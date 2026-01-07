@@ -46,13 +46,15 @@ public:
     /**
      * @brief Build ORM^O01 message from MPPS dataset
      */
-    [[nodiscard]] std::expected<mpps_mapping_result, dicom_hl7_error>
+    [[nodiscard]] Result<mpps_mapping_result>
     build_orm_message(const pacs_adapter::mpps_dataset& mpps,
                       pacs_adapter::mpps_event event) const {
         // Validate required fields
         auto validation_errors = validate_mpps_for_mapping(mpps);
         if (!validation_errors.empty() && config_.validate_before_build) {
-            return std::unexpected(dicom_hl7_error::missing_required_attribute);
+            return Result<mpps_mapping_result>::err(error_info{
+                to_error_code(dicom_hl7_error::missing_required_attribute),
+                to_string(dicom_hl7_error::missing_required_attribute)});
         }
 
         // Determine order control and status codes
@@ -95,7 +97,9 @@ public:
         // Build the message
         auto build_result = builder.build();
         if (!build_result.is_ok()) {
-            return std::unexpected(dicom_hl7_error::message_build_failed);
+            return Result<mpps_mapping_result>::err(error_info{
+                to_error_code(dicom_hl7_error::message_build_failed),
+                to_string(dicom_hl7_error::message_build_failed)});
         }
 
         // Prepare result
@@ -112,7 +116,7 @@ public:
             result.warnings.push_back(warning);
         }
 
-        return result;
+        return Result<mpps_mapping_result>::ok(std::move(result));
     }
 
 private:
@@ -366,25 +370,25 @@ dicom_hl7_mapper& dicom_hl7_mapper::operator=(dicom_hl7_mapper&&) noexcept = def
 // MPPS to ORM Mapping
 // =============================================================================
 
-std::expected<mpps_mapping_result, dicom_hl7_error>
+Result<mpps_mapping_result>
 dicom_hl7_mapper::mpps_to_orm(const pacs_adapter::mpps_dataset& mpps,
                                pacs_adapter::mpps_event event) const {
     return pimpl_->build_orm_message(mpps, event);
 }
 
-std::expected<mpps_mapping_result, dicom_hl7_error>
+Result<mpps_mapping_result>
 dicom_hl7_mapper::mpps_in_progress_to_orm(
     const pacs_adapter::mpps_dataset& mpps) const {
     return mpps_to_orm(mpps, pacs_adapter::mpps_event::in_progress);
 }
 
-std::expected<mpps_mapping_result, dicom_hl7_error>
+Result<mpps_mapping_result>
 dicom_hl7_mapper::mpps_completed_to_orm(
     const pacs_adapter::mpps_dataset& mpps) const {
     return mpps_to_orm(mpps, pacs_adapter::mpps_event::completed);
 }
 
-std::expected<mpps_mapping_result, dicom_hl7_error>
+Result<mpps_mapping_result>
 dicom_hl7_mapper::mpps_discontinued_to_orm(
     const pacs_adapter::mpps_dataset& mpps) const {
     return mpps_to_orm(mpps, pacs_adapter::mpps_event::discontinued);
@@ -394,13 +398,15 @@ dicom_hl7_mapper::mpps_discontinued_to_orm(
 // Utility Conversion Functions
 // =============================================================================
 
-std::expected<std::string, dicom_hl7_error>
+Result<std::string>
 dicom_hl7_mapper::dicom_date_to_hl7(std::string_view dicom_date) {
     // DICOM date format: YYYYMMDD
     // HL7 date format: YYYYMMDD (same)
 
     if (dicom_date.empty()) {
-        return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+        return Result<std::string>::err(error_info{
+            to_error_code(dicom_hl7_error::datetime_conversion_failed),
+            to_string(dicom_hl7_error::datetime_conversion_failed)});
     }
 
     // Remove any trailing whitespace
@@ -410,26 +416,32 @@ dicom_hl7_mapper::dicom_date_to_hl7(std::string_view dicom_date) {
 
     // Validate length (must be exactly 8 characters)
     if (dicom_date.length() != 8) {
-        return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+        return Result<std::string>::err(error_info{
+            to_error_code(dicom_hl7_error::datetime_conversion_failed),
+            to_string(dicom_hl7_error::datetime_conversion_failed)});
     }
 
     // Validate all characters are digits
     for (char c : dicom_date) {
         if (!std::isdigit(static_cast<unsigned char>(c))) {
-            return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+            return Result<std::string>::err(error_info{
+                to_error_code(dicom_hl7_error::datetime_conversion_failed),
+                to_string(dicom_hl7_error::datetime_conversion_failed)});
         }
     }
 
-    return std::string(dicom_date);
+    return Result<std::string>::ok(std::string(dicom_date));
 }
 
-std::expected<std::string, dicom_hl7_error>
+Result<std::string>
 dicom_hl7_mapper::dicom_time_to_hl7(std::string_view dicom_time) {
     // DICOM time format: HHMMSS.FFFFFF (up to 6 fractional digits)
     // HL7 time format: HHMMSS[.S[S[S[S]]]] (up to 4 fractional digits)
 
     if (dicom_time.empty()) {
-        return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+        return Result<std::string>::err(error_info{
+            to_error_code(dicom_hl7_error::datetime_conversion_failed),
+            to_string(dicom_hl7_error::datetime_conversion_failed)});
     }
 
     // Remove trailing whitespace
@@ -445,7 +457,9 @@ dicom_hl7_mapper::dicom_time_to_hl7(std::string_view dicom_time) {
     if (dot_pos == std::string_view::npos) {
         // No fractional part
         if (dicom_time.length() < 2) {
-            return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+            return Result<std::string>::err(error_info{
+                to_error_code(dicom_hl7_error::datetime_conversion_failed),
+                to_string(dicom_hl7_error::datetime_conversion_failed)});
         }
         result = std::string(dicom_time.substr(0, std::min(size_t(6), dicom_time.length())));
     } else {
@@ -455,7 +469,9 @@ dicom_hl7_mapper::dicom_time_to_hl7(std::string_view dicom_time) {
 
         // Validate time part
         if (time_part.length() < 2 || time_part.length() > 6) {
-            return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+            return Result<std::string>::err(error_info{
+                to_error_code(dicom_hl7_error::datetime_conversion_failed),
+                to_string(dicom_hl7_error::datetime_conversion_failed)});
         }
 
         result = std::string(time_part);
@@ -467,10 +483,10 @@ dicom_hl7_mapper::dicom_time_to_hl7(std::string_view dicom_time) {
         }
     }
 
-    return result;
+    return Result<std::string>::ok(std::move(result));
 }
 
-std::expected<hl7::hl7_timestamp, dicom_hl7_error>
+Result<hl7::hl7_timestamp>
 dicom_hl7_mapper::dicom_datetime_to_hl7_timestamp(std::string_view dicom_date,
                                                    std::string_view dicom_time) {
     hl7::hl7_timestamp ts{};
@@ -489,14 +505,18 @@ dicom_hl7_mapper::dicom_datetime_to_hl7_timestamp(std::string_view dicom_date,
         if (year_result.ec != std::errc{} ||
             month_result.ec != std::errc{} ||
             day_result.ec != std::errc{}) {
-            return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+            return Result<hl7::hl7_timestamp>::err(error_info{
+                to_error_code(dicom_hl7_error::datetime_conversion_failed),
+                to_string(dicom_hl7_error::datetime_conversion_failed)});
         }
 
         ts.year = year;
         ts.month = month;
         ts.day = day;
     } else {
-        return std::unexpected(dicom_hl7_error::datetime_conversion_failed);
+        return Result<hl7::hl7_timestamp>::err(error_info{
+            to_error_code(dicom_hl7_error::datetime_conversion_failed),
+            to_string(dicom_hl7_error::datetime_conversion_failed)});
     }
 
     // Parse time (HHMMSS[.FFFFFF])
@@ -554,7 +574,7 @@ dicom_hl7_mapper::dicom_datetime_to_hl7_timestamp(std::string_view dicom_date,
         }
     }
 
-    return ts;
+    return Result<hl7::hl7_timestamp>::ok(std::move(ts));
 }
 
 hl7::hl7_person_name
