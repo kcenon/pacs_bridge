@@ -1,7 +1,7 @@
 # Module Descriptions
 
-> **Version:** 0.1.0.2
-> **Last Updated:** 2025-12-18
+> **Version:** 0.1.0.3
+> **Last Updated:** 2026-01-07
 
 ---
 
@@ -40,6 +40,7 @@ pacs_bridge/
 │   ├── monitoring/           # Health and metrics
 │   ├── tracing/              # Distributed tracing
 │   ├── testing/              # Test utilities
+│   ├── internal/             # Internal stubs for standalone builds
 │   └── concepts/             # C++20 concepts
 ├── src/
 │   └── [corresponding implementations]
@@ -361,6 +362,19 @@ auto result = client.send(hl7_message);
 ### EMR Client Module (`emr/`)
 
 **Purpose:** Client-side integration with external EMR/FHIR servers.
+
+**Build Modes:**
+
+The EMR module supports two build modes for the Result<T> pattern:
+
+| Mode | Option | Description |
+|------|--------|-------------|
+| Standalone | `BRIDGE_STANDALONE_BUILD=ON` | Uses internal `result_stub.h` |
+| Full Integration | `BRIDGE_STANDALONE_BUILD=OFF` | Uses `common_system`'s Result<T> |
+
+> **Note:** In standalone builds, the `internal/result_stub.h` provides equivalent
+> `Result<T>`, `VoidResult`, `error_info`, and factory functions (`ok()`, `make_error()`)
+> for compatibility. See [Issue #217](https://github.com/kcenon/pacs_bridge/issues/217).
 
 **Key Classes:**
 
