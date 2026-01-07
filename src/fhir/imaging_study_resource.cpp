@@ -918,8 +918,8 @@ resource_result<std::unique_ptr<fhir_resource>> imaging_study_handler::read(
     // Convert DICOM study to FHIR ImagingStudy
     if (pimpl_->mapper_) {
         auto fhir_result = pimpl_->mapper_->study_to_imaging_study(*result);
-        if (fhir_result) {
-            return imaging_study_resource::from_mapping_struct(*fhir_result);
+        if (fhir_result.is_ok()) {
+            return imaging_study_resource::from_mapping_struct(fhir_result.unwrap());
         }
     }
 
@@ -964,9 +964,9 @@ resource_result<search_result> imaging_study_handler::search(
             if (pimpl_->mapper_) {
                 auto fhir_result =
                     pimpl_->mapper_->study_to_imaging_study(*study_result);
-                if (fhir_result) {
+                if (fhir_result.is_ok()) {
                     resource =
-                        imaging_study_resource::from_mapping_struct(*fhir_result);
+                        imaging_study_resource::from_mapping_struct(fhir_result.unwrap());
                 }
             } else {
                 resource = dicom_to_fhir_imaging_study(*study_result);
@@ -1006,9 +1006,9 @@ resource_result<search_result> imaging_study_handler::search(
 
         if (pimpl_->mapper_) {
             auto fhir_result = pimpl_->mapper_->study_to_imaging_study(study);
-            if (fhir_result) {
+            if (fhir_result.is_ok()) {
                 resource =
-                    imaging_study_resource::from_mapping_struct(*fhir_result);
+                    imaging_study_resource::from_mapping_struct(fhir_result.unwrap());
             }
         } else {
             resource = dicom_to_fhir_imaging_study(study);

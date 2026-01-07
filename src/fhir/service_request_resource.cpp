@@ -1109,10 +1109,10 @@ resource_result<std::unique_ptr<fhir_resource>> service_request_handler::create(
     if (pimpl_->mapper_) {
         auto mwl_result = pimpl_->mapper_->service_request_to_mwl(
             mapping_request, patient);
-        if (mwl_result.has_value()) {
+        if (mwl_result.is_ok()) {
             // Store MWL item
             if (pimpl_->storage_) {
-                pimpl_->storage_->store(resource_id, *mwl_result);
+                pimpl_->storage_->store(resource_id, mwl_result.unwrap());
             }
         }
     }
@@ -1184,8 +1184,8 @@ resource_result<std::unique_ptr<fhir_resource>> service_request_handler::update(
     if (pimpl_->mapper_ && pimpl_->storage_) {
         auto mwl_result = pimpl_->mapper_->service_request_to_mwl(
             mapping_request, patient);
-        if (mwl_result.has_value()) {
-            pimpl_->storage_->update(id, *mwl_result);
+        if (mwl_result.is_ok()) {
+            pimpl_->storage_->update(id, mwl_result.unwrap());
         }
     }
 
