@@ -19,7 +19,12 @@
 #include <string_view>
 #include <vector>
 
+// Result<T> pattern - use stub for standalone builds
+#ifdef PACS_BRIDGE_STANDALONE_BUILD
+#include <pacs/bridge/internal/result_stub.h>
+#else
 #include <kcenon/common/patterns/result.h>
+#endif
 
 namespace pacs::bridge::emr {
 
