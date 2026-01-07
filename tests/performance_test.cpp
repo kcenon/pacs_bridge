@@ -408,7 +408,7 @@ bool test_thread_pool_task_submission() {
     config.min_threads = 2;
 
     thread_pool_manager pool(config);
-    pool.start();
+    (void)pool.start();
 
     std::atomic<int> counter{0};
 
@@ -424,7 +424,7 @@ bool test_thread_pool_task_submission() {
                  std::chrono::milliseconds{5000}),
         "All tasks should complete within timeout");
 
-    pool.stop(true, std::chrono::seconds{5});
+    (void)pool.stop(true, std::chrono::seconds{5});
 
     TEST_ASSERT(counter.load() == 100, "All 100 tasks should complete");
 
@@ -436,7 +436,7 @@ bool test_thread_pool_priority_scheduling() {
     config.min_threads = 1;  // Single thread to test ordering
 
     thread_pool_manager pool(config);
-    pool.start();
+    (void)pool.start();
 
     std::vector<int> execution_order;
     std::mutex order_mutex;
@@ -470,7 +470,7 @@ bool test_thread_pool_priority_scheduling() {
             return execution_order.size() >= 3;
         }, std::chrono::milliseconds{2000}),
         "All tasks should complete within timeout");
-    pool.stop(true, std::chrono::seconds{5});
+    (void)pool.stop(true, std::chrono::seconds{5});
 
     // High priority should execute before low priority
     // (exact order depends on timing)
@@ -484,7 +484,7 @@ bool test_thread_pool_statistics() {
     config.min_threads = 2;
 
     thread_pool_manager pool(config);
-    pool.start();
+    (void)pool.start();
 
     const auto& stats = pool.statistics();
 
@@ -511,7 +511,7 @@ bool test_thread_pool_statistics() {
 
     TEST_ASSERT(stats.total_submitted.load() >= 10, "Should track submissions");
 
-    pool.stop(true, std::chrono::seconds{5});
+    (void)pool.stop(true, std::chrono::seconds{5});
 
     TEST_ASSERT(stats.total_completed.load() >= 10, "Should track completions");
 
@@ -545,7 +545,7 @@ bool test_connection_pool_acquire() {
     connection_pool_config config;
 
     optimized_connection_pool pool(config);
-    pool.start();
+    (void)pool.start();
 
     auto conn = pool.acquire("localhost", 2575);
     TEST_ASSERT(conn.has_value(), "Should acquire connection");
@@ -554,7 +554,7 @@ bool test_connection_pool_acquire() {
     TEST_ASSERT(stats.total_acquires.load() >= 1, "Should track acquires");
     TEST_ASSERT(stats.total_created.load() >= 1, "Should create connection");
 
-    pool.stop(true, std::chrono::seconds{5});
+    (void)pool.stop(true, std::chrono::seconds{5});
 
     return true;
 }
@@ -563,7 +563,7 @@ bool test_connection_pool_statistics() {
     connection_pool_config config;
 
     optimized_connection_pool pool(config);
-    pool.start();
+    (void)pool.start();
 
     // Acquire connections
     for (int i = 0; i < 5; ++i) {
@@ -573,7 +573,7 @@ bool test_connection_pool_statistics() {
     const auto& stats = pool.statistics();
     TEST_ASSERT(stats.total_acquires.load() == 5, "Should track 5 acquires");
 
-    pool.stop(true, std::chrono::seconds{5});
+    (void)pool.stop(true, std::chrono::seconds{5});
 
     return true;
 }
@@ -724,7 +724,7 @@ bool test_integration_thread_pool_with_parser() {
     pool_config.min_threads = 4;
 
     thread_pool_manager pool(pool_config);
-    pool.start();
+    (void)pool.start();
 
     std::atomic<uint64_t> successful_parses{0};
     std::atomic<uint64_t> failed_parses{0};
@@ -749,7 +749,7 @@ bool test_integration_thread_pool_with_parser() {
             return (successful_parses.load() + failed_parses.load()) >= 1000;
         }, std::chrono::milliseconds{10000}),
         "All parsing tasks should complete within timeout");
-    pool.stop(true, std::chrono::seconds{10});
+    (void)pool.stop(true, std::chrono::seconds{10});
 
     std::cout << "    Successful parses: " << successful_parses.load() << std::endl;
     std::cout << "    Failed parses: " << failed_parses.load() << std::endl;

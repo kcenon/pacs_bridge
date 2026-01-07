@@ -254,7 +254,7 @@ public:
                     auto result = process(msg);
 
                     if (result && !config_.output_topic.empty()) {
-                        bus_->publish(config_.output_topic, *result);
+                        (void)bus_->publish(config_.output_topic, *result);
                     }
 
                     return subscription_result::ok();
@@ -279,7 +279,7 @@ public:
         running_.store(false);
 
         if (bus_) {
-            bus_->unsubscribe(subscription_);
+            (void)bus_->unsubscribe(subscription_);
             bus_.reset();
         }
     }
@@ -603,7 +603,7 @@ hl7_pipeline hl7_pipeline_builder::build() {
     hl7_pipeline pipeline(config_);
 
     for (const auto& stage : stages_) {
-        pipeline.add_stage(stage);
+        (void)pipeline.add_stage(stage);
     }
 
     return pipeline;

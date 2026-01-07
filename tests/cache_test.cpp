@@ -402,7 +402,7 @@ bool test_cache_lru_eviction() {
     TEST_ASSERT(cache.size() == 5, "Should have 5 entries");
 
     // Access first entry to make it recently used
-    cache.get("0");
+    (void)cache.get("0");
 
     // Add new entry, should evict least recently used (entry "1")
     cache.put("5", create_test_patient("5"));
@@ -427,9 +427,9 @@ bool test_cache_lru_order() {
     cache.put("c", create_test_patient("c"));
 
     // Access in order: b, a, c - so b becomes most recent, a becomes second
-    cache.get("b");
-    cache.get("a");
-    cache.get("c");
+    (void)cache.get("b");
+    (void)cache.get("a");
+    (void)cache.get("c");
 
     // Add new entry, "b" was accessed first (least recently used now)
     cache.put("d", create_test_patient("d"));
@@ -681,8 +681,8 @@ bool test_cache_get_metadata() {
     TEST_ASSERT(!meta->is_expired(), "Should not be expired");
 
     // Access entry
-    cache.get("12345");
-    cache.get("12345");
+    (void)cache.get("12345");
+    (void)cache.get("12345");
 
     auto meta2 = cache.get_metadata("12345");
     TEST_ASSERT(meta2->access_count == 2, "Access count should be 2");
@@ -722,10 +722,10 @@ bool test_cache_statistics_basic() {
     cache.put("1", create_test_patient("1"));
     cache.put("2", create_test_patient("2"));
 
-    cache.get("1");  // Hit
-    cache.get("1");  // Hit
-    cache.get("2");  // Hit
-    cache.get("3");  // Miss
+    (void)cache.get("1");  // Hit
+    (void)cache.get("1");  // Hit
+    (void)cache.get("2");  // Hit
+    (void)cache.get("3");  // Miss
 
     auto stats = cache.get_statistics();
     TEST_ASSERT(stats.put_count == 2, "Put count should be 2");
@@ -742,10 +742,10 @@ bool test_cache_statistics_hit_rate() {
 
     cache.put("1", create_test_patient("1"));
 
-    cache.get("1");  // Hit
-    cache.get("1");  // Hit
-    cache.get("1");  // Hit
-    cache.get("2");  // Miss
+    (void)cache.get("1");  // Hit
+    (void)cache.get("1");  // Hit
+    (void)cache.get("1");  // Hit
+    (void)cache.get("2");  // Miss
 
     auto stats = cache.get_statistics();
     double hit_rate = stats.hit_rate();
@@ -759,8 +759,8 @@ bool test_cache_statistics_reset() {
     patient_cache cache;
 
     cache.put("1", create_test_patient("1"));
-    cache.get("1");
-    cache.get("2");
+    (void)cache.get("1");
+    (void)cache.get("2");
 
     auto stats1 = cache.get_statistics();
     TEST_ASSERT(stats1.get_count > 0, "Should have counts");

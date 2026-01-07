@@ -401,7 +401,7 @@ TEST_F(ReliableSenderStatisticsTest, StatisticsAfterEnqueue) {
     ASSERT_TRUE(sender.start().has_value());
 
     for (int i = 0; i < 5; ++i) {
-        sender.enqueue("RIS", "MSH|...|" + std::to_string(i), 0);
+        (void)sender.enqueue("RIS", "MSH|...|" + std::to_string(i), 0);
     }
 
     auto stats = sender.get_statistics();
@@ -419,7 +419,7 @@ TEST_F(ReliableSenderStatisticsTest, ResetStatistics) {
     reliable_outbound_sender sender(config);
     ASSERT_TRUE(sender.start().has_value());
 
-    sender.enqueue("RIS", "MSH|...", 0);
+    (void)sender.enqueue("RIS", "MSH|...", 0);
 
     auto stats1 = sender.get_statistics();
     EXPECT_GT(stats1.total_enqueued, 0u);

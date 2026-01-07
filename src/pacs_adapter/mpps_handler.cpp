@@ -54,7 +54,7 @@ public:
         if (monitor_func_) {
             monitor_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "mpps_monitor"; }
@@ -887,8 +887,8 @@ private:
         });
 
         auto result = config_.executor->execute_delayed(std::move(job), delay);
-        if (result) {
-            monitor_future_ = std::move(*result);
+        if (result.is_ok()) {
+            monitor_future_ = std::move(result.value());
         }
     }
 #endif  // PACS_BRIDGE_STANDALONE_BUILD
@@ -1544,8 +1544,8 @@ private:
         });
 
         auto result = config_.executor->execute_delayed(std::move(job), delay);
-        if (result) {
-            monitor_future_ = std::move(*result);
+        if (result.is_ok()) {
+            monitor_future_ = std::move(result.value());
         }
     }
 #endif  // PACS_BRIDGE_STANDALONE_BUILD

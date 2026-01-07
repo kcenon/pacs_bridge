@@ -349,9 +349,9 @@ protected:
 TEST_F(FhirPatientParseTest, ValidPatient) {
     auto result = parse_fhir_patient(valid_patient_json);
 
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    auto& patient = *result;
+    auto& patient = result.value();
     EXPECT_EQ(patient.id, "patient-123");
     EXPECT_EQ(patient.mrn, "MRN12345");
     EXPECT_EQ(patient.version_id.value_or(""), "1");
@@ -389,17 +389,17 @@ TEST_F(FhirPatientParseTest, InvalidResourceType) {
     })";
 
     auto result = parse_fhir_patient(invalid_json);
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), patient_error::invalid_data);
+    EXPECT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(patient_error::invalid_data));
 }
 
 TEST_F(FhirPatientParseTest, MalformedJson) {
     std::string malformed = "{ not valid json }";
 
     auto result = parse_fhir_patient(malformed);
-    EXPECT_FALSE(result.has_value());
+    EXPECT_FALSE(result.is_ok());
     // Malformed JSON without resourceType field returns invalid_data
-    EXPECT_EQ(result.error(), patient_error::invalid_data);
+    EXPECT_EQ(result.error().code, to_error_code(patient_error::invalid_data));
 }
 
 TEST_F(FhirPatientParseTest, MinimalPatient) {
@@ -409,9 +409,9 @@ TEST_F(FhirPatientParseTest, MinimalPatient) {
     })";
 
     auto result = parse_fhir_patient(minimal_json);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    auto& patient = *result;
+    auto& patient = result.value();
     EXPECT_EQ(patient.id, "minimal-123");
     EXPECT_TRUE(patient.active);  // Default
     EXPECT_TRUE(patient.names.empty());
@@ -426,9 +426,9 @@ TEST_F(FhirPatientParseTest, DeceasedPatient) {
     })";
 
     auto result = parse_fhir_patient(deceased_json);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    auto& patient = *result;
+    auto& patient = result.value();
     EXPECT_TRUE(patient.deceased.value_or(false));
     EXPECT_TRUE(patient.deceased_datetime.has_value());
 }
@@ -448,9 +448,9 @@ TEST_F(FhirPatientParseTest, MergedPatient) {
     })";
 
     auto result = parse_fhir_patient(merged_json);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    auto& patient = *result;
+    auto& patient = result.value();
     EXPECT_TRUE(patient.is_merged());
     EXPECT_EQ(patient.link_reference.value_or(""), "Patient/master-456");
 }

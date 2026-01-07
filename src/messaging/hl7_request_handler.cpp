@@ -188,7 +188,7 @@ public:
         if (!pub_result) {
             std::unique_lock lock(mutex_);
             pending_.erase(correlation_id);
-            bus_->unsubscribe(*sub_result);
+            (void)bus_->unsubscribe(*sub_result);
             return std::unexpected(request_error::service_unavailable);
         }
 
@@ -196,7 +196,7 @@ public:
         auto status = future.wait_for(timeout);
 
         // Cleanup subscription
-        bus_->unsubscribe(*sub_result);
+        (void)bus_->unsubscribe(*sub_result);
 
         // Remove pending request
         {
@@ -428,7 +428,7 @@ public:
         running_.store(false);
 
         if (bus_) {
-            bus_->unsubscribe(subscription_);
+            (void)bus_->unsubscribe(subscription_);
         }
     }
 
@@ -541,7 +541,7 @@ private:
             ? "hl7.reply." + std::string(request.control_id())
             : config_.reply_topic;
 
-        bus_->publish(reply_topic, response);
+        (void)bus_->publish(reply_topic, response);
     }
 
     std::shared_ptr<hl7_message_bus> bus_;

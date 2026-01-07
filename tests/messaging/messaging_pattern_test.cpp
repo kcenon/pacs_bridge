@@ -131,7 +131,7 @@ TEST_F(MessagingPatternTest, PublishWithoutStart) {
 
 TEST_F(MessagingPatternTest, SubscribeAndPublish) {
     hl7_message_bus bus;
-    bus.start();
+    (void)bus.start();
 
     std::atomic<int> received_count{0};
     std::latch message_received{1};
@@ -159,25 +159,25 @@ TEST_F(MessagingPatternTest, SubscribeAndPublish) {
 
 TEST_F(MessagingPatternTest, SubscribeToSpecificEvent) {
     hl7_message_bus bus;
-    bus.start();
+    (void)bus.start();
 
     std::atomic<int> a01_count{0};
     std::atomic<int> a04_count{0};
 
-    bus.subscribe_to_event("ADT", "A01",
+    (void)bus.subscribe_to_event("ADT", "A01",
         [&](const hl7_message&) {
             a01_count++;
             return subscription_result::ok();
         });
 
-    bus.subscribe_to_event("ADT", "A04",
+    (void)bus.subscribe_to_event("ADT", "A04",
         [&](const hl7_message&) {
             a04_count++;
             return subscription_result::ok();
         });
 
     // Publish A01 message
-    bus.publish(test_message_);
+    (void)bus.publish(test_message_);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -189,11 +189,11 @@ TEST_F(MessagingPatternTest, SubscribeToSpecificEvent) {
 
 TEST_F(MessagingPatternTest, FilteredSubscription) {
     hl7_message_bus bus;
-    bus.start();
+    (void)bus.start();
 
     std::atomic<int> filtered_count{0};
 
-    bus.subscribe(topics::HL7_ADT_ALL,
+    (void)bus.subscribe(topics::HL7_ADT_ALL,
         [&](const hl7_message&) {
             filtered_count++;
             return subscription_result::ok();
@@ -205,7 +205,7 @@ TEST_F(MessagingPatternTest, FilteredSubscription) {
         });
 
     // Should be received (patient ID is "12345")
-    bus.publish(test_message_);
+    (void)bus.publish(test_message_);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -216,7 +216,7 @@ TEST_F(MessagingPatternTest, FilteredSubscription) {
 
 TEST_F(MessagingPatternTest, Unsubscribe) {
     hl7_message_bus bus;
-    bus.start();
+    (void)bus.start();
 
     std::atomic<int> count{0};
 
@@ -241,7 +241,7 @@ TEST_F(MessagingPatternTest, Unsubscribe) {
 
 TEST_F(MessagingPatternTest, HL7PublisherWrapper) {
     auto bus = std::make_shared<hl7_message_bus>();
-    bus->start();
+    (void)bus->start();
 
     hl7_publisher publisher(bus);
     EXPECT_TRUE(publisher.is_ready());
@@ -251,12 +251,12 @@ TEST_F(MessagingPatternTest, HL7PublisherWrapper) {
     auto result = publisher.publish(test_message_);
     EXPECT_TRUE(result.has_value());
 
-    bus->stop();
+    (void)bus->stop();
 }
 
 TEST_F(MessagingPatternTest, HL7SubscriberWrapper) {
     auto bus = std::make_shared<hl7_message_bus>();
-    bus->start();
+    (void)bus->start();
 
     hl7_subscriber subscriber(bus);
     EXPECT_EQ(subscriber.subscription_count(), 0);
@@ -274,7 +274,7 @@ TEST_F(MessagingPatternTest, HL7SubscriberWrapper) {
     subscriber.unsubscribe_all();
     EXPECT_EQ(subscriber.subscription_count(), 0);
 
-    bus->stop();
+    (void)bus->stop();
 }
 
 // =============================================================================
@@ -283,12 +283,12 @@ TEST_F(MessagingPatternTest, HL7SubscriberWrapper) {
 
 TEST_F(MessagingPatternTest, MessageBusStatistics) {
     hl7_message_bus bus;
-    bus.start();
+    (void)bus.start();
 
-    bus.subscribe(topics::HL7_ALL,
+    (void)bus.subscribe(topics::HL7_ALL,
         [](const hl7_message&) { return subscription_result::ok(); });
 
-    bus.publish(test_message_);
+    (void)bus.publish(test_message_);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -323,13 +323,13 @@ TEST_F(MessagingPatternTest, PipelineProcess) {
     std::atomic<int> stage1_count{0};
     std::atomic<int> stage2_count{0};
 
-    pipeline.add_stage("stage1", "Stage 1",
+    (void)pipeline.add_stage("stage1", "Stage 1",
         [&](const hl7_message&) {
             stage1_count++;
             return stage_result::ok();
         });
 
-    pipeline.add_stage("stage2", "Stage 2",
+    (void)pipeline.add_stage("stage2", "Stage 2",
         [&](const hl7_message&) {
             stage2_count++;
             return stage_result::ok();
@@ -344,12 +344,12 @@ TEST_F(MessagingPatternTest, PipelineProcess) {
 TEST_F(MessagingPatternTest, PipelineStageFailure) {
     hl7_pipeline pipeline;
 
-    pipeline.add_stage("fail", "Failing Stage",
+    (void)pipeline.add_stage("fail", "Failing Stage",
         [](const hl7_message&) {
             return stage_result::error("Intentional failure");
         });
 
-    pipeline.add_stage("after", "After Stage",
+    (void)pipeline.add_stage("after", "After Stage",
         [](const hl7_message&) {
             return stage_result::ok();
         });
@@ -370,10 +370,10 @@ TEST_F(MessagingPatternTest, PipelineOptionalStage) {
     };
     optional_stage.optional = true;
 
-    pipeline.add_stage(optional_stage);
+    (void)pipeline.add_stage(optional_stage);
 
     std::atomic<bool> next_called{false};
-    pipeline.add_stage("next", "Next Stage",
+    (void)pipeline.add_stage("next", "Next Stage",
         [&](const hl7_message&) {
             next_called = true;
             return stage_result::ok();
@@ -387,7 +387,7 @@ TEST_F(MessagingPatternTest, PipelineOptionalStage) {
 TEST_F(MessagingPatternTest, PipelineTransformation) {
     hl7_pipeline pipeline;
 
-    pipeline.add_stage("transform", "Transform",
+    (void)pipeline.add_stage("transform", "Transform",
         [](const hl7_message& msg) {
             auto transformed = msg;
             transformed.set_value("ZPI.1", "TRANSFORMED");

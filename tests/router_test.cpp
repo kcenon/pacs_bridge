@@ -412,7 +412,7 @@ bool test_router_add_route_validation() {
     route r1;
     r1.id = "route1";
     r1.handler_ids = {"h1"};
-    router.add_route(r1);
+    (void)router.add_route(r1);
 
     route r2;
     r2.id = "route1";  // Duplicate
@@ -431,7 +431,7 @@ bool test_router_remove_route() {
     route r;
     r.id = "test_route";
     r.handler_ids = {"h1"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     bool removed = router.remove_route("test_route");
     TEST_ASSERT(removed, "Should remove route");
@@ -451,7 +451,7 @@ bool test_router_route_enabled() {
     r.id = "test_route";
     r.handler_ids = {"h1"};
     r.enabled = true;
-    router.add_route(r);
+    (void)router.add_route(r);
 
     router.set_route_enabled("test_route", false);
 
@@ -470,7 +470,7 @@ bool test_router_clear_routes() {
         route r;
         r.id = "route" + std::to_string(i);
         r.handler_ids = {"h1"};
-        router.add_route(r);
+        (void)router.add_route(r);
     }
 
     TEST_ASSERT(router.routes().size() == 5, "Should have 5 routes");
@@ -498,7 +498,7 @@ bool test_routing_basic() {
     r.id = "adt_route";
     r.pattern = message_pattern::for_type("ADT");
     r.handler_ids = {"adt_handler"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     auto msg = parse_message(SAMPLE_ADT_A01);
     auto result = router.route(msg);
@@ -520,7 +520,7 @@ bool test_routing_no_match() {
     r.id = "orm_route";
     r.pattern = message_pattern::for_type("ORM");
     r.handler_ids = {"orm_handler"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     auto adt_msg = parse_message(SAMPLE_ADT_A01);
     auto result = router.route(adt_msg);
@@ -577,10 +577,10 @@ bool test_routing_handler_chain() {
     r.id = "chain_route";
     r.pattern = message_pattern::any();
     r.handler_ids = {"handler1", "handler2", "handler3"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     auto msg = parse_message(SAMPLE_ADT_A01);
-    router.route(msg);
+    (void)router.route(msg);
 
     TEST_ASSERT(call_order.size() == 3, "All handlers should be called");
     TEST_ASSERT(call_order[0] == 1, "Handler 1 first");
@@ -614,10 +614,10 @@ bool test_routing_handler_stops_chain() {
     r.id = "stop_route";
     r.pattern = message_pattern::any();
     r.handler_ids = {"handler1", "handler2", "handler3"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     auto msg = parse_message(SAMPLE_ADT_A01);
-    router.route(msg);
+    (void)router.route(msg);
 
     TEST_ASSERT(call_order.size() == 2, "Only 2 handlers should be called");
     TEST_ASSERT(call_order[0] == 1, "Handler 1 called");
@@ -647,7 +647,7 @@ bool test_routing_priority() {
     r_low.priority = 100;
     r_low.pattern = message_pattern::any();
     r_low.handler_ids = {"low"};
-    router.add_route(r_low);
+    (void)router.add_route(r_low);
 
     // Add high priority second
     route r_high;
@@ -655,10 +655,10 @@ bool test_routing_priority() {
     r_high.priority = 10;  // Lower number = higher priority
     r_high.pattern = message_pattern::any();
     r_high.handler_ids = {"high"};
-    router.add_route(r_high);
+    (void)router.add_route(r_high);
 
     auto msg = parse_message(SAMPLE_ADT_A01);
-    router.route(msg);
+    (void)router.route(msg);
 
     TEST_ASSERT(call_order.size() == 2, "Both handlers should be called");
     TEST_ASSERT(call_order[0] == "high", "High priority should be first");
@@ -688,17 +688,17 @@ bool test_routing_terminal_route() {
     r1.pattern = message_pattern::any();
     r1.handler_ids = {"first"};
     r1.terminal = true;  // Terminal route
-    router.add_route(r1);
+    (void)router.add_route(r1);
 
     route r2;
     r2.id = "second_route";
     r2.priority = 100;
     r2.pattern = message_pattern::any();
     r2.handler_ids = {"second"};
-    router.add_route(r2);
+    (void)router.add_route(r2);
 
     auto msg = parse_message(SAMPLE_ADT_A01);
-    router.route(msg);
+    (void)router.route(msg);
 
     TEST_ASSERT(call_order.size() == 1, "Only terminal route should be called");
     TEST_ASSERT(call_order[0] == "first", "First handler should be called");
@@ -714,19 +714,19 @@ bool test_routing_find_matching_routes() {
     r1.id = "adt_route";
     r1.pattern = message_pattern::for_type("ADT");
     r1.handler_ids = {"h1"};
-    router.add_route(r1);
+    (void)router.add_route(r1);
 
     route r2;
     r2.id = "all_route";
     r2.pattern = message_pattern::any();
     r2.handler_ids = {"h1"};
-    router.add_route(r2);
+    (void)router.add_route(r2);
 
     route r3;
     r3.id = "orm_route";
     r3.pattern = message_pattern::for_type("ORM");
     r3.handler_ids = {"h1"};
-    router.add_route(r3);
+    (void)router.add_route(r3);
 
     auto adt_msg = parse_message(SAMPLE_ADT_A01);
     auto matching = router.find_matching_routes(adt_msg);
@@ -755,15 +755,15 @@ bool test_router_statistics() {
     r.id = "stats_route";
     r.pattern = message_pattern::for_type("ADT");
     r.handler_ids = {"h1"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     // Route some messages
     auto adt_msg = parse_message(SAMPLE_ADT_A01);
-    router.route(adt_msg);
-    router.route(adt_msg);
+    (void)router.route(adt_msg);
+    (void)router.route(adt_msg);
 
     auto orm_msg = parse_message(SAMPLE_ORM_O01);
-    router.route(orm_msg);  // Will not match
+    (void)router.route(orm_msg);  // Will not match
 
     auto stats = router.get_statistics();
     TEST_ASSERT(stats.total_messages == 3, "Should have 3 total messages");
@@ -782,10 +782,10 @@ bool test_router_statistics_reset() {
     r.id = "test_route";
     r.pattern = message_pattern::any();
     r.handler_ids = {"h1"};
-    router.add_route(r);
+    (void)router.add_route(r);
 
     auto msg = parse_message(SAMPLE_ADT_A01);
-    router.route(msg);
+    (void)router.route(msg);
 
     auto stats = router.get_statistics();
     TEST_ASSERT(stats.total_messages == 1, "Should have 1 message");

@@ -431,12 +431,12 @@ class HttpClientAdapterTest : public ::testing::Test {};
 
 TEST_F(HttpClientAdapterTest, CallbackHttpClient) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         http_response response;
         response.status = http_status::ok;
         response.body = R"({"resourceType":"Patient","id":"123"})";
         response.headers.emplace_back("Content-Type", "application/fhir+json");
-        return response;
+        return kcenon::common::ok(response);
     };
 
     callback_http_client client(callback);
@@ -446,15 +446,16 @@ TEST_F(HttpClientAdapterTest, CallbackHttpClient) {
     request.url = "http://example.com/Patient/123";
 
     auto result = client.execute(request);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->status, http_status::ok);
-    EXPECT_FALSE(result->body.empty());
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().status, http_status::ok);
+    EXPECT_FALSE(result.value().body.empty());
 }
 
 TEST_F(HttpClientAdapterTest, CallbackHttpClientError) {
     auto callback = [](const http_request&)
-        -> std::expected<http_response, emr_error> {
-        return std::unexpected(emr_error::timeout);
+        -> Result<http_response> {
+        return Result<http_response>(kcenon::common::error_info{
+            to_error_code(emr_error::timeout), to_string(emr_error::timeout), "emr"});
     };
 
     callback_http_client client(callback);
@@ -464,47 +465,47 @@ TEST_F(HttpClientAdapterTest, CallbackHttpClientError) {
     request.url = "http://example.com/Patient/123";
 
     auto result = client.execute(request);
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), emr_error::timeout);
+    EXPECT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(emr_error::timeout));
 }
 
 TEST_F(HttpClientAdapterTest, ConvenienceMethods) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         http_response response;
         response.status = http_status::ok;
 
         // Echo back method
         std::string method_str(to_string(req.method));
         response.body = "{\"method\":\"" + method_str + "\"}";
-        return response;
+        return kcenon::common::ok(response);
     };
 
     callback_http_client client(callback);
 
     // Test GET
     auto get_result = client.get("http://example.com/test");
-    ASSERT_TRUE(get_result.has_value());
-    EXPECT_NE(get_result->body.find("GET"), std::string::npos);
+    ASSERT_TRUE(get_result.is_ok());
+    EXPECT_NE(get_result.value().body.find("GET"), std::string::npos);
 
     // Test POST
     auto post_result =
         client.post("http://example.com/test", "{}", "application/fhir+json");
-    ASSERT_TRUE(post_result.has_value());
-    EXPECT_NE(post_result->body.find("POST"), std::string::npos);
+    ASSERT_TRUE(post_result.is_ok());
+    EXPECT_NE(post_result.value().body.find("POST"), std::string::npos);
 
     // Test DELETE
     auto del_result = client.del("http://example.com/test");
-    ASSERT_TRUE(del_result.has_value());
-    EXPECT_NE(del_result->body.find("DELETE"), std::string::npos);
+    ASSERT_TRUE(del_result.is_ok());
+    EXPECT_NE(del_result.value().body.find("DELETE"), std::string::npos);
 }
 
 TEST_F(HttpClientAdapterTest, CreateHttpClientWithCallback) {
     auto callback = [](const http_request&)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         http_response response;
         response.status = http_status::ok;
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_http_client(callback);
@@ -512,7 +513,7 @@ TEST_F(HttpClientAdapterTest, CreateHttpClientWithCallback) {
 
     http_request request;
     auto result = client->execute(request);
-    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(result.is_ok());
 }
 
 // =============================================================================
@@ -534,7 +535,7 @@ protected:
 
 TEST_F(FhirClientTest, ReadResource) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         // Verify request
         EXPECT_EQ(req.method, http_method::get);
         EXPECT_NE(req.url.find("Patient/123"), std::string::npos);
@@ -547,39 +548,39 @@ TEST_F(FhirClientTest, ReadResource) {
             "name": [{"family": "Smith", "given": ["John"]}]
         })";
         response.headers.emplace_back("ETag", "W/\"1\"");
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto result = client->read("Patient", "123");
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->status, http_status::ok);
-    EXPECT_EQ(result->value.resource_type, "Patient");
-    EXPECT_EQ(result->value.id, "123");
-    EXPECT_TRUE(result->etag.has_value());
-    EXPECT_EQ(*result->etag, "W/\"1\"");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().status, http_status::ok);
+    EXPECT_EQ(result.value().value.resource_type, "Patient");
+    EXPECT_EQ(result.value().value.id, "123");
+    EXPECT_TRUE(result.value().etag.has_value());
+    EXPECT_EQ(*result.value().etag, "W/\"1\"");
 }
 
 TEST_F(FhirClientTest, ReadResourceNotFound) {
     auto callback = [](const http_request&)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         http_response response;
         response.status = http_status::not_found;
         response.body = R"({"resourceType":"OperationOutcome"})";
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto result = client->read("Patient", "999");
 
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), emr_error::resource_not_found);
+    EXPECT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(emr_error::resource_not_found));
 }
 
 TEST_F(FhirClientTest, SearchResources) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         // Verify search parameters
         EXPECT_NE(req.url.find("name=Smith"), std::string::npos);
 
@@ -593,22 +594,22 @@ TEST_F(FhirClientTest, SearchResources) {
                 "resource": {"resourceType": "Patient", "id": "123"}
             }]
         })";
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto params = search_params::for_patient().name("Smith");
     auto result = client->search("Patient", params);
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->value.type, bundle_type::searchset);
-    EXPECT_EQ(result->value.total, 1);
-    EXPECT_EQ(result->value.entries.size(), 1);
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().value.type, bundle_type::searchset);
+    EXPECT_EQ(result.value().value.total, 1);
+    EXPECT_EQ(result.value().value.entries.size(), 1);
 }
 
 TEST_F(FhirClientTest, CreateResource) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         EXPECT_EQ(req.method, http_method::post);
         EXPECT_FALSE(req.body.empty());
 
@@ -616,21 +617,21 @@ TEST_F(FhirClientTest, CreateResource) {
         response.status = http_status::created;
         response.body = R"({"resourceType":"Patient","id":"new-123"})";
         response.headers.emplace_back("Location", "Patient/new-123/_history/1");
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     std::string patient_json = R"({"resourceType":"Patient"})";
     auto result = client->create("Patient", patient_json);
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->status, http_status::created);
-    EXPECT_TRUE(result->location.has_value());
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().status, http_status::created);
+    EXPECT_TRUE(result.value().location.has_value());
 }
 
 TEST_F(FhirClientTest, UpdateResource) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         EXPECT_EQ(req.method, http_method::put);
         EXPECT_NE(req.url.find("Patient/123"), std::string::npos);
 
@@ -638,35 +639,35 @@ TEST_F(FhirClientTest, UpdateResource) {
         response.status = http_status::ok;
         response.body = R"({"resourceType":"Patient","id":"123"})";
         response.headers.emplace_back("ETag", "W/\"2\"");
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto result = client->update("Patient", "123", R"({"resourceType":"Patient","id":"123"})");
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result->etag, "W/\"2\"");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(*result.value().etag, "W/\"2\"");
 }
 
 TEST_F(FhirClientTest, DeleteResource) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         EXPECT_EQ(req.method, http_method::delete_method);
 
         http_response response;
         response.status = http_status::no_content;
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto result = client->remove("Patient", "123");
 
-    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(result.is_ok());
 }
 
 TEST_F(FhirClientTest, Capabilities) {
     auto callback = [](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         EXPECT_NE(req.url.find("metadata"), std::string::npos);
 
         http_response response;
@@ -675,19 +676,19 @@ TEST_F(FhirClientTest, Capabilities) {
             "resourceType": "CapabilityStatement",
             "rest": [{"resource": [{"type": "Patient"}]}]
         })";
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto result = client->capabilities();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->value.resource_type, "CapabilityStatement");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().value.resource_type, "CapabilityStatement");
 }
 
 TEST_F(FhirClientTest, SupportsResource) {
     auto callback = [](const http_request&)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         http_response response;
         response.status = http_status::ok;
         // Need actual "type":"Patient" pattern for the simple substring search
@@ -695,24 +696,24 @@ TEST_F(FhirClientTest, SupportsResource) {
             "resourceType": "CapabilityStatement",
             "rest": [{"resource": [{"type":"Patient"}, {"type":"Observation"}]}]
         })";
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
 
     auto patient_result = client->supports_resource("Patient");
-    ASSERT_TRUE(patient_result.has_value());
-    EXPECT_TRUE(*patient_result);
+    ASSERT_TRUE(patient_result.is_ok());
+    EXPECT_TRUE(patient_result.value());
 
     auto unknown_result = client->supports_resource("UnknownResource");
-    ASSERT_TRUE(unknown_result.has_value());
-    EXPECT_FALSE(*unknown_result);
+    ASSERT_TRUE(unknown_result.is_ok());
+    EXPECT_FALSE(unknown_result.value());
 }
 
 TEST_F(FhirClientTest, NextPage) {
     int call_count = 0;
     auto callback = [&call_count](const http_request& req)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         call_count++;
 
         http_response response;
@@ -734,29 +735,29 @@ TEST_F(FhirClientTest, NextPage) {
                 "entry": [{"resource": {"resourceType": "Patient", "id": "2"}}]
             })";
         }
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
     auto result = client->search("Patient", search_params{});
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_TRUE(result->value.has_next());
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_TRUE(result.value().value.has_next());
 
-    auto next_result = client->next_page(result->value);
-    ASSERT_TRUE(next_result.has_value());
-    EXPECT_FALSE(next_result->value.has_next());
+    auto next_result = client->next_page(result.value().value);
+    ASSERT_TRUE(next_result.is_ok());
+    EXPECT_FALSE(next_result.value().value.has_next());
 
     EXPECT_EQ(call_count, 2);
 }
 
 TEST_F(FhirClientTest, Statistics) {
     auto callback = [](const http_request&)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         http_response response;
         response.status = http_status::ok;
         response.body = R"({"resourceType":"Patient","id":"1"})";
-        return response;
+        return kcenon::common::ok(response);
     };
 
     auto client = create_mock_client(callback);
@@ -782,8 +783,9 @@ TEST_F(FhirClientTest, Configuration) {
     config.timeout = 30s;
 
     auto http_client = create_http_client([](const http_request&)
-                                              -> std::expected<http_response, emr_error> {
-        return std::unexpected(emr_error::not_supported);
+                                              -> Result<http_response> {
+        return Result<http_response>(kcenon::common::error_info{
+            to_error_code(emr_error::not_supported), to_string(emr_error::not_supported), "emr"});
     });
 
     fhir_client client(config, std::move(http_client));

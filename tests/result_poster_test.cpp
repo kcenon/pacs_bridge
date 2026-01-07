@@ -287,15 +287,15 @@ TEST_F(DiagnosticReportBuilderTest, BuildValidatedSuccess) {
                       .subject("Patient/123")
                       .build_validated();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_FALSE(result->empty());
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_FALSE(result.value().empty());
 }
 
 TEST_F(DiagnosticReportBuilderTest, BuildValidatedFailure) {
     auto result = diagnostic_report_builder().build_validated();
 
-    ASSERT_FALSE(result.has_value());
-    EXPECT_TRUE(result.error().find("Validation failed") != std::string::npos);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_TRUE(result.error().message.find("Validation failed") != std::string::npos);
 }
 
 TEST_F(DiagnosticReportBuilderTest, Reset) {

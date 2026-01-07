@@ -363,7 +363,7 @@ thread_pool_manager& thread_pool_manager::instance() {
     std::lock_guard lock(g_instance_mutex);
     if (!g_instance) {
         g_instance = std::make_unique<thread_pool_manager>();
-        g_instance->start();
+        (void)g_instance->start();
     }
     return *g_instance;
 }
@@ -371,16 +371,16 @@ thread_pool_manager& thread_pool_manager::instance() {
 void thread_pool_manager::initialize(const thread_pool_config& config) {
     std::lock_guard lock(g_instance_mutex);
     if (g_instance) {
-        g_instance->stop(true, std::chrono::seconds{30});
+        (void)g_instance->stop(true, std::chrono::seconds{30});
     }
     g_instance = std::make_unique<thread_pool_manager>(config);
-    g_instance->start();
+    (void)g_instance->start();
 }
 
 void thread_pool_manager::shutdown() {
     std::lock_guard lock(g_instance_mutex);
     if (g_instance) {
-        g_instance->stop(true, std::chrono::seconds{30});
+        (void)g_instance->stop(true, std::chrono::seconds{30});
         g_instance.reset();
     }
 }

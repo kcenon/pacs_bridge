@@ -579,9 +579,9 @@ bool test_generator_message_counter() {
     TEST_ASSERT(generator.messages_generated() == 0,
                 "initial count should be 0");
 
-    generator.generate_orm();
-    generator.generate_adt();
-    generator.generate_siu();
+    (void)generator.generate_orm();
+    (void)generator.generate_adt();
+    (void)generator.generate_siu();
 
     TEST_ASSERT(generator.messages_generated() == 3,
                 "should have generated 3 messages");
@@ -596,9 +596,9 @@ bool test_generator_message_counter() {
 bool test_generator_type_counter() {
     load_generator generator;
 
-    generator.generate_orm();
-    generator.generate_orm();
-    generator.generate_adt();
+    (void)generator.generate_orm();
+    (void)generator.generate_orm();
+    (void)generator.generate_adt();
 
     TEST_ASSERT(generator.messages_generated(hl7_message_type::ORM) == 2,
                 "ORM count should be 2");

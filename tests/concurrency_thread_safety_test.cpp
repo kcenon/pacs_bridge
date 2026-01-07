@@ -562,7 +562,7 @@ TEST_F(ConcurrencyThreadSafetyTest, ParsingDoesNotDeadlock) {
     auto thread_func = [&](int thread_id) {
         hl7_parser parser;
         for (int i = 0; i < 100; ++i) {
-            parser.parse(create_test_message(thread_id * 1000 + i));
+            (void)parser.parse(create_test_message(thread_id * 1000 + i));
         }
         ++completed;
     };

@@ -543,7 +543,7 @@ struct benchmark_runner::impl {
         }
 
         // Wait for completion
-        pool.stop(true, std::chrono::seconds{10});
+        (void)pool.stop(true, std::chrono::seconds{10});
 
         auto end = std::chrono::steady_clock::now();
         result.actual_duration =

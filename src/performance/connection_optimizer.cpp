@@ -237,7 +237,7 @@ optimized_connection_pool::optimized_connection_pool(
 
 optimized_connection_pool::~optimized_connection_pool() {
     if (impl_->running.load()) {
-        stop(true, std::chrono::seconds{10});
+        (void)stop(true, std::chrono::seconds{10});
     }
 }
 
