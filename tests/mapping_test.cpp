@@ -208,9 +208,9 @@ bool test_mapper_orm_to_mwl() {
 
     hl7_dicom_mapper mapper;
     auto map_result = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(map_result.has_value(), "Should map to MWL successfully");
+    TEST_ASSERT(map_result.is_ok(), "Should map to MWL successfully");
 
-    const auto& mwl = *map_result;
+    const auto& mwl = map_result.unwrap();
 
     // Check patient info
     TEST_ASSERT(mwl.patient.patient_id == "12345", "Patient ID should be 12345");
@@ -235,13 +235,14 @@ bool test_mapper_patient_extraction() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient successfully");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient successfully");
 
-    TEST_ASSERT(patient->patient_id == "12345", "Patient ID should match");
-    TEST_ASSERT(patient->issuer_of_patient_id == "HOSPITAL", "Issuer should match");
-    TEST_ASSERT(patient->patient_name == "DOE^JOHN^WILLIAM", "Name should match");
-    TEST_ASSERT(patient->patient_birth_date == "19800515", "Birth date should match");
-    TEST_ASSERT(patient->patient_sex == "M", "Sex should be M");
+    const auto& p = patient.unwrap();
+    TEST_ASSERT(p.patient_id == "12345", "Patient ID should match");
+    TEST_ASSERT(p.issuer_of_patient_id == "HOSPITAL", "Issuer should match");
+    TEST_ASSERT(p.patient_name == "DOE^JOHN^WILLIAM", "Name should match");
+    TEST_ASSERT(p.patient_birth_date == "19800515", "Birth date should match");
+    TEST_ASSERT(p.patient_sex == "M", "Sex should be M");
 
     return true;
 }
@@ -258,8 +259,8 @@ bool test_mapper_invalid_message_type() {
 
     hl7_dicom_mapper mapper;
     auto map_result = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(!map_result.has_value(), "Should fail for ADT message");
-    TEST_ASSERT(map_result.error() == mapping_error::unsupported_message_type,
+    TEST_ASSERT(map_result.is_err(), "Should fail for ADT message");
+    TEST_ASSERT(map_result.error().code == to_error_code(mapping_error::unsupported_message_type),
                 "Error should be unsupported_message_type");
 
     return true;
@@ -435,9 +436,9 @@ bool test_complete_orm_workflow() {
 
     hl7_dicom_mapper mapper(config);
     auto mwl_result = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl_result.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl_result.is_ok(), "Should create MWL item");
 
-    const auto& mwl = *mwl_result;
+    const auto& mwl = mwl_result.unwrap();
 
     // Verify all required DICOM fields are populated
     TEST_ASSERT(!mwl.patient.patient_id.empty(), "Patient ID required");

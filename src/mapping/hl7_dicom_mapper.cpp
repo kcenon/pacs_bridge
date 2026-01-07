@@ -31,55 +31,61 @@ public:
     void register_default_transforms() {
         // Uppercase transform
         transforms_["uppercase"] = [](std::string_view value)
-            -> std::expected<std::string, mapping_error> {
+            -> Result<std::string> {
             std::string result(value);
             std::transform(result.begin(), result.end(), result.begin(),
                            ::toupper);
-            return result;
+            return Result<std::string>::ok(result);
         };
 
         // Trim whitespace transform
         transforms_["trim"] = [](std::string_view value)
-            -> std::expected<std::string, mapping_error> {
+            -> Result<std::string> {
             size_t start = value.find_first_not_of(" \t\r\n");
             size_t end = value.find_last_not_of(" \t\r\n");
-            if (start == std::string_view::npos) return std::string{};
-            return std::string(value.substr(start, end - start + 1));
+            if (start == std::string_view::npos) return Result<std::string>::ok(std::string{});
+            return Result<std::string>::ok(std::string(value.substr(start, end - start + 1)));
         };
 
         // Date format transform
         transforms_["date_to_dicom"] = [](std::string_view value)
-            -> std::expected<std::string, mapping_error> {
+            -> Result<std::string> {
             auto ts = hl7::hl7_timestamp::parse(value);
             if (!ts) {
-                return std::unexpected(mapping_error::datetime_parse_failed);
+                return Result<std::string>::err(error_info{
+                    static_cast<int>(mapping_error::datetime_parse_failed),
+                    to_string(mapping_error::datetime_parse_failed)});
             }
-            return hl7_dicom_mapper::hl7_datetime_to_dicom_date(*ts);
+            return Result<std::string>::ok(hl7_dicom_mapper::hl7_datetime_to_dicom_date(*ts));
         };
 
         // Time format transform
         transforms_["time_to_dicom"] = [](std::string_view value)
-            -> std::expected<std::string, mapping_error> {
+            -> Result<std::string> {
             auto ts = hl7::hl7_timestamp::parse(value);
             if (!ts) {
-                return std::unexpected(mapping_error::datetime_parse_failed);
+                return Result<std::string>::err(error_info{
+                    static_cast<int>(mapping_error::datetime_parse_failed),
+                    to_string(mapping_error::datetime_parse_failed)});
             }
-            return hl7_dicom_mapper::hl7_datetime_to_dicom_time(*ts);
+            return Result<std::string>::ok(hl7_dicom_mapper::hl7_datetime_to_dicom_time(*ts));
         };
 
         // Name format transform
         transforms_["name_to_dicom"] = [](std::string_view value)
-            -> std::expected<std::string, mapping_error> {
+            -> Result<std::string> {
             auto name = hl7::hl7_person_name::from_dicom_pn(value);
-            return hl7_dicom_mapper::hl7_name_to_dicom(name);
+            return Result<std::string>::ok(hl7_dicom_mapper::hl7_name_to_dicom(name));
         };
     }
 
-    std::expected<std::string, mapping_error> apply_transform(
+    Result<std::string> apply_transform(
         std::string_view value, std::string_view transform_name) const {
         auto it = transforms_.find(std::string(transform_name));
         if (it == transforms_.end()) {
-            return std::unexpected(mapping_error::no_mapping_rule);
+            return Result<std::string>::err(error_info{
+                static_cast<int>(mapping_error::no_mapping_rule),
+                to_string(mapping_error::no_mapping_rule)});
         }
         return it->second(value);
     }
@@ -100,7 +106,7 @@ hl7_dicom_mapper::~hl7_dicom_mapper() = default;
 hl7_dicom_mapper::hl7_dicom_mapper(hl7_dicom_mapper&&) noexcept = default;
 hl7_dicom_mapper& hl7_dicom_mapper::operator=(hl7_dicom_mapper&&) noexcept = default;
 
-std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
+Result<mwl_item> hl7_dicom_mapper::to_mwl(
     const hl7::hl7_message& message) const {
     // Start tracing span for HL7 to DICOM mapping
     auto span = tracing::trace_manager::instance().start_span(
@@ -113,7 +119,9 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
 
     if (header.type != hl7::message_type::ORM) {
         span.set_error("Unsupported message type for MWL mapping");
-        return std::unexpected(mapping_error::unsupported_message_type);
+        return Result<mwl_item>::err(error_info{
+            static_cast<int>(mapping_error::unsupported_message_type),
+            to_string(mapping_error::unsupported_message_type)});
     }
 
     mwl_item mwl;
@@ -146,7 +154,9 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
         // Patient Sex (PID-8)
         mwl.patient.patient_sex = hl7_sex_to_dicom(pid->field_value(8));
     } else if (!pimpl_->config_.allow_partial_mapping) {
-        return std::unexpected(mapping_error::missing_required_field);
+        return Result<mwl_item>::err(error_info{
+            static_cast<int>(mapping_error::missing_required_field),
+            to_string(mapping_error::missing_required_field)});
     }
 
     // Map order information (ORC segment)
@@ -266,7 +276,9 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
 
         mwl.scheduled_steps.push_back(std::move(sps));
     } else if (!pimpl_->config_.allow_partial_mapping) {
-        return std::unexpected(mapping_error::missing_required_field);
+        return Result<mwl_item>::err(error_info{
+            static_cast<int>(mapping_error::missing_required_field),
+            to_string(mapping_error::missing_required_field)});
     }
 
     // Validate if enabled
@@ -276,7 +288,9 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
             span.set_error("MWL validation failed");
             span.set_attribute("mapping.validation_errors",
                                static_cast<int64_t>(errors.size()));
-            return std::unexpected(mapping_error::validation_failed);
+            return Result<mwl_item>::err(error_info{
+                static_cast<int>(mapping_error::validation_failed),
+                to_string(mapping_error::validation_failed)});
         }
     }
 
@@ -288,22 +302,26 @@ std::expected<mwl_item, mapping_error> hl7_dicom_mapper::to_mwl(
     span.set_attribute("mapping.scheduled_steps",
                        static_cast<int64_t>(mwl.scheduled_steps.size()));
 
-    return mwl;
+    return Result<mwl_item>::ok(std::move(mwl));
 }
 
-std::expected<dicom_patient, mapping_error> hl7_dicom_mapper::to_patient(
+Result<dicom_patient> hl7_dicom_mapper::to_patient(
     const hl7::hl7_message& message) const {
     auto header = message.header();
 
     // ADT and ORM messages are acceptable
     if (header.type != hl7::message_type::ADT &&
         header.type != hl7::message_type::ORM) {
-        return std::unexpected(mapping_error::unsupported_message_type);
+        return Result<dicom_patient>::err(error_info{
+            static_cast<int>(mapping_error::unsupported_message_type),
+            to_string(mapping_error::unsupported_message_type)});
     }
 
     const auto* pid = message.segment("PID");
     if (!pid) {
-        return std::unexpected(mapping_error::missing_required_field);
+        return Result<dicom_patient>::err(error_info{
+            static_cast<int>(mapping_error::missing_required_field),
+            to_string(mapping_error::missing_required_field)});
     }
 
     dicom_patient patient;
@@ -332,7 +350,7 @@ std::expected<dicom_patient, mapping_error> hl7_dicom_mapper::to_patient(
     // Patient Comments (PID-48 or NK1 notes)
     patient.patient_comments = std::string(pid->field_value(48));
 
-    return patient;
+    return Result<dicom_patient>::ok(std::move(patient));
 }
 
 bool hl7_dicom_mapper::can_map_to_mwl(const hl7::hl7_message& message) const {
@@ -345,7 +363,7 @@ bool hl7_dicom_mapper::can_map_to_mwl(const hl7::hl7_message& message) const {
     return message.has_segment("PID") && message.has_segment("OBR");
 }
 
-std::expected<hl7::hl7_message, mapping_error> hl7_dicom_mapper::to_oru(
+Result<hl7::hl7_message> hl7_dicom_mapper::to_oru(
     const mwl_item& mwl, std::string_view status) const {
     hl7::hl7_message msg;
 
@@ -385,7 +403,7 @@ std::expected<hl7::hl7_message, mapping_error> hl7_dicom_mapper::to_oru(
     }
     obr.set_field(25, obr25_status);
 
-    return msg;
+    return Result<hl7::hl7_message>::ok(std::move(msg));
 }
 
 // =============================================================================
@@ -436,13 +454,15 @@ std::string hl7_dicom_mapper::hl7_datetime_to_dicom(const hl7::hl7_timestamp& ts
     return hl7_datetime_to_dicom_date(ts) + hl7_datetime_to_dicom_time(ts);
 }
 
-std::expected<std::string, mapping_error> hl7_dicom_mapper::parse_hl7_datetime(
+Result<std::string> hl7_dicom_mapper::parse_hl7_datetime(
     std::string_view hl7_ts) {
     auto ts = hl7::hl7_timestamp::parse(hl7_ts);
     if (!ts) {
-        return std::unexpected(mapping_error::datetime_parse_failed);
+        return Result<std::string>::err(error_info{
+            static_cast<int>(mapping_error::datetime_parse_failed),
+            to_string(mapping_error::datetime_parse_failed)});
     }
-    return hl7_datetime_to_dicom(*ts);
+    return Result<std::string>::ok(hl7_datetime_to_dicom(*ts));
 }
 
 std::string hl7_dicom_mapper::hl7_sex_to_dicom(std::string_view hl7_sex) {

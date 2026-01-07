@@ -24,7 +24,6 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
-#include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -32,7 +31,34 @@
 #include <unordered_map>
 #include <vector>
 
+// Result<T> pattern - use stub for standalone builds
+#ifdef PACS_BRIDGE_STANDALONE_BUILD
+#include <pacs/bridge/internal/result_stub.h>
+#else
+#include <kcenon/common/patterns/result.h>
+#endif
+
 namespace pacs::bridge::mapping {
+
+// =============================================================================
+// Result Type Aliases
+// =============================================================================
+
+/**
+ * @brief Result type alias for mapping operations
+ */
+template<typename T>
+using Result = kcenon::common::Result<T>;
+
+/**
+ * @brief VoidResult type alias for operations with no return value
+ */
+using VoidResult = kcenon::common::VoidResult;
+
+/**
+ * @brief Error info type alias
+ */
+using error_info = kcenon::common::error_info;
 
 // =============================================================================
 // DICOM MWL Data Structures
@@ -372,7 +398,7 @@ public:
      * Takes source value, returns transformed value or error.
      */
     using transform_function =
-        std::function<std::expected<std::string, mapping_error>(std::string_view)>;
+        std::function<Result<std::string>(std::string_view)>;
 
     /**
      * @brief Default constructor with default configuration
@@ -405,7 +431,7 @@ public:
      * @param message HL7 ORM order message
      * @return MWL item or error
      */
-    [[nodiscard]] std::expected<mwl_item, mapping_error> to_mwl(
+    [[nodiscard]] Result<mwl_item> to_mwl(
         const hl7::hl7_message& message) const;
 
     /**
@@ -414,7 +440,7 @@ public:
      * @param message HL7 ADT message
      * @return Patient data or error
      */
-    [[nodiscard]] std::expected<dicom_patient, mapping_error> to_patient(
+    [[nodiscard]] Result<dicom_patient> to_patient(
         const hl7::hl7_message& message) const;
 
     /**
@@ -436,7 +462,7 @@ public:
      * @param status MPPS status (IN PROGRESS, COMPLETED, DISCONTINUED)
      * @return HL7 ORU message
      */
-    [[nodiscard]] std::expected<hl7::hl7_message, mapping_error> to_oru(
+    [[nodiscard]] Result<hl7::hl7_message> to_oru(
         const mwl_item& mwl, std::string_view status) const;
 
     // =========================================================================
@@ -479,7 +505,7 @@ public:
     /**
      * @brief Parse HL7 timestamp string to DICOM format
      */
-    [[nodiscard]] static std::expected<std::string, mapping_error>
+    [[nodiscard]] static Result<std::string>
     parse_hl7_datetime(std::string_view hl7_ts);
 
     /**
