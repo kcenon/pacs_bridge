@@ -380,7 +380,11 @@ std::size_t simple_executor::pending_tasks() const {
 }
 
 void simple_executor::shutdown(bool wait_for_completion) {
-    running_.store(false, std::memory_order_release);
+    // Use exchange to ensure only one thread performs shutdown
+    bool expected = true;
+    if (!running_.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
+        return;  // Already shutdown or in progress
+    }
 
     queue_cv_.notify_all();
     delay_cv_.notify_all();
