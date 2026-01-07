@@ -112,15 +112,16 @@ bool test_patient_mandatory_fields() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient successfully");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient successfully");
 
+    const auto& p = patient.unwrap();
     // Verify mandatory fields are present
-    TEST_ASSERT(!patient->patient_id.empty(), "Patient ID is mandatory");
-    TEST_ASSERT(!patient->patient_name.empty(), "Patient name is mandatory");
+    TEST_ASSERT(!p.patient_id.empty(), "Patient ID is mandatory");
+    TEST_ASSERT(!p.patient_name.empty(), "Patient name is mandatory");
 
     // Verify actual values
-    TEST_ASSERT(patient->patient_id == "12345", "Patient ID should be 12345");
-    TEST_ASSERT(patient->patient_name.find("DOE") != std::string::npos, "Name should contain DOE");
+    TEST_ASSERT(p.patient_id == "12345", "Patient ID should be 12345");
+    TEST_ASSERT(p.patient_name.find("DOE") != std::string::npos, "Name should contain DOE");
 
     return true;
 }
@@ -132,14 +133,15 @@ bool test_patient_minimal_info() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract minimal patient successfully");
+    TEST_ASSERT(patient.is_ok(), "Should extract minimal patient successfully");
 
+    const auto& p = patient.unwrap();
     // Verify mandatory fields
-    TEST_ASSERT(patient->patient_id == "54321", "Patient ID should be 54321");
-    TEST_ASSERT(patient->patient_name.find("SMITH") != std::string::npos, "Name should contain SMITH");
+    TEST_ASSERT(p.patient_id == "54321", "Patient ID should be 54321");
+    TEST_ASSERT(p.patient_name.find("SMITH") != std::string::npos, "Name should contain SMITH");
 
     // Optional fields should be empty or have defaults
-    TEST_ASSERT(patient->patient_birth_date.empty(), "Birth date should be empty");
+    TEST_ASSERT(p.patient_birth_date.empty(), "Birth date should be empty");
 
     return true;
 }
@@ -163,7 +165,7 @@ bool test_patient_missing_required_field() {
     auto patient = mapper.to_patient(parse_result.value());
     // With strict validation, missing patient ID should cause error
     // Implementation may vary - adjust based on actual behavior
-    TEST_ASSERT(!patient.has_value() || patient->patient_id.empty(),
+    TEST_ASSERT(patient.is_err() || patient.unwrap().patient_id.empty(),
                 "Should handle missing patient ID appropriately");
 
     return true;
@@ -180,12 +182,13 @@ bool test_patient_optional_fields() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient");
 
+    const auto& p = patient.unwrap();
     // Verify optional fields
-    TEST_ASSERT(patient->patient_birth_date == "19800515", "Birth date should match");
-    TEST_ASSERT(patient->patient_sex == "M", "Sex should be M");
-    TEST_ASSERT(patient->issuer_of_patient_id == "HOSPITAL", "Issuer should be HOSPITAL");
+    TEST_ASSERT(p.patient_birth_date == "19800515", "Birth date should match");
+    TEST_ASSERT(p.patient_sex == "M", "Sex should be M");
+    TEST_ASSERT(p.issuer_of_patient_id == "HOSPITAL", "Issuer should be HOSPITAL");
 
     return true;
 }
@@ -197,14 +200,15 @@ bool test_patient_empty_optional_fields() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with empty optional fields");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with empty optional fields");
 
+    const auto& p = patient.unwrap();
     // Mandatory fields should be present
-    TEST_ASSERT(patient->patient_id == "EO001", "Patient ID should be EO001");
-    TEST_ASSERT(patient->patient_name.find("EMPTY") != std::string::npos, "Name should contain EMPTY");
+    TEST_ASSERT(p.patient_id == "EO001", "Patient ID should be EO001");
+    TEST_ASSERT(p.patient_name.find("EMPTY") != std::string::npos, "Name should contain EMPTY");
 
     // Optional fields should be empty or have default values
-    TEST_ASSERT(patient->patient_birth_date.empty(), "Empty birth date");
+    TEST_ASSERT(p.patient_birth_date.empty(), "Empty birth date");
     // Sex may have a default value (e.g., "O" for Other) when not specified
     // This is acceptable behavior per DICOM standard
 
@@ -218,10 +222,11 @@ bool test_patient_multiple_identifiers() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with multiple IDs");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with multiple IDs");
 
+    const auto& p = patient.unwrap();
     // Primary ID should be the first one (MR type)
-    TEST_ASSERT(patient->patient_id == "MID001", "Primary ID should be MID001");
+    TEST_ASSERT(p.patient_id == "MID001", "Primary ID should be MID001");
 
     // Other IDs handling is implementation-specific
     // The mapper may store additional IDs in other_patient_ids or not
@@ -241,11 +246,12 @@ bool test_patient_korean_name() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with Korean name");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with Korean name");
 
+    const auto& p = patient.unwrap();
     // Verify Korean name is preserved
-    TEST_ASSERT(!patient->patient_name.empty(), "Korean name should not be empty");
-    TEST_ASSERT(patient->patient_id == "K12345", "Patient ID should be K12345");
+    TEST_ASSERT(!p.patient_name.empty(), "Korean name should not be empty");
+    TEST_ASSERT(p.patient_id == "K12345", "Patient ID should be K12345");
 
     // Korean name contains UTF-8 bytes for 홍길동
     // Family name: 홍 (U+D64D)
@@ -255,8 +261,8 @@ bool test_patient_korean_name() {
 
     // The name format depends on DICOM PN representation
     // Should contain the Korean characters
-    TEST_ASSERT(patient->patient_name.find(hong) != std::string::npos ||
-                patient->patient_name.find("HONG") != std::string::npos,
+    TEST_ASSERT(p.patient_name.find(hong) != std::string::npos ||
+                p.patient_name.find("HONG") != std::string::npos,
                 "Name should contain Korean family name or romanization");
 
     return true;
@@ -269,12 +275,13 @@ bool test_patient_ideographic_name() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with ideographic name");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with ideographic name");
 
+    const auto& p = patient.unwrap();
     // DICOM PN can have multiple representations:
     // Alphabetic^Ideographic^Phonetic
-    TEST_ASSERT(!patient->patient_name.empty(), "Name should not be empty");
-    TEST_ASSERT(patient->patient_name.find("YAMADA") != std::string::npos,
+    TEST_ASSERT(!p.patient_name.empty(), "Name should not be empty");
+    TEST_ASSERT(p.patient_name.find("YAMADA") != std::string::npos,
                 "Name should contain YAMADA");
 
     return true;
@@ -314,10 +321,11 @@ bool test_study_basic_mapping() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Check requested procedure (study)
-    const auto& proc = mwl->requested_procedure;
+    const auto& proc = m.requested_procedure;
 
     // Study Instance UID should be generated if not provided
     TEST_ASSERT(!proc.study_instance_uid.empty() || mapper.config().auto_generate_study_uid,
@@ -333,12 +341,13 @@ bool test_study_referring_physician() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Referring physician mapping is implementation-specific
     // May come from PV1-7 (attending physician), PV1-8 (referring physician), or OBR-16
     // Verify that the field is populated or empty based on message content
-    const auto& proc = mwl->requested_procedure;
+    const auto& proc = m.requested_procedure;
 
     // The referring physician may be mapped from different sources
     // or may not be populated if the specific field mapping is different
@@ -355,10 +364,11 @@ bool test_study_procedure_description() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Procedure description should be mapped from OBR-4
-    const auto& proc = mwl->requested_procedure;
+    const auto& proc = m.requested_procedure;
     TEST_ASSERT(proc.requested_procedure_description.find("CHEST") != std::string::npos ||
                 proc.procedure_code_meaning.find("CHEST") != std::string::npos,
                 "Procedure should mention CHEST");
@@ -418,10 +428,11 @@ bool test_order_accession_number() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Accession number should be mapped from ORC-3 or OBR-3
-    const auto& isr = mwl->imaging_service_request;
+    const auto& isr = m.imaging_service_request;
     TEST_ASSERT(isr.accession_number == "ACC001", "Accession number should be ACC001");
 
     return true;
@@ -434,10 +445,11 @@ bool test_order_placer_filler_numbers() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Placer order number from ORC-2/OBR-2
-    const auto& isr = mwl->imaging_service_request;
+    const auto& isr = m.imaging_service_request;
     TEST_ASSERT(isr.placer_order_number == "ORD001", "Placer order should be ORD001");
 
     return true;
@@ -450,16 +462,17 @@ bool test_order_requesting_physician() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Requesting physician mapping is implementation-specific
     // The field may be populated from ORC-12, OBR-16, or other segments
     // This test verifies the MWL item is created successfully
-    const auto& isr = mwl->imaging_service_request;
+    const auto& isr = m.imaging_service_request;
     (void)isr;  // Suppress unused warning
 
     // Verify other essential fields are present
-    TEST_ASSERT(!mwl->imaging_service_request.accession_number.empty(),
+    TEST_ASSERT(!m.imaging_service_request.accession_number.empty(),
                 "Accession number should be present");
 
     return true;
@@ -472,12 +485,13 @@ bool test_order_scheduled_step() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Should have at least one scheduled procedure step
-    TEST_ASSERT(!mwl->scheduled_steps.empty(), "Should have scheduled steps");
+    TEST_ASSERT(!m.scheduled_steps.empty(), "Should have scheduled steps");
 
-    const auto& sps = mwl->scheduled_steps[0];
+    const auto& sps = m.scheduled_steps[0];
 
     // Verify SPS fields
     TEST_ASSERT(!sps.scheduled_step_id.empty() || mapper.config().auto_generate_sps_id,
@@ -493,11 +507,12 @@ bool test_order_modality_mapping() {
 
     hl7_dicom_mapper mapper;
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(mwl.has_value(), "Should create MWL item");
+    TEST_ASSERT(mwl.is_ok(), "Should create MWL item");
 
+    const auto& m = mwl.unwrap();
     // Check modality in scheduled step
-    if (!mwl->scheduled_steps.empty()) {
-        const auto& sps = mwl->scheduled_steps[0];
+    if (!m.scheduled_steps.empty()) {
+        const auto& sps = m.scheduled_steps[0];
         // Modality should be present or use default
         TEST_ASSERT(!sps.modality.empty() || !mapper.config().default_modality.empty(),
                     "Modality should be set or have default");
@@ -529,14 +544,15 @@ bool test_edge_special_characters() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with special chars");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with special chars");
 
+    const auto& p = patient.unwrap();
     // Name with apostrophe and hyphen
-    TEST_ASSERT(patient->patient_name.find("O'BRIEN") != std::string::npos ||
-                patient->patient_name.find("O") != std::string::npos,
+    TEST_ASSERT(p.patient_name.find("O'BRIEN") != std::string::npos ||
+                p.patient_name.find("O") != std::string::npos,
                 "Should handle apostrophe in name");
-    TEST_ASSERT(patient->patient_name.find("MARY") != std::string::npos ||
-                patient->patient_name.find("JANE") != std::string::npos,
+    TEST_ASSERT(p.patient_name.find("MARY") != std::string::npos ||
+                p.patient_name.find("JANE") != std::string::npos,
                 "Should handle hyphenated given name");
 
     return true;
@@ -574,10 +590,11 @@ bool test_edge_long_values() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with long name");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with long name");
 
+    const auto& p = patient.unwrap();
     // DICOM has limits on some field lengths, but patient name (PN) is 64 chars per component
-    TEST_ASSERT(!patient->patient_name.empty(), "Should have patient name");
+    TEST_ASSERT(!p.patient_name.empty(), "Should have patient name");
 
     return true;
 }
@@ -602,7 +619,7 @@ bool test_edge_unicode_handling() {
 
     hl7_dicom_mapper mapper;
     auto patient = mapper.to_patient(parse_result.value());
-    TEST_ASSERT(patient.has_value(), "Should extract patient with umlaut name");
+    TEST_ASSERT(patient.is_ok(), "Should extract patient with umlaut name");
 
     return true;
 }
@@ -655,8 +672,8 @@ bool test_edge_invalid_message_type() {
     TEST_ASSERT(!mapper.can_map_to_mwl(parse_result.value()), "ADT should not be mappable to MWL");
 
     auto mwl = mapper.to_mwl(parse_result.value());
-    TEST_ASSERT(!mwl.has_value(), "ADT to MWL should fail");
-    TEST_ASSERT(mwl.error() == mapping_error::unsupported_message_type,
+    TEST_ASSERT(mwl.is_err(), "ADT to MWL should fail");
+    TEST_ASSERT(mwl.error().code == to_error_code(mapping_error::unsupported_message_type),
                 "Error should be unsupported_message_type");
 
     return true;
@@ -682,8 +699,8 @@ bool test_edge_partial_mapping() {
 
     // With partial mapping allowed, should succeed with available data
     // The result depends on implementation
-    if (mwl.has_value()) {
-        TEST_ASSERT(mwl->patient.patient_id == "PM001", "Should have patient ID");
+    if (mwl.is_ok()) {
+        TEST_ASSERT(mwl.unwrap().patient.patient_id == "PM001", "Should have patient ID");
     }
 
     return true;
