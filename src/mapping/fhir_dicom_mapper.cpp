@@ -225,13 +225,15 @@ fhir_dicom_mapper& fhir_dicom_mapper::operator=(fhir_dicom_mapper&&) noexcept =
 // ServiceRequest to MWL Mapping
 // =============================================================================
 
-std::expected<mwl_item, fhir_dicom_error> fhir_dicom_mapper::service_request_to_mwl(
+Result<mwl_item> fhir_dicom_mapper::service_request_to_mwl(
     const fhir_service_request& request,
     const dicom_patient& patient) const {
     // Validate required fields
     auto validation_errors = validate_service_request(request);
     if (!validation_errors.empty() && pimpl_->config_.validate_output) {
-        return std::unexpected(fhir_dicom_error::validation_failed);
+        return Result<mwl_item>::err(error_info{
+            to_error_code(fhir_dicom_error::validation_failed),
+            to_string(fhir_dicom_error::validation_failed)});
     }
 
     mwl_item mwl;
@@ -382,37 +384,43 @@ std::expected<mwl_item, fhir_dicom_error> fhir_dicom_mapper::service_request_to_
     if (pimpl_->config_.validate_output) {
         auto mwl_errors = validate_mwl(mwl);
         if (!mwl_errors.empty()) {
-            return std::unexpected(fhir_dicom_error::validation_failed);
+            return Result<mwl_item>::err(error_info{
+                to_error_code(fhir_dicom_error::validation_failed),
+                to_string(fhir_dicom_error::validation_failed)});
         }
     }
 
-    return mwl;
+    return Result<mwl_item>::ok(std::move(mwl));
 }
 
-std::expected<mwl_item, fhir_dicom_error> fhir_dicom_mapper::service_request_to_mwl(
+Result<mwl_item> fhir_dicom_mapper::service_request_to_mwl(
     const fhir_service_request& request) const {
     // Resolve patient reference
     if (!request.subject.reference.has_value()) {
-        return std::unexpected(fhir_dicom_error::missing_required_field);
+        return Result<mwl_item>::err(error_info{
+            to_error_code(fhir_dicom_error::missing_required_field),
+            to_string(fhir_dicom_error::missing_required_field)});
     }
 
     if (!pimpl_->patient_lookup_) {
-        return std::unexpected(fhir_dicom_error::patient_not_found);
+        return Result<mwl_item>::err(error_info{
+            to_error_code(fhir_dicom_error::patient_not_found),
+            to_string(fhir_dicom_error::patient_not_found)});
     }
 
     auto patient_result = pimpl_->patient_lookup_(*request.subject.reference);
-    if (!patient_result) {
-        return std::unexpected(patient_result.error());
+    if (patient_result.is_err()) {
+        return Result<mwl_item>::err(patient_result.err());
     }
 
-    return service_request_to_mwl(request, *patient_result);
+    return service_request_to_mwl(request, patient_result.unwrap());
 }
 
 // =============================================================================
 // DICOM Study to ImagingStudy Mapping
 // =============================================================================
 
-std::expected<fhir_imaging_study, fhir_dicom_error>
+Result<fhir_imaging_study>
 fhir_dicom_mapper::study_to_imaging_study(
     const dicom_study& study,
     const std::optional<std::string>& patient_reference) const {
@@ -499,21 +507,21 @@ fhir_dicom_mapper::study_to_imaging_study(
         result.series.push_back(std::move(fhir_series));
     }
 
-    return result;
+    return Result<fhir_imaging_study>::ok(std::move(result));
 }
 
 // =============================================================================
 // Patient Mapping
 // =============================================================================
 
-std::expected<std::unique_ptr<fhir::patient_resource>, fhir_dicom_error>
+Result<std::unique_ptr<fhir::patient_resource>>
 fhir_dicom_mapper::dicom_to_fhir_patient(const dicom_patient& dicom_patient) const {
     // Use the utility function from patient_resource.h
     auto patient = fhir::dicom_to_fhir_patient(dicom_patient);
-    return patient;
+    return Result<std::unique_ptr<fhir::patient_resource>>::ok(std::move(patient));
 }
 
-std::expected<dicom_patient, fhir_dicom_error>
+Result<dicom_patient>
 fhir_dicom_mapper::fhir_to_dicom_patient(const fhir::patient_resource& patient) const {
     dicom_patient result;
 
@@ -547,7 +555,7 @@ fhir_dicom_mapper::fhir_to_dicom_patient(const fhir::patient_resource& patient) 
         result.patient_sex = fhir::fhir_gender_to_dicom_sex(*patient.gender());
     }
 
-    return result;
+    return Result<dicom_patient>::ok(std::move(result));
 }
 
 // =============================================================================
@@ -603,14 +611,16 @@ std::string fhir_dicom_mapper::generate_uid(const std::string& suffix) const {
     return uid.str();
 }
 
-std::expected<std::pair<std::string, std::string>, fhir_dicom_error>
+Result<std::pair<std::string, std::string>>
 fhir_dicom_mapper::fhir_datetime_to_dicom(std::string_view fhir_datetime) {
     // FHIR format: YYYY-MM-DDTHH:MM:SS[.SSS][Z|+/-HH:MM]
     // DICOM Date: YYYYMMDD
     // DICOM Time: HHMMSS[.FFFFFF]
 
     if (fhir_datetime.size() < 10) {
-        return std::unexpected(fhir_dicom_error::datetime_conversion_failed);
+        return Result<std::pair<std::string, std::string>>::err(error_info{
+            to_error_code(fhir_dicom_error::datetime_conversion_failed),
+            to_string(fhir_dicom_error::datetime_conversion_failed)});
     }
 
     // Extract date part (YYYY-MM-DD)
@@ -622,7 +632,9 @@ fhir_dicom_mapper::fhir_datetime_to_dicom(std::string_view fhir_datetime) {
         date += std::string(fhir_datetime.substr(5, 2));  // MM
         date += std::string(fhir_datetime.substr(8, 2));  // DD
     } else {
-        return std::unexpected(fhir_dicom_error::datetime_conversion_failed);
+        return Result<std::pair<std::string, std::string>>::err(error_info{
+            to_error_code(fhir_dicom_error::datetime_conversion_failed),
+            to_string(fhir_dicom_error::datetime_conversion_failed)});
     }
 
     // Extract time part if present
@@ -658,22 +670,26 @@ fhir_dicom_mapper::fhir_datetime_to_dicom(std::string_view fhir_datetime) {
         }
     }
 
-    return std::make_pair(date, time);
+    return Result<std::pair<std::string, std::string>>::ok(std::make_pair(date, time));
 }
 
-std::expected<std::string, fhir_dicom_error>
+Result<std::string>
 fhir_dicom_mapper::dicom_datetime_to_fhir(std::string_view dicom_date,
                                           std::string_view dicom_time) {
     // DICOM Date: YYYYMMDD -> FHIR: YYYY-MM-DD
     // DICOM Time: HHMMSS[.FFFFFF] -> FHIR: THH:MM:SS[.SSS]
 
     if (dicom_date.size() != 8) {
-        return std::unexpected(fhir_dicom_error::datetime_conversion_failed);
+        return Result<std::string>::err(error_info{
+            to_error_code(fhir_dicom_error::datetime_conversion_failed),
+            to_string(fhir_dicom_error::datetime_conversion_failed)});
     }
 
     // Validate date is all digits
     if (!is_all_digits(dicom_date)) {
-        return std::unexpected(fhir_dicom_error::datetime_conversion_failed);
+        return Result<std::string>::err(error_info{
+            to_error_code(fhir_dicom_error::datetime_conversion_failed),
+            to_string(fhir_dicom_error::datetime_conversion_failed)});
     }
 
     std::string result;
@@ -704,7 +720,7 @@ fhir_dicom_mapper::dicom_datetime_to_fhir(std::string_view dicom_date,
         }
     }
 
-    return result;
+    return Result<std::string>::ok(std::move(result));
 }
 
 std::string fhir_dicom_mapper::fhir_priority_to_dicom(std::string_view fhir_priority) {
@@ -950,12 +966,14 @@ std::string imaging_study_to_json(const fhir_imaging_study& study) {
     return json.str();
 }
 
-std::expected<fhir_service_request, fhir_dicom_error>
+Result<fhir_service_request>
 service_request_from_json(const std::string& json) {
     // Check resourceType
     std::string resource_type = extract_json_string(json, "resourceType");
     if (resource_type != "ServiceRequest") {
-        return std::unexpected(fhir_dicom_error::unsupported_resource_type);
+        return Result<fhir_service_request>::err(error_info{
+            to_error_code(fhir_dicom_error::unsupported_resource_type),
+            to_string(fhir_dicom_error::unsupported_resource_type)});
     }
 
     fhir_service_request result;
@@ -986,7 +1004,7 @@ service_request_from_json(const std::string& json) {
     // Note: Full JSON parsing for nested objects (code, subject, etc.)
     // would require a proper JSON parser. This is a simplified implementation.
 
-    return result;
+    return Result<fhir_service_request>::ok(std::move(result));
 }
 
 std::string service_request_to_json(const fhir_service_request& request) {

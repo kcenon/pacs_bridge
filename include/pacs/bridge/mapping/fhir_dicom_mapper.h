@@ -435,8 +435,7 @@ public:
      * patient data from the cache.
      */
     using patient_lookup_function =
-        std::function<std::expected<dicom_patient, fhir_dicom_error>(
-            const std::string&)>;
+        std::function<Result<dicom_patient>(const std::string&)>;
 
     /**
      * @brief Default constructor with default configuration
@@ -480,7 +479,7 @@ public:
      * @param patient DICOM patient data (pre-resolved)
      * @return MWL item or error
      */
-    [[nodiscard]] std::expected<mwl_item, fhir_dicom_error>
+    [[nodiscard]] Result<mwl_item>
     service_request_to_mwl(const fhir_service_request& request,
                            const dicom_patient& patient) const;
 
@@ -493,7 +492,7 @@ public:
      * @param request FHIR ServiceRequest resource
      * @return MWL item or error
      */
-    [[nodiscard]] std::expected<mwl_item, fhir_dicom_error>
+    [[nodiscard]] Result<mwl_item>
     service_request_to_mwl(const fhir_service_request& request) const;
 
     // =========================================================================
@@ -517,7 +516,7 @@ public:
      * @param patient_reference Optional patient reference (e.g., "Patient/123")
      * @return ImagingStudy data or error
      */
-    [[nodiscard]] std::expected<fhir_imaging_study, fhir_dicom_error>
+    [[nodiscard]] Result<fhir_imaging_study>
     study_to_imaging_study(
         const dicom_study& study,
         const std::optional<std::string>& patient_reference = std::nullopt) const;
@@ -532,7 +531,7 @@ public:
      * @param dicom_patient DICOM patient attributes
      * @return FHIR patient data (can be used to create patient_resource)
      */
-    [[nodiscard]] std::expected<std::unique_ptr<fhir::patient_resource>, fhir_dicom_error>
+    [[nodiscard]] Result<std::unique_ptr<fhir::patient_resource>>
     dicom_to_fhir_patient(const dicom_patient& dicom_patient) const;
 
     /**
@@ -541,7 +540,7 @@ public:
      * @param patient FHIR Patient resource
      * @return DICOM patient data
      */
-    [[nodiscard]] std::expected<dicom_patient, fhir_dicom_error>
+    [[nodiscard]] Result<dicom_patient>
     fhir_to_dicom_patient(const fhir::patient_resource& patient) const;
 
     // =========================================================================
@@ -589,7 +588,7 @@ public:
      * @param fhir_datetime FHIR datetime string
      * @return Pair of (date, time) strings or error
      */
-    [[nodiscard]] static std::expected<std::pair<std::string, std::string>, fhir_dicom_error>
+    [[nodiscard]] static Result<std::pair<std::string, std::string>>
     fhir_datetime_to_dicom(std::string_view fhir_datetime);
 
     /**
@@ -599,7 +598,7 @@ public:
      * @param dicom_time DICOM time (HHMMSS[.FFFFFF])
      * @return FHIR dateTime string
      */
-    [[nodiscard]] static std::expected<std::string, fhir_dicom_error>
+    [[nodiscard]] static Result<std::string>
     dicom_datetime_to_fhir(std::string_view dicom_date,
                            std::string_view dicom_time);
 
@@ -696,7 +695,7 @@ private:
  * @param json JSON string
  * @return Parsed ServiceRequest or error
  */
-[[nodiscard]] std::expected<fhir_service_request, fhir_dicom_error>
+[[nodiscard]] Result<fhir_service_request>
 service_request_from_json(const std::string& json);
 
 /**
