@@ -38,7 +38,7 @@ constexpr std::string_view MDM_T02_ORIGINAL =
     "EVN|T02|20240115140000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
     "PV1|1|I|WARD^101^A||||SMITH^ROBERT^MD\r"
-    "TXA|1|HP^History and Physical|TX|20240115140000|||||||DOC12345|||||AU|||||SMITH^ROBERT^MD\r"
+    "TXA|1|HP^History and Physical|TX|20240115140000||||||||DOC12345|||||AU|||||SMITH^ROBERT^MD\r"
     "OBX|1|TX|REPORT^Report Text||History and physical examination completed.||||||F\r";
 
 /**
@@ -48,7 +48,7 @@ constexpr std::string_view MDM_T04_STATUS_CHANGE =
     "MSH|^~\\&|TRANSCRIPTION|HOSPITAL|EMR|HOSPITAL|20240115150000||MDM^T04|MSG002|P|2.5.1\r"
     "EVN|T04|20240115150000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "TXA|1|HP^History and Physical|TX|20240115140000||20240115150000|||||DOC12345|||||LA|||||SMITH^ROBERT^MD\r";
+    "TXA|1|HP^History and Physical|TX|20240115140000||20240115150000||||||DOC12345|||||LA|||||SMITH^ROBERT^MD\r";
 
 /**
  * @brief Sample MDM^T06 (Document Addendum) message
@@ -57,7 +57,7 @@ constexpr std::string_view MDM_T06_ADDENDUM =
     "MSH|^~\\&|TRANSCRIPTION|HOSPITAL|EMR|HOSPITAL|20240115160000||MDM^T06|MSG003|P|2.5.1\r"
     "EVN|T06|20240115160000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "TXA|1|HP^History and Physical Addendum|TX|20240115160000|||||||DOC12346|DOC12345||||AU|||||JONES^MARY^MD\r"
+    "TXA|1|HP^History and Physical Addendum|TX|20240115160000||||||||DOC12346|DOC12345||||AU|||||JONES^MARY^MD\r"
     "OBX|1|TX|ADDENDUM^Addendum Text||Additional findings noted.||||||F\r";
 
 /**
@@ -67,7 +67,7 @@ constexpr std::string_view MDM_T08_EDIT =
     "MSH|^~\\&|TRANSCRIPTION|HOSPITAL|EMR|HOSPITAL|20240115170000||MDM^T08|MSG004|P|2.5.1\r"
     "EVN|T08|20240115170000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "TXA|1|HP^History and Physical|TX|20240115140000||20240115170000|||||DOC12345|||||AU|||||SMITH^ROBERT^MD\r"
+    "TXA|1|HP^History and Physical|TX|20240115140000||20240115170000||||||DOC12345|||||AU|||||SMITH^ROBERT^MD\r"
     "OBX|1|TX|REPORT^Report Text||History and physical examination completed with corrections.||||||F\r";
 
 /**
@@ -77,7 +77,7 @@ constexpr std::string_view MDM_T10_REPLACEMENT =
     "MSH|^~\\&|TRANSCRIPTION|HOSPITAL|EMR|HOSPITAL|20240115180000||MDM^T10|MSG005|P|2.5.1\r"
     "EVN|T10|20240115180000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "TXA|1|HP^History and Physical|TX|20240115180000|||||||DOC12347|DOC12345||||AU|||||SMITH^ROBERT^MD\r"
+    "TXA|1|HP^History and Physical|TX|20240115180000||||||||DOC12347|DOC12345||||AU|||||SMITH^ROBERT^MD\r"
     "OBX|1|TX|REPORT^Report Text||Replacement document with updated findings.||||||F\r";
 
 /**
@@ -88,7 +88,7 @@ constexpr std::string_view MDM_RADIOLOGY_REPORT =
     "EVN|T02|20240115190000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
     "PV1|1|O|RAD^XRAY^1\r"
-    "TXA|1|RR^Radiology Report|TX|20240115190000|||||||RAD001|||||AU|||||RADIOLOGIST^JAMES^MD\r"
+    "TXA|1|RR^Radiology Report|TX|20240115190000||||||||RAD001|||||AU|||||RADIOLOGIST^JAMES^MD\r"
     "OBR|1|ORD001|ACC001|71020^CHEST XRAY^CPT\r"
     "OBX|1|TX|IMPRESSION^Impression||No acute cardiopulmonary abnormality.||||||F\r"
     "OBX|2|TX|FINDINGS^Findings||Heart size normal. Lungs are clear.||||||F\r";

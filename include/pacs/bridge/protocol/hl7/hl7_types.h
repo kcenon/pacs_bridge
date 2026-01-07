@@ -321,6 +321,18 @@ enum class message_type {
     /** Unsolicited Display */
     UDM,
 
+    /** Medical Document Management */
+    MDM,
+
+    /** Pharmacy/Treatment Encoded Order */
+    RDE,
+
+    /** Unsolicited Immunization Update */
+    VXU,
+
+    /** Product Experience (Adverse Event Reporting) */
+    PEX,
+
     /** Unknown/Other */
     UNKNOWN
 };
@@ -341,6 +353,10 @@ enum class message_type {
         case message_type::DFT: return "DFT";
         case message_type::BAR: return "BAR";
         case message_type::UDM: return "UDM";
+        case message_type::MDM: return "MDM";
+        case message_type::RDE: return "RDE";
+        case message_type::VXU: return "VXU";
+        case message_type::PEX: return "PEX";
         case message_type::UNKNOWN: return "UNKNOWN";
         default: return "UNKNOWN";
     }
@@ -362,6 +378,10 @@ enum class message_type {
     if (type_str == "DFT") return message_type::DFT;
     if (type_str == "BAR") return message_type::BAR;
     if (type_str == "UDM") return message_type::UDM;
+    if (type_str == "MDM") return message_type::MDM;
+    if (type_str == "RDE") return message_type::RDE;
+    if (type_str == "VXU") return message_type::VXU;
+    if (type_str == "PEX") return message_type::PEX;
     return message_type::UNKNOWN;
 }
 
