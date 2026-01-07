@@ -3480,13 +3480,17 @@ namespace pacs::bridge::integration {
  * to use the standardized IExecutor interface while leveraging existing
  * thread pool implementations.
  *
- * Integrated Components (Issue #208):
+ * Integrated Components (Issue #208, #228):
  * - config_manager: File watcher uses IExecutor for periodic checks
  * - batch_exporter: Export loop uses IExecutor for task scheduling
+ * - mpps_hl7_workflow: Worker tasks use IExecutor for async processing
+ * - hl7_message_bus: Optional IExecutor for message handling
+ * - messaging_backend: IExecutor factory support for message bus creation
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/198
  * @see https://github.com/kcenon/pacs_bridge/issues/208
  * @see https://github.com/kcenon/pacs_bridge/issues/210
+ * @see https://github.com/kcenon/pacs_bridge/issues/228
  */
 
 /**

@@ -2236,7 +2236,7 @@ public:
 
 ### DES-INT-004: executor_adapter
 
-**추적 대상:** IR-2 (common_system), Issue #198, Issue #210
+**추적 대상:** IR-2 (common_system), Issue #198, Issue #210, Issue #228
 
 ```cpp
 namespace pacs::bridge::integration {
@@ -2248,8 +2248,16 @@ namespace pacs::bridge::integration {
  * 연결하는 어댑터를 제공합니다. 워크플로우 모듈이 기존 스레드 풀 구현을
  * 활용하면서 표준화된 IExecutor 인터페이스를 사용할 수 있게 합니다.
  *
+ * 통합된 컴포넌트 (Issue #208, #228):
+ * - config_manager: 파일 감시자가 주기적 검사에 IExecutor 사용
+ * - batch_exporter: 내보내기 루프가 작업 스케줄링에 IExecutor 사용
+ * - mpps_hl7_workflow: 비동기 처리를 위해 워커 태스크에 IExecutor 사용
+ * - hl7_message_bus: 메시지 처리를 위한 선택적 IExecutor
+ * - messaging_backend: 메시지 버스 생성을 위한 IExecutor 팩토리 지원
+ *
  * @see https://github.com/kcenon/pacs_bridge/issues/198
  * @see https://github.com/kcenon/pacs_bridge/issues/210
+ * @see https://github.com/kcenon/pacs_bridge/issues/228
  */
 
 /**

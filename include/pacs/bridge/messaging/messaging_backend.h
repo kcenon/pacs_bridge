@@ -14,6 +14,11 @@
  * @see https://github.com/kcenon/pacs_bridge/issues/156
  */
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 #include <chrono>
 #include <expected>
 #include <functional>
@@ -136,6 +141,11 @@ struct backend_config {
     /** Shutdown timeout */
     std::chrono::milliseconds shutdown_timeout{5000};
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional IExecutor for task execution (integration mode) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
+
     /**
      * @brief Create default configuration
      */
@@ -161,6 +171,19 @@ struct backend_config {
         config.type = backend_type::integration;
         return config;
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Create integration configuration with IExecutor
+     */
+    [[nodiscard]] static backend_config integration(
+        std::shared_ptr<kcenon::common::interfaces::IExecutor> exec) {
+        backend_config config;
+        config.type = backend_type::integration;
+        config.executor = std::move(exec);
+        return config;
+    }
+#endif
 };
 
 // =============================================================================
@@ -224,6 +247,29 @@ public:
      * @brief Check if external executor is available
      */
     [[nodiscard]] static bool has_external_executor() noexcept;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Set IExecutor for integration mode
+     *
+     * @param executor IExecutor interface implementation
+     */
+    static void set_executor(
+        std::shared_ptr<kcenon::common::interfaces::IExecutor> executor);
+
+    /**
+     * @brief Get the current IExecutor
+     *
+     * @return IExecutor or nullptr if not set
+     */
+    [[nodiscard]] static std::shared_ptr<kcenon::common::interfaces::IExecutor>
+    get_executor() noexcept;
+
+    /**
+     * @brief Check if IExecutor is available
+     */
+    [[nodiscard]] static bool has_executor() noexcept;
+#endif
 
     /**
      * @brief Get recommended backend type
