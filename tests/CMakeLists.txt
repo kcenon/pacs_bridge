@@ -557,6 +557,53 @@ else()
     message(STATUS "Skipping executor_adapter_test: requires common_system IExecutor (BRIDGE_STANDALONE_BUILD=OFF)")
 endif()
 
+# Executor Integration Tests (Issue #229)
+# Tests IExecutor integration with queue_manager and other components
+if(NOT BRIDGE_STANDALONE_BUILD)
+    add_executable(executor_integration_test executor_integration_test.cpp)
+    target_link_libraries(executor_integration_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(executor_integration_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(executor_integration_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+    target_include_directories(executor_integration_test
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+    target_compile_definitions(executor_integration_test
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        include(GoogleTest)
+        gtest_discover_tests(executor_integration_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 120
+                LABELS "unit;integration;executor;phase5"
+        )
+    else()
+        add_test(
+            NAME executor_integration_test
+            COMMAND executor_integration_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        set_tests_properties(executor_integration_test PROPERTIES
+            TIMEOUT 120
+            LABELS "unit;integration;executor;phase5"
+        )
+    endif()
+else()
+    message(STATUS "Skipping executor_integration_test: requires common_system IExecutor (BRIDGE_STANDALONE_BUILD=OFF)")
+endif()
+
 # =============================================================================
 # Messaging Pattern Tests (Issue #146, #142)
 # =============================================================================

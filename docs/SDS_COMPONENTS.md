@@ -3512,6 +3512,11 @@ public:
 /**
  * @class simple_executor
  * @brief Lightweight IExecutor implementation with internal thread pool
+ *
+ * Thread Safety (Issue #229):
+ * - All public methods are thread-safe
+ * - shutdown() uses compare_exchange_strong to prevent concurrent shutdown crashes
+ * - Safe for multiple threads to call shutdown() simultaneously
  */
 class simple_executor : public kcenon::common::interfaces::IExecutor {
 public:
@@ -3527,6 +3532,15 @@ public:
     [[nodiscard]] std::size_t worker_count() const override;
     [[nodiscard]] bool is_running() const override;
     [[nodiscard]] std::size_t pending_tasks() const override;
+
+    /**
+     * @brief Shutdown the executor
+     *
+     * Thread-safe: Uses atomic compare_exchange_strong to ensure
+     * only one thread performs shutdown, preventing double-join crashes.
+     *
+     * @param wait_for_completion If true, waits for pending tasks to complete
+     */
     void shutdown(bool wait_for_completion = true) override;
 };
 
