@@ -67,6 +67,30 @@ namespace pacs::bridge::mllp {
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
 
 /**
+ * @brief Job implementation for accept loop execution
+ *
+ * Wraps the accept loop task for execution via IExecutor.
+ * Runs continuously until stop is requested.
+ */
+class mllp_accept_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit mllp_accept_job(std::function<void()> accept_loop)
+        : accept_loop_(std::move(accept_loop)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (accept_loop_) {
+            accept_loop_();
+        }
+        return std::monostate{};
+    }
+
+    std::string get_name() const override { return "mllp_accept"; }
+
+private:
+    std::function<void()> accept_loop_;
+};
+
+/**
  * @brief Job implementation for session handling
  *
  * Wraps a session processing task for execution via IExecutor.
@@ -228,10 +252,26 @@ public:
             return result;
         }
 
-        // Start accept thread
+        // Start accept loop
         running_ = true;
         stop_requested_ = false;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            auto job = std::make_unique<mllp_accept_job>([this] { accept_loop(); });
+            auto result = config_.executor->execute(std::move(job));
+            if (result.is_ok()) {
+                accept_future_ = std::move(result.value());
+            } else {
+                // Fallback to std::thread if executor fails
+                accept_thread_ = std::thread([this] { accept_loop(); });
+            }
+        } else {
+            accept_thread_ = std::thread([this] { accept_loop(); });
+        }
+#else
         accept_thread_ = std::thread([this] { accept_loop(); });
+#endif
 
         // Update statistics
         stats_.started_at = std::chrono::system_clock::now();
@@ -258,7 +298,12 @@ public:
             server_socket_ = INVALID_SOCKET_VALUE;
         }
 
-        // Wait for accept thread
+        // Wait for accept thread or future
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (accept_future_.valid()) {
+            accept_future_.wait_for(std::chrono::seconds{10});
+        }
+#endif
         if (accept_thread_.joinable()) {
             accept_thread_.join();
         }
@@ -982,6 +1027,8 @@ private:
     std::vector<std::thread> session_threads_;
 
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Future for executor-based accept loop
+    std::future<void> accept_future_;
     // Futures for executor-based session tasks
     std::vector<std::future<void>> session_futures_;
 #endif

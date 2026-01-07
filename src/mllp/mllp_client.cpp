@@ -69,6 +69,34 @@ namespace pacs::bridge::mllp {
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
 
 /**
+ * @brief Job implementation for async send operations
+ *
+ * Wraps a send operation for execution via IExecutor.
+ */
+class mllp_send_job : public kcenon::common::interfaces::IJob {
+public:
+    using result_type = std::expected<mllp_client::send_result, mllp_error>;
+    using promise_type = std::promise<result_type>;
+
+    explicit mllp_send_job(std::function<result_type()> send_func,
+                           std::shared_ptr<promise_type> promise)
+        : send_func_(std::move(send_func)), promise_(std::move(promise)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (send_func_ && promise_) {
+            promise_->set_value(send_func_());
+        }
+        return std::monostate{};
+    }
+
+    std::string get_name() const override { return "mllp_send"; }
+
+private:
+    std::function<result_type()> send_func_;
+    std::shared_ptr<promise_type> promise_;
+};
+
+/**
  * @brief Job implementation for health check execution
  *
  * Wraps a single health check iteration for execution via IExecutor.
@@ -335,6 +363,22 @@ public:
 
     [[nodiscard]] std::future<std::expected<send_result, mllp_error>>
     send_async(const mllp_message& message) {
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            auto promise = std::make_shared<std::promise<std::expected<send_result, mllp_error>>>();
+            auto future = promise->get_future();
+
+            auto job = std::make_unique<mllp_send_job>(
+                [this, message]() { return send(message); },
+                promise);
+
+            auto result = config_.executor->execute(std::move(job));
+            if (result.is_ok()) {
+                return future;
+            }
+            // Fallback to std::async if executor fails
+        }
+#endif
         return std::async(std::launch::async, [this, message] {
             return send(message);
         });
