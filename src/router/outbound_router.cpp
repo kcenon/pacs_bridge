@@ -16,6 +16,60 @@
 namespace pacs::bridge::router {
 
 // =============================================================================
+// IExecutor Job Implementations (when available)
+// =============================================================================
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+
+/**
+ * @brief Job implementation for outbound router worker execution
+ *
+ * Wraps a single delivery worker iteration for execution via IExecutor.
+ */
+class outbound_worker_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit outbound_worker_job(std::function<void()> work_func)
+        : work_func_(std::move(work_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (work_func_) {
+            work_func_();
+        }
+        return std::monostate{};
+    }
+
+    std::string get_name() const override { return "outbound_worker"; }
+
+private:
+    std::function<void()> work_func_;
+};
+
+/**
+ * @brief Job implementation for health check task execution
+ *
+ * Wraps periodic health check operations for execution via IExecutor.
+ */
+class health_check_job : public kcenon::common::interfaces::IJob {
+public:
+    explicit health_check_job(std::function<void()> health_func)
+        : health_func_(std::move(health_func)) {}
+
+    kcenon::common::VoidResult execute() override {
+        if (health_func_) {
+            health_func_();
+        }
+        return std::monostate{};
+    }
+
+    std::string get_name() const override { return "health_check"; }
+
+private:
+    std::function<void()> health_func_;
+};
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
+
+// =============================================================================
 // outbound_router::impl
 // =============================================================================
 
@@ -51,6 +105,12 @@ public:
     std::vector<std::thread> worker_threads_;
     std::atomic<bool> workers_running_{false};
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Futures for tracking executor-based jobs
+    std::vector<std::future<void>> worker_futures_;
+    std::future<void> health_check_future_;
+#endif
+
     // Statistics
     mutable std::mutex stats_mutex_;
     statistics stats_;
@@ -71,6 +131,19 @@ public:
         // Stop workers
         workers_running_ = false;
         queue_cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based worker jobs to complete
+        if (config_.executor) {
+            for (auto& future : worker_futures_) {
+                if (future.valid()) {
+                    future.wait_for(std::chrono::seconds{5});
+                }
+            }
+            worker_futures_.clear();
+        }
+#endif
+
         for (auto& worker : worker_threads_) {
             if (worker.joinable()) {
                 worker.join();
@@ -81,6 +154,14 @@ public:
         // Stop health checking
         health_check_running_ = false;
         health_check_cv_.notify_all();
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Wait for executor-based health check job to complete
+        if (config_.executor && health_check_future_.valid()) {
+            health_check_future_.wait_for(std::chrono::seconds{5});
+        }
+#endif
+
         if (health_check_thread_.joinable()) {
             health_check_thread_.join();
         }
@@ -126,15 +207,35 @@ public:
         // Start health checking
         if (config_.enable_health_check) {
             health_check_running_ = true;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+            if (config_.executor) {
+                schedule_health_check_job();
+            } else {
+                health_check_thread_ = std::thread([this]() { health_check_loop(); });
+            }
+#else
             health_check_thread_ = std::thread([this]() { health_check_loop(); });
+#endif
         }
 
         // Start worker threads
         if (config_.async_queue_size > 0 && config_.worker_threads > 0) {
             workers_running_ = true;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+            if (config_.executor) {
+                for (size_t i = 0; i < config_.worker_threads; ++i) {
+                    schedule_worker_job();
+                }
+            } else {
+                for (size_t i = 0; i < config_.worker_threads; ++i) {
+                    worker_threads_.emplace_back([this]() { worker_loop(); });
+                }
+            }
+#else
             for (size_t i = 0; i < config_.worker_threads; ++i) {
                 worker_threads_.emplace_back([this]() { worker_loop(); });
             }
+#endif
         }
 
         return {};
@@ -434,6 +535,98 @@ public:
             }
         }
     }
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /**
+     * @brief Schedule worker job using IExecutor
+     *
+     * Processes delivery queue messages and reschedules itself for continuous operation.
+     */
+    void schedule_worker_job() {
+        if (!workers_running_ || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<outbound_worker_job>([this]() {
+            if (!workers_running_) {
+                return;
+            }
+
+            queued_message item;
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex_);
+                queue_cv_.wait_for(lock, std::chrono::milliseconds{100}, [this]() {
+                    return !delivery_queue_.empty() || !workers_running_;
+                });
+
+                if (!workers_running_ && delivery_queue_.empty()) {
+                    return;
+                }
+
+                if (delivery_queue_.empty()) {
+                    // Reschedule for next iteration
+                    schedule_worker_job();
+                    return;
+                }
+
+                item = std::move(delivery_queue_.front());
+                delivery_queue_.pop();
+            }
+
+            // Process the message
+            auto result = route_internal(item.message);
+            if (item.callback) {
+                if (result) {
+                    item.callback(*result, item.message);
+                } else {
+                    delivery_result failed;
+                    failed.success = false;
+                    failed.error_message = to_string(result.error());
+                    failed.timestamp = std::chrono::system_clock::now();
+                    item.callback(failed, item.message);
+                }
+            }
+
+            // Reschedule for next iteration
+            schedule_worker_job();
+        });
+
+        auto result = config_.executor->execute(std::move(job));
+        if (result.is_ok()) {
+            worker_futures_.push_back(std::move(result.value()));
+        }
+    }
+
+    /**
+     * @brief Schedule health check job using IExecutor with delayed execution
+     *
+     * Performs periodic health checks and reschedules itself.
+     */
+    void schedule_health_check_job() {
+        if (!health_check_running_ || !config_.executor) {
+            return;
+        }
+
+        auto job = std::make_unique<health_check_job>([this]() {
+            if (!health_check_running_) {
+                return;
+            }
+
+            // Perform health check for all destinations
+            check_all_health_internal();
+
+            // Reschedule for next iteration
+            schedule_health_check_job();
+        });
+
+        auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(
+            config_.default_health_check_interval);
+        auto result = config_.executor->execute_delayed(std::move(job), delay);
+        if (result.is_ok()) {
+            health_check_future_ = std::move(result.value());
+        }
+    }
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 };
 
 // =============================================================================
