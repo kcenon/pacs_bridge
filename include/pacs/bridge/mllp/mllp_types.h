@@ -213,6 +213,11 @@ struct mllp_client_config {
     /** Keep connection alive for reuse */
     bool keep_alive = true;
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for async operations (nullptr = use std::async) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
+
     /** Validate configuration */
     [[nodiscard]] bool is_valid() const noexcept {
         if (host.empty()) return false;
