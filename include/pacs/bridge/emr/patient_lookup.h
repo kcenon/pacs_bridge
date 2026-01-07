@@ -18,7 +18,6 @@
 #include "patient_record.h"
 
 #include <chrono>
-#include <expected>
 #include <memory>
 #include <optional>
 #include <string>
@@ -243,7 +242,7 @@ public:
      * @return Patient record or error
      */
     [[nodiscard]] auto get_by_mrn(std::string_view mrn)
-        -> std::expected<patient_record, patient_error>;
+        -> Result<patient_record>;
 
     /**
      * @brief Get patient by identifier with system
@@ -254,7 +253,7 @@ public:
      */
     [[nodiscard]] auto get_by_identifier(std::string_view system,
                                          std::string_view value)
-        -> std::expected<patient_record, patient_error>;
+        -> Result<patient_record>;
 
     /**
      * @brief Get patient by FHIR resource ID
@@ -263,7 +262,7 @@ public:
      * @return Patient record or error
      */
     [[nodiscard]] auto get_by_id(std::string_view id)
-        -> std::expected<patient_record, patient_error>;
+        -> Result<patient_record>;
 
     /**
      * @brief Find single patient matching query
@@ -276,7 +275,7 @@ public:
      * @return Patient record or error
      */
     [[nodiscard]] auto find_patient(const patient_query& query)
-        -> std::expected<patient_record, patient_error>;
+        -> Result<patient_record>;
 
     // =========================================================================
     // Multiple Patient Search
@@ -292,7 +291,7 @@ public:
      * @return List of matching patients with scores or error
      */
     [[nodiscard]] auto search_patients(const patient_query& query)
-        -> std::expected<std::vector<patient_match>, patient_error>;
+        -> Result<std::vector<patient_match>>;
 
     /**
      * @brief Search patients with raw FHIR search params
@@ -304,7 +303,7 @@ public:
      * @return List of matching patients or error
      */
     [[nodiscard]] auto search_with_params(const search_params& params)
-        -> std::expected<std::vector<patient_record>, patient_error>;
+        -> Result<std::vector<patient_record>>;
 
     // =========================================================================
     // Cache Management
@@ -407,7 +406,7 @@ private:
  * @param json FHIR Patient JSON
  * @return Parsed patient record or error
  */
-[[nodiscard]] std::expected<patient_record, patient_error> parse_fhir_patient(
+[[nodiscard]] Result<patient_record> parse_fhir_patient(
     std::string_view json);
 
 /**

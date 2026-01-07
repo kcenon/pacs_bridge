@@ -48,40 +48,40 @@ emr_vendor parse_emr_vendor(std::string_view vendor_str) noexcept {
 // Factory Function Implementation
 // =============================================================================
 
-std::expected<std::unique_ptr<emr_adapter>, adapter_error>
+Result<std::unique_ptr<emr_adapter>>
 create_emr_adapter(const emr_adapter_config& config) {
     // Validate configuration
     if (!config.is_valid()) {
-        return std::unexpected(adapter_error::invalid_configuration);
+        return Result<std::unique_ptr<emr_adapter>>::err(to_error_info(adapter_error::invalid_configuration));
     }
 
     // Create adapter based on vendor
     switch (config.vendor) {
         case emr_vendor::generic_fhir:
-            return std::make_unique<generic_fhir_adapter>(config);
+            return std::unique_ptr<emr_adapter>(std::make_unique<generic_fhir_adapter>(config));
 
         case emr_vendor::epic:
             // TODO: Epic-specific adapter (Phase 5.2+)
             // For now, fall through to generic
-            return std::make_unique<generic_fhir_adapter>(config);
+            return std::unique_ptr<emr_adapter>(std::make_unique<generic_fhir_adapter>(config));
 
         case emr_vendor::cerner:
             // TODO: Cerner-specific adapter (Phase 5.2+)
             // For now, fall through to generic
-            return std::make_unique<generic_fhir_adapter>(config);
+            return std::unique_ptr<emr_adapter>(std::make_unique<generic_fhir_adapter>(config));
 
         case emr_vendor::meditech:
         case emr_vendor::allscripts:
             // Not yet implemented
-            return std::unexpected(adapter_error::not_supported);
+            return Result<std::unique_ptr<emr_adapter>>::err(to_error_info(adapter_error::not_supported));
 
         case emr_vendor::unknown:
         default:
-            return std::unexpected(adapter_error::invalid_vendor);
+            return Result<std::unique_ptr<emr_adapter>>::err(to_error_info(adapter_error::invalid_vendor));
     }
 }
 
-std::expected<std::unique_ptr<emr_adapter>, adapter_error>
+Result<std::unique_ptr<emr_adapter>>
 create_emr_adapter(emr_vendor vendor, std::string_view base_url) {
     emr_adapter_config config;
     config.vendor = vendor;

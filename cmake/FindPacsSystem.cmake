@@ -97,6 +97,13 @@ else()
     set(CONTAINER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(CONTAINER_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
 
+    # Logger system options
+    set(LOGGER_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(LOGGER_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(LOGGER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(LOGGER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(LOGGER_BUILD_INTEGRATION_TESTS OFF CACHE BOOL "" FORCE)
+
     # Monitoring system options
     set(MONITORING_SYSTEM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(MONITORING_SYSTEM_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -191,6 +198,18 @@ else()
         set(THREAD_SYSTEM_ROOT "${thread_system_SOURCE_DIR}" CACHE PATH "thread_system root directory" FORCE)
     endif()
 
+    # Container system (required for data structures - must be before messaging_system)
+    fetch_kcenon_component(container_system)
+
+    # Set container_system paths for downstream dependencies
+    # Note: container.h and core/container.h are at root level
+    if(container_system_SOURCE_DIR)
+        set(CONTAINER_SYSTEM_INCLUDE_DIR "${container_system_SOURCE_DIR}"
+            CACHE PATH "container_system include directory" FORCE)
+        set(ENV{CONTAINER_SYSTEM_ROOT} "${container_system_SOURCE_DIR}")
+        set(CONTAINER_SYSTEM_ROOT "${container_system_SOURCE_DIR}" CACHE PATH "container_system root directory" FORCE)
+    endif()
+
     # Messaging system (required for network communication)
     fetch_kcenon_component(messaging_system)
 
@@ -202,17 +221,6 @@ else()
         set(MESSAGING_SYSTEM_ROOT "${messaging_system_SOURCE_DIR}" CACHE PATH "messaging_system root directory" FORCE)
     endif()
 
-    # Container system (required for data structures)
-    fetch_kcenon_component(container_system)
-
-    # Set container_system paths for downstream dependencies
-    if(container_system_SOURCE_DIR)
-        set(CONTAINER_SYSTEM_INCLUDE_DIR "${container_system_SOURCE_DIR}/include"
-            CACHE PATH "container_system include directory" FORCE)
-        set(ENV{CONTAINER_SYSTEM_ROOT} "${container_system_SOURCE_DIR}")
-        set(CONTAINER_SYSTEM_ROOT "${container_system_SOURCE_DIR}" CACHE PATH "container_system root directory" FORCE)
-    endif()
-
     # Monitoring system (optional, for metrics and observability)
     option(BRIDGE_BUILD_MONITORING "Enable monitoring_system integration for metrics export" ON)
     if(BRIDGE_BUILD_MONITORING)
@@ -220,6 +228,15 @@ else()
         set(PACS_BRIDGE_HAS_MONITORING_SYSTEM TRUE CACHE BOOL "monitoring_system is available" FORCE)
     else()
         set(PACS_BRIDGE_HAS_MONITORING_SYSTEM FALSE CACHE BOOL "monitoring_system is available" FORCE)
+    endif()
+
+    # Logger system (required by pacs_system - Tier 2)
+    fetch_kcenon_component(logger_system)
+    if(logger_system_SOURCE_DIR)
+        set(LOGGER_SYSTEM_INCLUDE_DIR "${logger_system_SOURCE_DIR}/include"
+            CACHE PATH "logger_system include directory" FORCE)
+        set(ENV{LOGGER_SYSTEM_ROOT} "${logger_system_SOURCE_DIR}")
+        set(LOGGER_SYSTEM_ROOT "${logger_system_SOURCE_DIR}" CACHE PATH "logger_system root directory" FORCE)
     endif()
 
     # PACS system (optional, for DICOM MWL/MPPS integration)
@@ -314,7 +331,9 @@ else()
         target_link_libraries(pacs_bridge_dependencies INTERFACE kcenon::thread_system)
     endif()
 
-    if(TARGET messaging_system)
+    if(TARGET messaging_system_core)
+        target_link_libraries(pacs_bridge_dependencies INTERFACE messaging_system_core)
+    elseif(TARGET messaging_system)
         target_link_libraries(pacs_bridge_dependencies INTERFACE messaging_system)
     elseif(TARGET kcenon::messaging_system)
         target_link_libraries(pacs_bridge_dependencies INTERFACE kcenon::messaging_system)
@@ -338,8 +357,19 @@ else()
         )
     endif()
 
-    # Link pacs_system if available
+    # Link pacs_system components if available
     if(PACS_BRIDGE_HAS_PACS_SYSTEM)
+        # pacs_system provides individual component targets rather than an aggregate target
+        if(TARGET pacs_storage)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE pacs_storage)
+        endif()
+        if(TARGET pacs_core)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE pacs_core)
+        endif()
+        if(TARGET pacs_services)
+            target_link_libraries(pacs_bridge_dependencies INTERFACE pacs_services)
+        endif()
+        # Fallback to aggregate target names if they exist
         if(TARGET pacs_system)
             target_link_libraries(pacs_bridge_dependencies INTERFACE pacs_system)
         elseif(TARGET kcenon::pacs_system)

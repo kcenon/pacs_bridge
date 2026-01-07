@@ -552,7 +552,7 @@ bool test_health_server_handle_liveness() {
 
     health_server::config server_config;
     health_server server(checker, server_config);
-    server.start();
+    (void)server.start();
 
     auto response = server.handle_request("/health/live");
     TEST_ASSERT(response.status_code == 200, "liveness should return 200");
@@ -578,7 +578,7 @@ bool test_health_server_handle_readiness() {
 
     health_server::config server_config;
     health_server server(checker, server_config);
-    server.start();
+    (void)server.start();
 
     auto response = server.handle_request("/health/ready");
     TEST_ASSERT(response.status_code == 200, "readiness should return 200");
@@ -600,7 +600,7 @@ bool test_health_server_handle_readiness_unhealthy() {
 
     health_server::config server_config;
     health_server server(checker, server_config);
-    server.start();
+    (void)server.start();
 
     auto response = server.handle_request("/health/ready");
     TEST_ASSERT(response.status_code == 503,
@@ -627,7 +627,7 @@ bool test_health_server_handle_deep() {
 
     health_server::config server_config;
     health_server server(checker, server_config);
-    server.start();
+    (void)server.start();
 
     auto response = server.handle_request("/health/deep");
     TEST_ASSERT(response.status_code == 200, "deep should return 200");
@@ -643,7 +643,7 @@ bool test_health_server_handle_not_found() {
 
     health_server::config server_config;
     health_server server(checker, server_config);
-    server.start();
+    (void)server.start();
 
     auto response = server.handle_request("/invalid/path");
     TEST_ASSERT(response.status_code == 404, "invalid path should return 404");
@@ -657,12 +657,12 @@ bool test_health_server_statistics() {
 
     health_server::config server_config;
     health_server server(checker, server_config);
-    server.start();
+    (void)server.start();
 
-    server.handle_request("/health/live");
-    server.handle_request("/health/ready");
-    server.handle_request("/health/deep");
-    server.handle_request("/invalid");
+    (void)server.handle_request("/health/live");
+    (void)server.handle_request("/health/ready");
+    (void)server.handle_request("/health/deep");
+    (void)server.handle_request("/invalid");
 
     auto stats = server.get_statistics();
     TEST_ASSERT(stats.total_requests == 4, "should have 4 total requests");

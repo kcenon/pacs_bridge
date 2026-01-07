@@ -80,7 +80,7 @@ public:
         if (handler_) {
             handler_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "mllp_session"; }
@@ -688,9 +688,9 @@ private:
                     handle_session(session_id);
                 });
                 auto result = config_.executor->execute(std::move(job));
-                if (result) {
+                if (result.is_ok()) {
                     std::lock_guard lock(threads_mutex_);
-                    session_futures_.push_back(std::move(*result));
+                    session_futures_.push_back(std::move(result.value()));
                 }
             } else {
                 std::lock_guard lock(threads_mutex_);

@@ -20,8 +20,8 @@
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
 #include <kcenon/messaging/core/message_bus.h>
 #include <kcenon/messaging/core/message.h>
-#include <kcenon/messaging/backend/standalone_backend.h>
-#include <kcenon/container/container.h>
+#include <kcenon/messaging/backends/standalone_backend.h>
+#include <core/container.h>
 #endif
 
 namespace pacs::bridge::messaging {
@@ -163,10 +163,10 @@ public:
 
             // Store HL7 message data in payload
             auto& payload = msg.payload();
-            payload.add("raw_message", message.to_string());
-            payload.add("message_type", std::string(message.get_value("MSH.9.1")));
-            payload.add("trigger_event", std::string(message.trigger_event()));
-            payload.add("control_id", std::string(message.control_id()));
+            payload.set("raw_message", message.serialize());
+            payload.set("message_type", std::string(message.get_value("MSH.9.1")));
+            payload.set("trigger_event", std::string(message.trigger_event()));
+            payload.set("control_id", std::string(message.control_id()));
 
             // Set priority
             switch (priority) {
@@ -272,13 +272,14 @@ public:
                 }
 
                 // Convert messaging_system message to HL7 message
-                auto raw = msg.payload().get_string("raw_message");
-                if (!raw) {
+                auto raw_opt = msg.payload().get_value("raw_message");
+                if (!raw_opt || raw_opt->type != container_module::value_types::string_value) {
                     return kcenon::common::ok();
                 }
+                auto raw = std::get<std::string>(raw_opt->data);
 
                 hl7::hl7_parser parser;
-                auto parse_result = parser.parse(*raw);
+                auto parse_result = parser.parse(raw);
                 if (!parse_result) {
                     return kcenon::common::ok();
                 }
@@ -638,7 +639,7 @@ std::expected<void, message_bus_error> hl7_subscriber::on(
 void hl7_subscriber::unsubscribe_all() {
     if (bus_) {
         for (const auto& handle : handles_) {
-            bus_->unsubscribe(handle);
+            (void)bus_->unsubscribe(handle);
         }
     }
     handles_.clear();

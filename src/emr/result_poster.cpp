@@ -80,38 +80,38 @@ public:
                        : nullptr) {}
 
     auto post_result(const study_result& result)
-        -> std::expected<posted_result, result_error> {
+        -> Result<posted_result> {
         // Validate input
         if (!result.is_valid()) {
-            return std::unexpected(result_error::invalid_data);
+            return to_error_info(result_error::invalid_data);
         }
 
         // Check for duplicates if enabled
         if (config_.check_duplicates) {
             if (tracker_ && tracker_->exists(result.study_instance_uid)) {
                 ++stats_.duplicate_skips;
-                return std::unexpected(result_error::duplicate);
+                return to_error_info(result_error::duplicate);
             }
 
             // Also check EMR for existing report
             auto existing = find_by_study_uid_impl(result.study_instance_uid);
-            if (existing && *existing) {
+            if (existing.is_ok() && existing.value()) {
                 ++stats_.duplicate_skips;
-                return std::unexpected(result_error::duplicate);
+                return to_error_info(result_error::duplicate);
             }
         }
 
         // Build DiagnosticReport JSON
         auto json = diagnostic_report_builder::from_study_result(result)
                         .build_validated();
-        if (!json) {
-            return std::unexpected(result_error::build_failed);
+        if (json.is_err()) {
+            return to_error_info(result_error::build_failed);
         }
 
         auto start_time = std::chrono::steady_clock::now();
 
         // Post to EMR
-        auto post_result = client_->create("DiagnosticReport", *json);
+        auto post_result = client_->create("DiagnosticReport", json.value());
 
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - start_time);
@@ -120,17 +120,17 @@ public:
         stats_.total_post_time += elapsed;
         ++stats_.total_posts;
 
-        if (!post_result) {
+        if (post_result.is_err()) {
             ++stats_.failed_posts;
-            return std::unexpected(result_error::post_failed);
+            return to_error_info(result_error::post_failed);
         }
 
         ++stats_.successful_posts;
 
         // Extract resource ID
-        auto resource_id = extract_resource_id(*post_result);
+        auto resource_id = extract_resource_id(post_result.value());
         if (!resource_id) {
-            return std::unexpected(result_error::post_failed);
+            return to_error_info(result_error::post_failed);
         }
 
         // Create posted result reference
@@ -139,36 +139,36 @@ public:
         posted.study_instance_uid = result.study_instance_uid;
         posted.accession_number = result.accession_number;
         posted.status = result.status;
-        posted.etag = post_result->etag;
+        posted.etag = post_result.value().etag;
         posted.posted_at = std::chrono::system_clock::now();
 
         // Track the result
         if (tracker_) {
-            tracker_->track(posted);
+            (void)tracker_->track(posted);
         }
 
         return posted;
     }
 
     auto update_result(std::string_view report_id, const study_result& result)
-        -> std::expected<void, result_error> {
+        -> VoidResult {
         if (!result.is_valid()) {
-            return std::unexpected(result_error::invalid_data);
+            return to_error_info(result_error::invalid_data);
         }
 
         // Build updated DiagnosticReport JSON
         auto json = diagnostic_report_builder::from_study_result(result)
                         .build_validated();
-        if (!json) {
-            return std::unexpected(result_error::build_failed);
+        if (json.is_err()) {
+            return to_error_info(result_error::build_failed);
         }
 
         // Update in EMR
         auto update_result =
-            client_->update("DiagnosticReport", report_id, *json);
+            client_->update("DiagnosticReport", report_id, json.value());
 
-        if (!update_result) {
-            return std::unexpected(result_error::update_failed);
+        if (update_result.is_err()) {
+            return to_error_info(result_error::update_failed);
         }
 
         // Update tracking
@@ -178,40 +178,40 @@ public:
             updated.study_instance_uid = result.study_instance_uid;
             updated.accession_number = result.accession_number;
             updated.status = result.status;
-            updated.etag = update_result->etag;
+            updated.etag = update_result.value().etag;
             updated.updated_at = std::chrono::system_clock::now();
 
-            tracker_->update(result.study_instance_uid, updated);
+            (void)tracker_->update(result.study_instance_uid, updated);
         }
 
         std::lock_guard lock(stats_mutex_);
         ++stats_.updates;
 
-        return {};
+        return std::monostate{};
     }
 
     auto update_status(std::string_view report_id, result_status new_status)
-        -> std::expected<void, result_error> {
+        -> VoidResult {
         // Read current resource
         auto read_result = client_->read("DiagnosticReport", report_id);
-        if (!read_result) {
-            return std::unexpected(result_error::not_found);
+        if (read_result.is_err()) {
+            return to_error_info(result_error::not_found);
         }
 
         // For now, we need to parse and rebuild - in a full implementation
         // we would use PATCH operation or modify the JSON directly
         // This is a simplified implementation
 
-        return std::unexpected(result_error::update_failed);
+        return to_error_info(result_error::update_failed);
     }
 
     auto find_by_accession(std::string_view accession_number)
-        -> std::expected<std::optional<std::string>, result_error> {
+        -> Result<std::optional<std::string>> {
         // Check local tracker first
         if (tracker_) {
             auto tracked = tracker_->get_by_accession(accession_number);
             if (tracked) {
-                return tracked->report_id;
+                return std::optional<std::string>(tracked->report_id);
             }
         }
 
@@ -220,30 +220,30 @@ public:
         params.add("identifier", std::string(accession_number));
 
         auto search_result = client_->search("DiagnosticReport", params);
-        if (!search_result) {
-            return std::unexpected(result_error::post_failed);
+        if (search_result.is_err()) {
+            return to_error_info(result_error::post_failed);
         }
 
-        const auto& bundle = search_result->value;
+        const auto& bundle = search_result.value().value;
         if (bundle.entries.empty()) {
-            return std::nullopt;
+            return std::optional<std::string>{};
         }
 
         // Return first match
         if (bundle.entries[0].resource_id) {
-            return *bundle.entries[0].resource_id;
+            return std::optional<std::string>(*bundle.entries[0].resource_id);
         }
 
-        return std::nullopt;
+        return std::optional<std::string>{};
     }
 
     auto find_by_study_uid(std::string_view study_uid)
-        -> std::expected<std::optional<std::string>, result_error> {
+        -> Result<std::optional<std::string>> {
         return find_by_study_uid_impl(study_uid);
     }
 
     auto get_result(std::string_view report_id)
-        -> std::expected<posted_result, result_error> {
+        -> Result<posted_result> {
         // Check local tracker first
         if (tracker_) {
             auto tracked = tracker_->get_by_report_id(report_id);
@@ -254,14 +254,14 @@ public:
 
         // Read from EMR
         auto read_result = client_->read("DiagnosticReport", report_id);
-        if (!read_result) {
-            return std::unexpected(result_error::not_found);
+        if (read_result.is_err()) {
+            return to_error_info(result_error::not_found);
         }
 
         // Parse response - simplified, would need full parsing in production
         posted_result result;
         result.report_id = std::string(report_id);
-        result.etag = read_result->etag;
+        result.etag = read_result.value().etag;
         result.posted_at = std::chrono::system_clock::now();
 
         return result;
@@ -301,12 +301,12 @@ public:
 
 private:
     auto find_by_study_uid_impl(std::string_view study_uid)
-        -> std::expected<std::optional<std::string>, result_error> {
+        -> Result<std::optional<std::string>> {
         // Check local tracker first
         if (tracker_) {
             auto tracked = tracker_->get_by_study_uid(study_uid);
             if (tracked) {
-                return tracked->report_id;
+                return std::optional<std::string>(tracked->report_id);
             }
         }
 
@@ -315,20 +315,20 @@ private:
         params.add("identifier", "urn:dicom:uid|" + std::string(study_uid));
 
         auto search_result = client_->search("DiagnosticReport", params);
-        if (!search_result) {
-            return std::unexpected(result_error::post_failed);
+        if (search_result.is_err()) {
+            return to_error_info(result_error::post_failed);
         }
 
-        const auto& bundle = search_result->value;
+        const auto& bundle = search_result.value().value;
         if (bundle.entries.empty()) {
-            return std::nullopt;
+            return std::optional<std::string>{};
         }
 
         if (bundle.entries[0].resource_id) {
-            return *bundle.entries[0].resource_id;
+            return std::optional<std::string>(*bundle.entries[0].resource_id);
         }
 
-        return std::nullopt;
+        return std::optional<std::string>{};
     }
 
     std::shared_ptr<fhir_client> client_;
@@ -354,34 +354,34 @@ emr_result_poster& emr_result_poster::operator=(emr_result_poster&&) noexcept =
     default;
 
 auto emr_result_poster::post_result(const study_result& result)
-    -> std::expected<posted_result, result_error> {
+    -> Result<posted_result> {
     return impl_->post_result(result);
 }
 
 auto emr_result_poster::update_result(std::string_view report_id,
                                       const study_result& result)
-    -> std::expected<void, result_error> {
+    -> VoidResult {
     return impl_->update_result(report_id, result);
 }
 
 auto emr_result_poster::update_status(std::string_view report_id,
                                       result_status new_status)
-    -> std::expected<void, result_error> {
+    -> VoidResult {
     return impl_->update_status(report_id, new_status);
 }
 
 auto emr_result_poster::find_by_accession(std::string_view accession_number)
-    -> std::expected<std::optional<std::string>, result_error> {
+    -> Result<std::optional<std::string>> {
     return impl_->find_by_accession(accession_number);
 }
 
 auto emr_result_poster::find_by_study_uid(std::string_view study_uid)
-    -> std::expected<std::optional<std::string>, result_error> {
+    -> Result<std::optional<std::string>> {
     return impl_->find_by_study_uid(study_uid);
 }
 
 auto emr_result_poster::get_result(std::string_view report_id)
-    -> std::expected<posted_result, result_error> {
+    -> Result<posted_result> {
     return impl_->get_result(report_id);
 }
 

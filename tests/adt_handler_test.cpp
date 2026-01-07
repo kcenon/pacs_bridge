@@ -407,7 +407,7 @@ bool test_patient_updated_callback() {
 
     // Create patient first
     auto a01_msg = hl7_message::parse(SAMPLE_ADT_A01);
-    handler.handle(*a01_msg);
+    (void)handler.handle(*a01_msg);
 
     // Update patient
     auto a08_msg = hl7_message::parse(SAMPLE_ADT_A08);

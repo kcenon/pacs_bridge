@@ -15,7 +15,6 @@
 
 #include "emr_types.h"
 
-#include <expected>
 #include <functional>
 #include <memory>
 #include <string>
@@ -34,7 +33,7 @@ namespace pacs::bridge::emr {
  * class mock_http_client : public http_client_adapter {
  * public:
  *     auto execute(const http_request& req)
- *         -> std::expected<http_response, emr_error> override {
+ *         -> Result<http_response> override {
  *         http_response response;
  *         response.status = http_status::ok;
  *         response.body = R"({"resourceType": "Patient", "id": "123"})";
@@ -68,7 +67,7 @@ public:
      * @return HTTP response or error
      */
     [[nodiscard]] virtual auto execute(const http_request& request)
-        -> std::expected<http_response, emr_error> = 0;
+        -> Result<http_response> = 0;
 
     /**
      * @brief Execute a GET request
@@ -84,7 +83,7 @@ public:
         std::string_view url,
         const std::vector<std::pair<std::string, std::string>>& headers = {},
         std::chrono::seconds timeout = std::chrono::seconds{30})
-        -> std::expected<http_response, emr_error>;
+        -> Result<http_response>;
 
     /**
      * @brief Execute a POST request
@@ -104,7 +103,7 @@ public:
         std::string_view content_type,
         const std::vector<std::pair<std::string, std::string>>& headers = {},
         std::chrono::seconds timeout = std::chrono::seconds{30})
-        -> std::expected<http_response, emr_error>;
+        -> Result<http_response>;
 
     /**
      * @brief Execute a PUT request
@@ -122,7 +121,7 @@ public:
         std::string_view content_type,
         const std::vector<std::pair<std::string, std::string>>& headers = {},
         std::chrono::seconds timeout = std::chrono::seconds{30})
-        -> std::expected<http_response, emr_error>;
+        -> Result<http_response>;
 
     /**
      * @brief Execute a DELETE request
@@ -136,7 +135,7 @@ public:
         std::string_view url,
         const std::vector<std::pair<std::string, std::string>>& headers = {},
         std::chrono::seconds timeout = std::chrono::seconds{30})
-        -> std::expected<http_response, emr_error>;
+        -> Result<http_response>;
 
     /**
      * @brief Execute a PATCH request
@@ -154,7 +153,7 @@ public:
         std::string_view content_type,
         const std::vector<std::pair<std::string, std::string>>& headers = {},
         std::chrono::seconds timeout = std::chrono::seconds{30})
-        -> std::expected<http_response, emr_error>;
+        -> Result<http_response>;
 
 protected:
     /**
@@ -207,7 +206,7 @@ struct http_client_config {
  * @example Usage with Lambda
  * ```cpp
  * auto http_func = [](const http_request& req)
- *     -> std::expected<http_response, emr_error> {
+ *     -> Result<http_response> {
  *     // Custom HTTP implementation
  *     return make_http_call(req);
  * };
@@ -221,7 +220,7 @@ public:
     /**
      * @brief HTTP execution callback type
      */
-    using execute_callback = std::function<std::expected<http_response, emr_error>(
+    using execute_callback = std::function<Result<http_response>(
         const http_request&)>;
 
     /**
@@ -236,7 +235,7 @@ public:
      * @brief Execute HTTP request using the callback
      */
     [[nodiscard]] auto execute(const http_request& request)
-        -> std::expected<http_response, emr_error> override;
+        -> Result<http_response> override;
 
 private:
     execute_callback callback_;

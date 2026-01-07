@@ -71,7 +71,7 @@ public:
         if (work_func_) {
             work_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "health_accept"; }
@@ -94,7 +94,7 @@ public:
         if (handler_func_) {
             handler_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "health_handler"; }

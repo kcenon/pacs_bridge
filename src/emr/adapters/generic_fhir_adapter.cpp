@@ -116,25 +116,25 @@ adapter_features generic_fhir_adapter::features() const noexcept {
 // Connection Management
 // =============================================================================
 
-std::expected<void, adapter_error> generic_fhir_adapter::initialize() {
+VoidResult generic_fhir_adapter::initialize() {
     std::lock_guard<std::mutex> lock(impl_->mutex_);
 
     if (impl_->initialized_) {
-        return {};  // Already initialized
+        return std::monostate{};  // Already initialized
     }
 
     // Validate configuration
     if (!impl_->config_.is_valid()) {
-        return std::unexpected(adapter_error::invalid_configuration);
+        return to_error_info(adapter_error::invalid_configuration);
     }
 
     // Create FHIR client if not provided
     if (!impl_->fhir_client_) {
         auto result = create_fhir_client();
-        if (!result) {
-            return std::unexpected(result.error());
+        if (result.is_err()) {
+            return result.error();
         }
-        impl_->fhir_client_ = *result;
+        impl_->fhir_client_ = result.value();
     }
 
     // Create patient lookup service
@@ -167,7 +167,7 @@ std::expected<void, adapter_error> generic_fhir_adapter::initialize() {
     impl_->initialized_ = true;
     impl_->connected_ = true;
 
-    return {};
+    return std::monostate{};
 }
 
 void generic_fhir_adapter::shutdown() noexcept {
@@ -198,12 +198,12 @@ bool generic_fhir_adapter::is_connected() const noexcept {
 // Health Check
 // =============================================================================
 
-std::expected<adapter_health_status, adapter_error>
+Result<adapter_health_status>
 generic_fhir_adapter::health_check() {
     std::lock_guard<std::mutex> lock(impl_->mutex_);
 
     if (!impl_->initialized_) {
-        return std::unexpected(adapter_error::not_initialized);
+        return to_error_info(adapter_error::not_initialized);
     }
 
     auto start = std::chrono::steady_clock::now();
@@ -217,7 +217,7 @@ generic_fhir_adapter::health_check() {
         end - start);
     status.last_check = std::chrono::system_clock::now();
 
-    if (cap_result) {
+    if (cap_result.is_ok()) {
         status.healthy = true;
         status.connected = true;
         status.authenticated = true;
@@ -225,7 +225,7 @@ generic_fhir_adapter::health_check() {
     } else {
         status.healthy = false;
         status.connected = false;
-        status.error_message = to_string(cap_result.error());
+        status.error_message = cap_result.error().message;
         impl_->connected_ = false;
     }
 
@@ -242,14 +242,14 @@ adapter_health_status generic_fhir_adapter::get_health_status() const noexcept {
 // Patient Operations
 // =============================================================================
 
-std::expected<patient_record, patient_error>
+Result<patient_record>
 generic_fhir_adapter::query_patient(const patient_query& query) {
     auto start = std::chrono::steady_clock::now();
 
     {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         if (!impl_->initialized_) {
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
     }
 
@@ -263,7 +263,7 @@ generic_fhir_adapter::query_patient(const patient_query& query) {
         impl_->stats_.total_requests++;
         impl_->stats_.patient_queries++;
         impl_->stats_.total_request_time += duration;
-        if (result) {
+        if (result.is_ok()) {
             impl_->stats_.successful_requests++;
         } else {
             impl_->stats_.failed_requests++;
@@ -273,14 +273,14 @@ generic_fhir_adapter::query_patient(const patient_query& query) {
     return result;
 }
 
-std::expected<std::vector<patient_match>, patient_error>
+Result<std::vector<patient_match>>
 generic_fhir_adapter::search_patients(const patient_query& query) {
     auto start = std::chrono::steady_clock::now();
 
     {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         if (!impl_->initialized_) {
-            return std::unexpected(patient_error::query_failed);
+            return to_error_info(patient_error::query_failed);
         }
     }
 
@@ -294,7 +294,7 @@ generic_fhir_adapter::search_patients(const patient_query& query) {
         impl_->stats_.total_requests++;
         impl_->stats_.patient_queries++;
         impl_->stats_.total_request_time += duration;
-        if (result) {
+        if (result.is_ok()) {
             impl_->stats_.successful_requests++;
         } else {
             impl_->stats_.failed_requests++;
@@ -308,14 +308,14 @@ generic_fhir_adapter::search_patients(const patient_query& query) {
 // Result Operations
 // =============================================================================
 
-std::expected<posted_result, result_error>
+Result<posted_result>
 generic_fhir_adapter::post_result(const study_result& result) {
     auto start = std::chrono::steady_clock::now();
 
     {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         if (!impl_->initialized_) {
-            return std::unexpected(result_error::post_failed);
+            return to_error_info(result_error::post_failed);
         }
     }
 
@@ -329,7 +329,7 @@ generic_fhir_adapter::post_result(const study_result& result) {
         impl_->stats_.total_requests++;
         impl_->stats_.result_posts++;
         impl_->stats_.total_request_time += duration;
-        if (post_result) {
+        if (post_result.is_ok()) {
             impl_->stats_.successful_requests++;
         } else {
             impl_->stats_.failed_requests++;
@@ -339,7 +339,7 @@ generic_fhir_adapter::post_result(const study_result& result) {
     return post_result;
 }
 
-std::expected<void, result_error>
+VoidResult
 generic_fhir_adapter::update_result(std::string_view report_id,
                                     const study_result& result) {
     auto start = std::chrono::steady_clock::now();
@@ -347,7 +347,7 @@ generic_fhir_adapter::update_result(std::string_view report_id,
     {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         if (!impl_->initialized_) {
-            return std::unexpected(result_error::update_failed);
+            return to_error_info(result_error::update_failed);
         }
     }
 
@@ -360,7 +360,7 @@ generic_fhir_adapter::update_result(std::string_view report_id,
         std::lock_guard<std::mutex> lock(impl_->stats_mutex_);
         impl_->stats_.total_requests++;
         impl_->stats_.total_request_time += duration;
-        if (update_result) {
+        if (update_result.is_ok()) {
             impl_->stats_.successful_requests++;
         } else {
             impl_->stats_.failed_requests++;
@@ -374,14 +374,14 @@ generic_fhir_adapter::update_result(std::string_view report_id,
 // Encounter Operations
 // =============================================================================
 
-std::expected<encounter_info, encounter_error>
+Result<encounter_info>
 generic_fhir_adapter::get_encounter(std::string_view encounter_id) {
     auto start = std::chrono::steady_clock::now();
 
     {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         if (!impl_->initialized_) {
-            return std::unexpected(encounter_error::query_failed);
+            return to_error_info(encounter_error::query_failed);
         }
     }
 
@@ -397,7 +397,7 @@ generic_fhir_adapter::get_encounter(std::string_view encounter_id) {
         impl_->stats_.total_request_time += duration;
     }
 
-    // Convert variant to expected
+    // Convert variant to Result
     if (auto* enc = std::get_if<encounter_info>(&result)) {
         std::lock_guard<std::mutex> lock(impl_->stats_mutex_);
         impl_->stats_.successful_requests++;
@@ -405,18 +405,18 @@ generic_fhir_adapter::get_encounter(std::string_view encounter_id) {
     } else {
         std::lock_guard<std::mutex> lock(impl_->stats_mutex_);
         impl_->stats_.failed_requests++;
-        return std::unexpected(std::get<encounter_error>(result));
+        return to_error_info(std::get<encounter_error>(result));
     }
 }
 
-std::expected<std::optional<encounter_info>, encounter_error>
+Result<std::optional<encounter_info>>
 generic_fhir_adapter::find_active_encounter(std::string_view patient_id) {
     auto start = std::chrono::steady_clock::now();
 
     {
         std::lock_guard<std::mutex> lock(impl_->mutex_);
         if (!impl_->initialized_) {
-            return std::unexpected(encounter_error::query_failed);
+            return to_error_info(encounter_error::query_failed);
         }
     }
 
@@ -432,7 +432,7 @@ generic_fhir_adapter::find_active_encounter(std::string_view patient_id) {
         impl_->stats_.total_request_time += duration;
     }
 
-    // Convert variant to expected
+    // Convert variant to Result
     if (auto* opt_enc = std::get_if<std::optional<encounter_info>>(&result)) {
         std::lock_guard<std::mutex> lock(impl_->stats_mutex_);
         impl_->stats_.successful_requests++;
@@ -440,7 +440,7 @@ generic_fhir_adapter::find_active_encounter(std::string_view patient_id) {
     } else {
         std::lock_guard<std::mutex> lock(impl_->stats_mutex_);
         impl_->stats_.failed_requests++;
-        return std::unexpected(std::get<encounter_error>(result));
+        return to_error_info(std::get<encounter_error>(result));
     }
 }
 
@@ -452,12 +452,12 @@ const emr_adapter_config& generic_fhir_adapter::config() const noexcept {
     return impl_->config_;
 }
 
-std::expected<void, adapter_error>
+VoidResult
 generic_fhir_adapter::set_config(const emr_adapter_config& config) {
     std::lock_guard<std::mutex> lock(impl_->mutex_);
 
     if (!config.is_valid()) {
-        return std::unexpected(adapter_error::invalid_configuration);
+        return to_error_info(adapter_error::invalid_configuration);
     }
 
     // If already initialized, need to reinitialize
@@ -480,12 +480,12 @@ generic_fhir_adapter::set_config(const emr_adapter_config& config) {
         impl_->mutex_.unlock();
         auto result = initialize();
         impl_->mutex_.lock();
-        if (!result) {
-            return std::unexpected(result.error());
+        if (result.is_err()) {
+            return result.error();
         }
     }
 
-    return {};
+    return std::monostate{};
 }
 
 // =============================================================================
@@ -518,7 +518,7 @@ generic_fhir_adapter::get_fhir_client() const noexcept {
     return impl_->fhir_client_;
 }
 
-std::expected<std::shared_ptr<fhir_client>, adapter_error>
+Result<std::shared_ptr<fhir_client>>
 generic_fhir_adapter::create_fhir_client() {
     fhir_client_config fhir_config;
     fhir_config.base_url = impl_->config_.base_url;
@@ -528,7 +528,7 @@ generic_fhir_adapter::create_fhir_client() {
     try {
         return std::make_shared<fhir_client>(fhir_config);
     } catch (const std::exception&) {
-        return std::unexpected(adapter_error::connection_failed);
+        return to_error_info(adapter_error::connection_failed);
     }
 }
 

@@ -373,9 +373,9 @@ TEST_F(AdapterFactoryTest, CreateGenericAdapter) {
 
     auto result = create_emr_adapter(config);
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ((*result)->vendor(), emr_vendor::generic_fhir);
-    EXPECT_EQ((*result)->vendor_name(), "Generic FHIR R4");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value()->vendor(), emr_vendor::generic_fhir);
+    EXPECT_EQ(result.value()->vendor_name(), "Generic FHIR R4");
 }
 
 TEST_F(AdapterFactoryTest, CreateEpicAdapter) {
@@ -384,7 +384,7 @@ TEST_F(AdapterFactoryTest, CreateEpicAdapter) {
     auto result = create_emr_adapter(config);
 
     // Currently falls back to generic
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
     // Epic adapter will be implemented in Phase 5.2+
 }
 
@@ -394,7 +394,7 @@ TEST_F(AdapterFactoryTest, CreateCernerAdapter) {
     auto result = create_emr_adapter(config);
 
     // Currently falls back to generic
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
     // Cerner adapter will be implemented in Phase 5.2+
 }
 
@@ -404,8 +404,8 @@ TEST_F(AdapterFactoryTest, CreateMeditechAdapter) {
     auto result = create_emr_adapter(config);
 
     // Not yet supported
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), adapter_error::not_supported);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(adapter_error::not_supported));
 }
 
 TEST_F(AdapterFactoryTest, CreateAllscriptsAdapter) {
@@ -414,8 +414,8 @@ TEST_F(AdapterFactoryTest, CreateAllscriptsAdapter) {
     auto result = create_emr_adapter(config);
 
     // Not yet supported
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), adapter_error::not_supported);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(adapter_error::not_supported));
 }
 
 TEST_F(AdapterFactoryTest, CreateUnknownVendorAdapter) {
@@ -423,8 +423,8 @@ TEST_F(AdapterFactoryTest, CreateUnknownVendorAdapter) {
 
     auto result = create_emr_adapter(config);
 
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), adapter_error::invalid_vendor);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(adapter_error::invalid_vendor));
 }
 
 TEST_F(AdapterFactoryTest, InvalidConfiguration) {
@@ -434,8 +434,8 @@ TEST_F(AdapterFactoryTest, InvalidConfiguration) {
 
     auto result = create_emr_adapter(config);
 
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), adapter_error::invalid_configuration);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(adapter_error::invalid_configuration));
 }
 
 TEST_F(AdapterFactoryTest, CreateWithVendorAndUrl) {
@@ -443,8 +443,8 @@ TEST_F(AdapterFactoryTest, CreateWithVendorAndUrl) {
                                      "https://emr.example.com/fhir");
 
     // This will fail because minimal config doesn't have auth
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), adapter_error::invalid_configuration);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(adapter_error::invalid_configuration));
 }
 
 // =============================================================================
@@ -462,8 +462,8 @@ protected:
         config.token_url = "https://emr.example.com/oauth/token";
 
         auto result = create_emr_adapter(config);
-        if (result) {
-            return std::move(*result);
+        if (result.is_ok()) {
+            return std::move(result.value());
         }
         return nullptr;
     }
@@ -525,8 +525,8 @@ TEST_F(AdapterConfigUpdateTest, SetConfigInvalidFails) {
     // Empty base_url
     auto result = adapter.set_config(invalid_config);
 
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), adapter_error::invalid_configuration);
+    EXPECT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(adapter_error::invalid_configuration));
 }
 
 TEST_F(AdapterConfigUpdateTest, SetConfigValid) {
@@ -538,7 +538,7 @@ TEST_F(AdapterConfigUpdateTest, SetConfigValid) {
 
     auto result = adapter.set_config(new_config);
 
-    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(result.is_ok());
     EXPECT_EQ(adapter.config().base_url, "https://new-emr.example.com/fhir");
 }
 

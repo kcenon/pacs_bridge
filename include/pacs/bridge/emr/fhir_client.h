@@ -26,7 +26,6 @@
 #include "search_params.h"
 #include "../security/auth_provider.h"
 
-#include <expected>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -219,7 +218,7 @@ public:
      * ```
      */
     [[nodiscard]] auto read(std::string_view resource_type, std::string_view id)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     /**
      * @brief Read a specific version of a resource (vread)
@@ -232,7 +231,7 @@ public:
     [[nodiscard]] auto vread(std::string_view resource_type,
                              std::string_view id,
                              std::string_view version_id)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     // =========================================================================
     // Search Operations
@@ -258,7 +257,7 @@ public:
      */
     [[nodiscard]] auto search(std::string_view resource_type,
                               const search_params& params)
-        -> std::expected<fhir_result<fhir_bundle>, emr_error>;
+        -> Result<fhir_result<fhir_bundle>>;
 
     /**
      * @brief Search all resources (without type restriction)
@@ -269,7 +268,7 @@ public:
      * @return Bundle with search results or error
      */
     [[nodiscard]] auto search_all(const search_params& params)
-        -> std::expected<fhir_result<fhir_bundle>, emr_error>;
+        -> Result<fhir_result<fhir_bundle>>;
 
     /**
      * @brief Fetch next page of search results
@@ -278,7 +277,7 @@ public:
      * @return Next page bundle or error
      */
     [[nodiscard]] auto next_page(const fhir_bundle& bundle)
-        -> std::expected<fhir_result<fhir_bundle>, emr_error>;
+        -> Result<fhir_result<fhir_bundle>>;
 
     /**
      * @brief Fetch all pages of search results
@@ -294,7 +293,7 @@ public:
     [[nodiscard]] auto search_all_pages(std::string_view resource_type,
                                         const search_params& params,
                                         size_t max_pages = 0)
-        -> std::expected<std::vector<fhir_resource_wrapper>, emr_error>;
+        -> Result<std::vector<fhir_resource_wrapper>>;
 
     // =========================================================================
     // Create Operations
@@ -324,7 +323,7 @@ public:
      */
     [[nodiscard]] auto create(std::string_view resource_type,
                               std::string_view resource)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     /**
      * @brief Create a resource conditionally
@@ -339,7 +338,7 @@ public:
     [[nodiscard]] auto create_if_none_exist(std::string_view resource_type,
                                             std::string_view resource,
                                             const search_params& search)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     // =========================================================================
     // Update Operations
@@ -367,7 +366,7 @@ public:
     [[nodiscard]] auto update(std::string_view resource_type,
                               std::string_view id,
                               std::string_view resource)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     /**
      * @brief Update a resource with version check
@@ -384,7 +383,7 @@ public:
                                        std::string_view id,
                                        std::string_view resource,
                                        std::string_view etag)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     /**
      * @brief Create or update a resource (upsert)
@@ -399,7 +398,7 @@ public:
     [[nodiscard]] auto upsert(std::string_view resource_type,
                               std::string_view id,
                               std::string_view resource)
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     // =========================================================================
     // Delete Operations
@@ -414,7 +413,7 @@ public:
      */
     [[nodiscard]] auto remove(std::string_view resource_type,
                               std::string_view id)
-        -> std::expected<void, emr_error>;
+        -> VoidResult;
 
     /**
      * @brief Delete a resource conditionally
@@ -427,7 +426,7 @@ public:
      */
     [[nodiscard]] auto conditional_delete(std::string_view resource_type,
                                           const search_params& search)
-        -> std::expected<void, emr_error>;
+        -> VoidResult;
 
     // =========================================================================
     // Transaction/Batch Operations
@@ -442,7 +441,7 @@ public:
      * @return Response bundle or error
      */
     [[nodiscard]] auto transaction(const fhir_bundle& bundle)
-        -> std::expected<fhir_result<fhir_bundle>, emr_error>;
+        -> Result<fhir_result<fhir_bundle>>;
 
     /**
      * @brief Execute a batch bundle
@@ -453,7 +452,7 @@ public:
      * @return Response bundle or error
      */
     [[nodiscard]] auto batch(const fhir_bundle& bundle)
-        -> std::expected<fhir_result<fhir_bundle>, emr_error>;
+        -> Result<fhir_result<fhir_bundle>>;
 
     // =========================================================================
     // Server Capabilities
@@ -467,7 +466,7 @@ public:
      * @return CapabilityStatement JSON or error
      */
     [[nodiscard]] auto capabilities()
-        -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error>;
+        -> Result<fhir_result<fhir_resource_wrapper>>;
 
     /**
      * @brief Check if server supports a resource type
@@ -476,7 +475,7 @@ public:
      * @return true if supported, false otherwise
      */
     [[nodiscard]] auto supports_resource(std::string_view resource_type)
-        -> std::expected<bool, emr_error>;
+        -> Result<bool>;
 
     // =========================================================================
     // Configuration

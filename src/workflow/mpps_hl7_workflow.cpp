@@ -40,7 +40,7 @@ public:
         if (work_func_) {
             work_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "mpps_workflow_worker"; }
@@ -664,8 +664,8 @@ private:
         });
 
         auto result = config_.executor->execute(std::move(job));
-        if (result) {
-            worker_futures_.push_back(std::move(*result));
+        if (result.is_ok()) {
+            worker_futures_.push_back(std::move(result.value()));
         }
     }
 #endif  // PACS_BRIDGE_STANDALONE_BUILD

@@ -159,9 +159,9 @@ public:
 
     // Execute request with retry
     auto execute_with_retry(http_request request)
-        -> std::expected<http_response, emr_error> {
+        -> Result<http_response> {
         auto start_time = std::chrono::steady_clock::now();
-        emr_error last_error = emr_error::unknown;
+        error_info last_error = to_error_info(emr_error::unknown);
 
         for (size_t attempt = 0; attempt <= config_.retry.max_retries; ++attempt) {
             if (attempt > 0) {
@@ -174,19 +174,19 @@ public:
             stats_.total_requests.fetch_add(1, std::memory_order_relaxed);
 
             auto result = http_client_->execute(request);
-            if (result) {
-                auto& response = *result;
+            if (result.is_ok()) {
+                auto& response = result.value();
 
                 // Check for server errors that might be retryable
                 if (is_server_error(response.status)) {
-                    last_error = status_to_error(response.status);
+                    last_error = to_error_info(status_to_error(response.status));
                     // Retry on server errors
                     continue;
                 }
 
                 // Handle rate limiting
                 if (response.status == http_status::too_many_requests) {
-                    last_error = emr_error::rate_limited;
+                    last_error = to_error_info(emr_error::rate_limited);
                     // Could check Retry-After header here
                     continue;
                 }
@@ -211,27 +211,27 @@ public:
             last_error = result.error();
 
             // Don't retry certain errors
-            if (last_error == emr_error::invalid_configuration ||
-                last_error == emr_error::bad_request ||
-                last_error == emr_error::unauthorized ||
-                last_error == emr_error::forbidden ||
-                last_error == emr_error::cancelled) {
+            if (last_error.code == static_cast<int>(emr_error::invalid_configuration) ||
+                last_error.code == static_cast<int>(emr_error::bad_request) ||
+                last_error.code == static_cast<int>(emr_error::unauthorized) ||
+                last_error.code == static_cast<int>(emr_error::forbidden) ||
+                last_error.code == static_cast<int>(emr_error::cancelled)) {
                 break;
             }
         }
 
         stats_.failed_requests.fetch_add(1, std::memory_order_relaxed);
 
-        if (last_error == emr_error::unknown) {
-            return std::unexpected(emr_error::retry_exhausted);
+        if (last_error.code == static_cast<int>(emr_error::unknown)) {
+            return Result<http_response>::err(to_error_info(emr_error::retry_exhausted));
         }
-        return std::unexpected(last_error);
+        return Result<http_response>::err(last_error);
     }
 
     // Process response into result
     template <typename T>
     auto process_response(const http_response& response)
-        -> std::expected<fhir_result<T>, emr_error>;
+        -> Result<fhir_result<T>>;
 
     // Configuration
     const fhir_client_config& config() const { return config_; }
@@ -284,9 +284,9 @@ private:
 template <>
 auto fhir_client::impl::process_response<fhir_resource_wrapper>(
     const http_response& response)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     if (!response.is_success()) {
-        return std::unexpected(status_to_error(response.status));
+        return Result<fhir_result<fhir_resource_wrapper>>::err(to_error_info(status_to_error(response.status)));
     }
 
     fhir_result<fhir_resource_wrapper> result;
@@ -309,14 +309,14 @@ auto fhir_client::impl::process_response<fhir_resource_wrapper>(
 template <>
 auto fhir_client::impl::process_response<fhir_bundle>(
     const http_response& response)
-    -> std::expected<fhir_result<fhir_bundle>, emr_error> {
+    -> Result<fhir_result<fhir_bundle>> {
     if (!response.is_success()) {
-        return std::unexpected(status_to_error(response.status));
+        return Result<fhir_result<fhir_bundle>>::err(to_error_info(status_to_error(response.status)));
     }
 
     auto bundle = fhir_bundle::parse(response.body);
     if (!bundle) {
-        return std::unexpected(emr_error::invalid_response);
+        return Result<fhir_result<fhir_bundle>>::err(to_error_info(emr_error::invalid_response));
     }
 
     fhir_result<fhir_bundle> result;
@@ -358,7 +358,7 @@ std::shared_ptr<security::auth_provider> fhir_client::auth_provider() const noex
 
 // Read operations
 auto fhir_client::read(std::string_view resource_type, std::string_view id)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::get;
     request.url = impl_->build_url(resource_type, id);
@@ -366,16 +366,16 @@ auto fhir_client::read(std::string_view resource_type, std::string_view id)
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return Result<fhir_result<fhir_resource_wrapper>>::err(response.error());
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 auto fhir_client::vread(std::string_view resource_type, std::string_view id,
                         std::string_view version_id)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::get;
     request.url = impl_->build_url(resource_type, id) + "/_history/" +
@@ -384,17 +384,17 @@ auto fhir_client::vread(std::string_view resource_type, std::string_view id,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return Result<fhir_result<fhir_resource_wrapper>>::err(response.error());
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 // Search operations
 auto fhir_client::search(std::string_view resource_type,
                          const search_params& params)
-    -> std::expected<fhir_result<fhir_bundle>, emr_error> {
+    -> Result<fhir_result<fhir_bundle>> {
     http_request request;
     request.method = http_method::get;
     request.url = impl_->build_url(resource_type);
@@ -405,15 +405,15 @@ auto fhir_client::search(std::string_view resource_type,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return response.error();
     }
 
-    return impl_->process_response<fhir_bundle>(*response);
+    return impl_->process_response<fhir_bundle>(response.value());
 }
 
 auto fhir_client::search_all(const search_params& params)
-    -> std::expected<fhir_result<fhir_bundle>, emr_error> {
+    -> Result<fhir_result<fhir_bundle>> {
     http_request request;
     request.method = http_method::get;
     request.url = impl_->config().base_url;
@@ -427,18 +427,18 @@ auto fhir_client::search_all(const search_params& params)
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return response.error();
     }
 
-    return impl_->process_response<fhir_bundle>(*response);
+    return impl_->process_response<fhir_bundle>(response.value());
 }
 
 auto fhir_client::next_page(const fhir_bundle& bundle)
-    -> std::expected<fhir_result<fhir_bundle>, emr_error> {
+    -> Result<fhir_result<fhir_bundle>> {
     auto next_url = bundle.next_url();
     if (!next_url) {
-        return std::unexpected(emr_error::resource_not_found);
+        return Result<fhir_result<fhir_bundle>>::err(to_error_info(emr_error::resource_not_found));
     }
 
     http_request request;
@@ -448,29 +448,29 @@ auto fhir_client::next_page(const fhir_bundle& bundle)
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return response.error();
     }
 
-    return impl_->process_response<fhir_bundle>(*response);
+    return impl_->process_response<fhir_bundle>(response.value());
 }
 
 auto fhir_client::search_all_pages(std::string_view resource_type,
                                    const search_params& params,
                                    size_t max_pages)
-    -> std::expected<std::vector<fhir_resource_wrapper>, emr_error> {
+    -> Result<std::vector<fhir_resource_wrapper>> {
     std::vector<fhir_resource_wrapper> all_resources;
     size_t page_count = 0;
 
     auto result = search(resource_type, params);
-    if (!result) {
-        return std::unexpected(result.error());
+    if (result.is_err()) {
+        return Result<std::vector<fhir_resource_wrapper>>::err(result.error());
     }
 
     while (true) {
         ++page_count;
 
-        for (const auto& entry : result->value.entries) {
+        for (const auto& entry : result.value().value.entries) {
             fhir_resource_wrapper wrapper;
             wrapper.resource_type = entry.resource_type;
             wrapper.id = entry.resource_id;
@@ -484,13 +484,13 @@ auto fhir_client::search_all_pages(std::string_view resource_type,
         }
 
         // Check for next page
-        if (!result->value.has_next()) {
+        if (!result.value().value.has_next()) {
             break;
         }
 
-        result = next_page(result->value);
-        if (!result) {
-            return std::unexpected(result.error());
+        result = next_page(result.value().value);
+        if (result.is_err()) {
+            return Result<std::vector<fhir_resource_wrapper>>::err(result.error());
         }
     }
 
@@ -500,7 +500,7 @@ auto fhir_client::search_all_pages(std::string_view resource_type,
 // Create operations
 auto fhir_client::create(std::string_view resource_type,
                          std::string_view resource)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::post;
     request.url = impl_->build_url(resource_type);
@@ -511,17 +511,17 @@ auto fhir_client::create(std::string_view resource_type,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return Result<fhir_result<fhir_resource_wrapper>>::err(response.error());
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 auto fhir_client::create_if_none_exist(std::string_view resource_type,
                                        std::string_view resource,
                                        const search_params& search)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::post;
     request.url = impl_->build_url(resource_type);
@@ -533,17 +533,17 @@ auto fhir_client::create_if_none_exist(std::string_view resource_type,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return Result<fhir_result<fhir_resource_wrapper>>::err(response.error());
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 // Update operations
 auto fhir_client::update(std::string_view resource_type, std::string_view id,
                          std::string_view resource)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::put;
     request.url = impl_->build_url(resource_type, id);
@@ -554,18 +554,18 @@ auto fhir_client::update(std::string_view resource_type, std::string_view id,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return Result<fhir_result<fhir_resource_wrapper>>::err(response.error());
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 auto fhir_client::update_if_match(std::string_view resource_type,
                                   std::string_view id,
                                   std::string_view resource,
                                   std::string_view etag)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::put;
     request.url = impl_->build_url(resource_type, id);
@@ -577,28 +577,28 @@ auto fhir_client::update_if_match(std::string_view resource_type,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return response.error();
     }
 
     // Check for precondition failed (version mismatch)
-    if (response->status == http_status::precondition_failed) {
-        return std::unexpected(emr_error::conflict);
+    if (response.value().status == http_status::precondition_failed) {
+        return to_error_info(emr_error::conflict);
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 auto fhir_client::upsert(std::string_view resource_type, std::string_view id,
                          std::string_view resource)
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     // Upsert uses PUT with ID - creates if doesn't exist, updates if it does
     return update(resource_type, id, resource);
 }
 
 // Delete operations
 auto fhir_client::remove(std::string_view resource_type, std::string_view id)
-    -> std::expected<void, emr_error> {
+    -> VoidResult {
     http_request request;
     request.method = http_method::delete_method;
     request.url = impl_->build_url(resource_type, id);
@@ -606,22 +606,22 @@ auto fhir_client::remove(std::string_view resource_type, std::string_view id)
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return VoidResult::err(response.error());
     }
 
-    if (!response->is_success() &&
-        response->status != http_status::no_content &&
-        response->status != http_status::gone) {
-        return std::unexpected(status_to_error(response->status));
+    if (!response.value().is_success() &&
+        response.value().status != http_status::no_content &&
+        response.value().status != http_status::gone) {
+        return VoidResult::err(to_error_info(status_to_error(response.value().status)));
     }
 
-    return {};
+    return std::monostate{};
 }
 
 auto fhir_client::conditional_delete(std::string_view resource_type,
                                      const search_params& search)
-    -> std::expected<void, emr_error> {
+    -> VoidResult {
     http_request request;
     request.method = http_method::delete_method;
     request.url = impl_->build_url(resource_type);
@@ -632,21 +632,21 @@ auto fhir_client::conditional_delete(std::string_view resource_type,
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return VoidResult::err(response.error());
     }
 
-    if (!response->is_success() &&
-        response->status != http_status::no_content) {
-        return std::unexpected(status_to_error(response->status));
+    if (!response.value().is_success() &&
+        response.value().status != http_status::no_content) {
+        return VoidResult::err(to_error_info(status_to_error(response.value().status)));
     }
 
-    return {};
+    return std::monostate{};
 }
 
 // Transaction/Batch operations
 auto fhir_client::transaction(const fhir_bundle& bundle)
-    -> std::expected<fhir_result<fhir_bundle>, emr_error> {
+    -> Result<fhir_result<fhir_bundle>> {
     http_request request;
     request.method = http_method::post;
     request.url = impl_->config().base_url;
@@ -657,22 +657,22 @@ auto fhir_client::transaction(const fhir_bundle& bundle)
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return response.error();
     }
 
-    return impl_->process_response<fhir_bundle>(*response);
+    return impl_->process_response<fhir_bundle>(response.value());
 }
 
 auto fhir_client::batch(const fhir_bundle& bundle)
-    -> std::expected<fhir_result<fhir_bundle>, emr_error> {
+    -> Result<fhir_result<fhir_bundle>> {
     // Batch uses the same endpoint as transaction
     return transaction(bundle);
 }
 
 // Server capabilities
 auto fhir_client::capabilities()
-    -> std::expected<fhir_result<fhir_resource_wrapper>, emr_error> {
+    -> Result<fhir_result<fhir_resource_wrapper>> {
     http_request request;
     request.method = http_method::get;
     request.url = impl_->config().base_url;
@@ -684,18 +684,18 @@ auto fhir_client::capabilities()
     request.timeout = impl_->config().timeout;
 
     auto response = impl_->execute_with_retry(request);
-    if (!response) {
-        return std::unexpected(response.error());
+    if (response.is_err()) {
+        return Result<fhir_result<fhir_resource_wrapper>>::err(response.error());
     }
 
-    return impl_->process_response<fhir_resource_wrapper>(*response);
+    return impl_->process_response<fhir_resource_wrapper>(response.value());
 }
 
 auto fhir_client::supports_resource(std::string_view resource_type)
-    -> std::expected<bool, emr_error> {
+    -> Result<bool> {
     auto cap_result = capabilities();
-    if (!cap_result) {
-        return std::unexpected(cap_result.error());
+    if (cap_result.is_err()) {
+        return Result<bool>::err(cap_result.error());
     }
 
     // Search for resource type in capability statement
@@ -704,7 +704,7 @@ auto fhir_client::supports_resource(std::string_view resource_type)
     search_pattern += resource_type;
     search_pattern += "\"";
 
-    return cap_result->value.json.find(search_pattern) != std::string::npos;
+    return cap_result.value().value.json.find(search_pattern) != std::string::npos;
 }
 
 // Configuration

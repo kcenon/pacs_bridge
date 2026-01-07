@@ -6,6 +6,7 @@
  */
 
 #include "pacs/bridge/emr/diagnostic_report_builder.h"
+#include "pacs/bridge/emr/emr_types.h"
 
 #include <sstream>
 
@@ -658,7 +659,7 @@ std::optional<std::string> diagnostic_report_builder::build() const {
     return impl_->build();
 }
 
-std::expected<std::string, std::string>
+Result<std::string>
 diagnostic_report_builder::build_validated() const {
     auto errors = impl_->validation_errors();
     if (!errors.empty()) {
@@ -669,12 +670,18 @@ diagnostic_report_builder::build_validated() const {
             error_msg += err;
             first = false;
         }
-        return std::unexpected(error_msg);
+        return error_info{
+            static_cast<int>(result_error::build_failed),
+            error_msg,
+            "emr::diagnostic_report_builder::build_validated"};
     }
 
     auto json = impl_->build();
     if (!json) {
-        return std::unexpected("Failed to build JSON");
+        return error_info{
+            static_cast<int>(result_error::build_failed),
+            "Failed to build JSON",
+            "emr::diagnostic_report_builder::build_validated"};
     }
 
     return *json;

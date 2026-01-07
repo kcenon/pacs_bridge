@@ -344,7 +344,7 @@ public:
         // Add entry to database
         auto add_result = db_->add_worklist_item(wl_item);
         if (add_result.is_err()) {
-            span.set_error("Database add failed: " + add_result.error());
+            span.set_error("Database add failed: " + add_result.error().message);
             return std::unexpected(mwl_error::add_failed);
         }
 
@@ -441,7 +441,7 @@ public:
             existing_wl.step_id, std::string(accession_number), new_status);
 
         if (update_result.is_err()) {
-            span.set_error("Database update failed: " + update_result.error());
+            span.set_error("Database update failed: " + update_result.error().message);
             return std::unexpected(mwl_error::update_failed);
         }
 
@@ -529,7 +529,7 @@ public:
             existing_wl.step_id, std::string(accession_number));
 
         if (delete_result.is_err()) {
-            span.set_error("Database delete failed: " + delete_result.error());
+            span.set_error("Database delete failed: " + delete_result.error().message);
             return std::unexpected(mwl_error::cancel_failed);
         }
 
@@ -599,7 +599,7 @@ public:
 
         auto query_result = db_->query_worklist(wl_query);
         if (query_result.is_err()) {
-            span.set_error("Database query failed: " + query_result.error());
+            span.set_error("Database query failed: " + query_result.error().message);
             return std::unexpected(mwl_error::query_failed);
         }
 

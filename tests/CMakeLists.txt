@@ -470,7 +470,8 @@ else()
 endif()
 
 # Stress Tests (high volume)
-add_integration_test(stress_test "integration;stress;phase2" 600)
+# Renamed to pacs_stress_test to avoid collision with network_system's stress_test
+add_integration_test(pacs_stress_test "integration;stress;phase2" 600)
 
 # MLLP Connection Tests (Issue #161) - setup/teardown, timeout, reconnection
 add_integration_test(mllp_connection_test "integration;mllp;connection;phase2")
@@ -777,7 +778,7 @@ message(STATUS "  - backwards_compatibility_test (Issue #145)")
 if(PACS_BRIDGE_HAS_SQLITE)
     message(STATUS "  - disaster_recovery_test (Issue #162)")
 endif()
-message(STATUS "  - stress_test")
+message(STATUS "  - pacs_stress_test")
 message(STATUS "  - mllp_connection_test (Issue #161)")
 message(STATUS "  - pacs_worklist_test (Issue #161)")
 message(STATUS "  - e2e_scenario_test (Issue #161)")

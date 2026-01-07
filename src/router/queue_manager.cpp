@@ -46,7 +46,7 @@ public:
         if (work_func_) {
             work_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "queue_worker"; }
@@ -69,7 +69,7 @@ public:
         if (cleanup_func_) {
             cleanup_func_();
         }
-        return {};
+        return std::monostate{};
     }
 
     std::string get_name() const override { return "queue_cleanup"; }
@@ -1206,8 +1206,8 @@ public:
         });
 
         auto result = config_.executor->execute(std::move(job));
-        if (result) {
-            worker_futures_.push_back(std::move(*result));
+        if (result.is_ok()) {
+            worker_futures_.push_back(std::move(result.value()));
         }
     }
 
@@ -1245,8 +1245,8 @@ public:
         });
 
         auto result = config_.executor->execute_delayed(std::move(job), metrics_update_interval);
-        if (result) {
-            cleanup_future_ = std::move(*result);
+        if (result.is_ok()) {
+            cleanup_future_ = std::move(result.value());
         }
     }
 #endif  // PACS_BRIDGE_STANDALONE_BUILD

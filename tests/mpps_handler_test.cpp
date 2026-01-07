@@ -471,7 +471,7 @@ bool test_handler_on_n_create() {
         last_accession = mpps.accession_number;
     });
 
-    handler->start();
+    (void)handler->start();
 
     // Create test dataset
     mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
@@ -498,7 +498,7 @@ bool test_handler_on_n_set_completed() {
         last_event = event;
     });
 
-    handler->start();
+    (void)handler->start();
 
     // Create completed dataset
     mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001", mpps_event::completed);
@@ -526,7 +526,7 @@ bool test_handler_on_n_set_discontinued() {
         discontinuation_reason = mpps.discontinuation_reason;
     });
 
-    handler->start();
+    (void)handler->start();
 
     // Create discontinued dataset
     mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001", mpps_event::discontinued);
@@ -551,7 +551,7 @@ bool test_handler_invalid_dataset() {
         callback_count++;
     });
 
-    handler->start();
+    (void)handler->start();
 
     // Create invalid dataset (missing SOP Instance UID)
     mpps_dataset invalid_dataset;
@@ -572,7 +572,7 @@ bool test_handler_no_callback() {
     mpps_handler_config config;
     auto handler = mpps_handler::create(config);
 
-    handler->start();
+    (void)handler->start();
 
     // N-CREATE without callback should succeed
     mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
@@ -596,7 +596,7 @@ bool test_handler_statistics() {
         // Empty callback
     });
 
-    handler->start();
+    (void)handler->start();
 
     // Initial statistics
     auto stats1 = handler->get_statistics();
@@ -606,7 +606,7 @@ bool test_handler_statistics() {
 
     // Send N-CREATE
     mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
-    handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset1);
 
     auto stats2 = handler->get_statistics();
     TEST_ASSERT(stats2.n_create_count == 1, "n_create_count should be 1");
@@ -614,7 +614,7 @@ bool test_handler_statistics() {
 
     // Send N-SET completed
     mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.4.6", "ACC002", mpps_event::completed);
-    handler->on_n_set(dataset2);
+    (void)handler->on_n_set(dataset2);
 
     auto stats3 = handler->get_statistics();
     TEST_ASSERT(stats3.n_set_count == 1, "n_set_count should be 1");
@@ -622,7 +622,7 @@ bool test_handler_statistics() {
 
     // Send N-SET discontinued
     mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.4.7", "ACC003", mpps_event::discontinued);
-    handler->on_n_set(dataset3);
+    (void)handler->on_n_set(dataset3);
 
     auto stats4 = handler->get_statistics();
     TEST_ASSERT(stats4.n_set_count == 2, "n_set_count should be 2");
@@ -637,12 +637,12 @@ bool test_handler_reset_statistics() {
     auto handler = mpps_handler::create(config);
 
     handler->set_callback([](mpps_event event, const mpps_dataset& mpps) {});
-    handler->start();
+    (void)handler->start();
 
     // Generate some events
     mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
-    handler->on_n_create(dataset);
-    handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
+    (void)handler->on_n_create(dataset);
 
     auto stats1 = handler->get_statistics();
     TEST_ASSERT(stats1.n_create_count == 2, "Should have 2 n_create events");
@@ -670,7 +670,7 @@ bool test_handler_callback_exception() {
         throw std::runtime_error("Test exception");
     });
 
-    handler->start();
+    (void)handler->start();
 
     mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
     auto result = handler->on_n_create(dataset);
@@ -705,7 +705,7 @@ bool test_handler_concurrent_events() {
         }
     });
 
-    handler->start();
+    (void)handler->start();
 
     // Launch multiple threads sending events
     std::vector<std::thread> threads;
@@ -718,7 +718,7 @@ bool test_handler_concurrent_events() {
                 std::string sop_uid = "1.2.3.4." + std::to_string(i) + "." + std::to_string(j);
                 std::string acc = "ACC" + std::to_string(i * 100 + j);
                 mpps_dataset dataset = create_test_mpps_dataset(sop_uid, acc);
-                handler->on_n_create(dataset);
+                (void)handler->on_n_create(dataset);
             }
         });
     }
@@ -764,7 +764,7 @@ bool test_persistence_enabled() {
  */
 bool test_query_mpps_by_sop_instance_uid() {
     auto handler = mpps_handler::create({});
-    handler->start();
+    (void)handler->start();
 
     // Create an MPPS record
     mpps_dataset dataset = create_test_mpps_dataset(
@@ -795,23 +795,23 @@ bool test_query_mpps_by_sop_instance_uid() {
  */
 bool test_query_mpps_with_params() {
     auto handler = mpps_handler::create({});
-    handler->start();
+    (void)handler->start();
 
     // Create multiple MPPS records
     mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.1", "ACC001");
     dataset1.station_ae_title = "CT_SCANNER_1";
     dataset1.modality = "CT";
-    handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset1);
 
     mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.2", "ACC002");
     dataset2.station_ae_title = "MR_SCANNER_1";
     dataset2.modality = "MR";
-    handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset2);
 
     mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.3", "ACC003");
     dataset3.station_ae_title = "CT_SCANNER_1";
     dataset3.modality = "CT";
-    handler->on_n_create(dataset3);
+    (void)handler->on_n_create(dataset3);
 
     // Query by station AE
     mpps_handler::mpps_query_params params;
@@ -838,22 +838,22 @@ bool test_query_mpps_with_params() {
  */
 bool test_get_active_mpps() {
     auto handler = mpps_handler::create({});
-    handler->start();
+    (void)handler->start();
 
     // Create some MPPS records
     mpps_dataset dataset1 = create_test_mpps_dataset(
         "1.2.3.1", "ACC001", mpps_event::in_progress);
-    handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset1);
 
     mpps_dataset dataset2 = create_test_mpps_dataset(
         "1.2.3.2", "ACC002", mpps_event::in_progress);
-    handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset2);
 
     // Complete one
     dataset1.status = mpps_event::completed;
     dataset1.end_date = "20241201";
     dataset1.end_time = "100000";
-    handler->on_n_set(dataset1);
+    (void)handler->on_n_set(dataset1);
 
     // Get active MPPS
     auto active = handler->get_active_mpps();
@@ -871,20 +871,20 @@ bool test_get_active_mpps() {
  */
 bool test_get_pending_mpps_for_station() {
     auto handler = mpps_handler::create({});
-    handler->start();
+    (void)handler->start();
 
     // Create MPPS records for different stations
     mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.1", "ACC001");
     dataset1.station_ae_title = "CT_SCANNER_1";
-    handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset1);
 
     mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.2", "ACC002");
     dataset2.station_ae_title = "CT_SCANNER_2";
-    handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset2);
 
     mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.3", "ACC003");
     dataset3.station_ae_title = "CT_SCANNER_1";
-    handler->on_n_create(dataset3);
+    (void)handler->on_n_create(dataset3);
 
     // Get pending for CT_SCANNER_1
     auto pending = handler->get_pending_mpps_for_station("CT_SCANNER_1");
@@ -905,7 +905,7 @@ bool test_get_pending_mpps_for_station() {
  */
 bool test_persistence_statistics() {
     auto handler = mpps_handler::create({});
-    handler->start();
+    (void)handler->start();
 
     // Initial stats
     auto stats = handler->get_persistence_stats();
@@ -913,10 +913,10 @@ bool test_persistence_statistics() {
 
     // Create MPPS records
     mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.1", "ACC001");
-    handler->on_n_create(dataset1);
+    (void)handler->on_n_create(dataset1);
 
     mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.2", "ACC002");
-    handler->on_n_create(dataset2);
+    (void)handler->on_n_create(dataset2);
 
     stats = handler->get_persistence_stats();
     TEST_ASSERT(stats.total_persisted == 2, "Should have 2 persisted");
@@ -926,7 +926,7 @@ bool test_persistence_statistics() {
     dataset1.status = mpps_event::completed;
     dataset1.end_date = "20241201";
     dataset1.end_time = "100000";
-    handler->on_n_set(dataset1);
+    (void)handler->on_n_set(dataset1);
 
     stats = handler->get_persistence_stats();
     TEST_ASSERT(stats.completed_count == 1, "Should have 1 completed");
@@ -936,7 +936,7 @@ bool test_persistence_statistics() {
     dataset2.status = mpps_event::discontinued;
     dataset2.end_date = "20241201";
     dataset2.end_time = "103000";
-    handler->on_n_set(dataset2);
+    (void)handler->on_n_set(dataset2);
 
     stats = handler->get_persistence_stats();
     TEST_ASSERT(stats.discontinued_count == 1, "Should have 1 discontinued");

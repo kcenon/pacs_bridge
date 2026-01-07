@@ -185,7 +185,7 @@ bool test_reconnect() {
     mwl_client_config config;
     mwl_client client(config);
 
-    client.connect();
+    (void)client.connect();
     TEST_ASSERT(client.is_connected(), "Should be connected");
 
     auto result = client.reconnect();
@@ -217,7 +217,7 @@ bool test_multiple_connect_calls() {
 bool test_add_entry_success() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = create_test_mwl_item("ACC001", "PAT001");
 
@@ -232,7 +232,7 @@ bool test_add_entry_success() {
 bool test_add_entry_duplicate() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = create_test_mwl_item("ACC002", "PAT002");
 
@@ -249,7 +249,7 @@ bool test_add_entry_duplicate() {
 bool test_add_entry_invalid_data() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     mapping::mwl_item item;  // Empty item with no accession number
 
@@ -281,10 +281,10 @@ bool test_add_entry_without_connection() {
 bool test_update_entry_success() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = create_test_mwl_item("ACC010", "PAT010");
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     // Update with new data
     mapping::mwl_item updates;
@@ -306,7 +306,7 @@ bool test_update_entry_success() {
 bool test_update_entry_not_found() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     mapping::mwl_item updates;
     updates.patient.patient_name = "NEW^NAME";
@@ -321,7 +321,7 @@ bool test_update_entry_not_found() {
 bool test_update_entry_invalid_accession() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     mapping::mwl_item updates;
 
@@ -339,10 +339,10 @@ bool test_update_entry_invalid_accession() {
 bool test_cancel_entry_success() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = create_test_mwl_item("ACC020", "PAT020");
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     TEST_ASSERT(client.exists("ACC020"), "Entry should exist before cancel");
 
@@ -357,7 +357,7 @@ bool test_cancel_entry_success() {
 bool test_cancel_entry_not_found() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto result = client.cancel_entry("NONEXISTENT");
     TEST_ASSERT(!result.has_value(), "Cancel should fail for non-existent entry");
@@ -373,12 +373,12 @@ bool test_cancel_entry_not_found() {
 bool test_query_all() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add multiple entries
-    client.add_entry(create_test_mwl_item("QRY001", "PAT101", "ALPHA^ONE"));
-    client.add_entry(create_test_mwl_item("QRY002", "PAT102", "BETA^TWO"));
-    client.add_entry(create_test_mwl_item("QRY003", "PAT103", "GAMMA^THREE"));
+    (void)client.add_entry(create_test_mwl_item("QRY001", "PAT101", "ALPHA^ONE"));
+    (void)client.add_entry(create_test_mwl_item("QRY002", "PAT102", "BETA^TWO"));
+    (void)client.add_entry(create_test_mwl_item("QRY003", "PAT103", "GAMMA^THREE"));
 
     mwl_query_filter filter;  // Empty filter = return all
     auto result = client.query(filter);
@@ -392,9 +392,9 @@ bool test_query_all() {
 bool test_query_by_patient_id() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
-    client.add_entry(create_test_mwl_item("QRY010", "UNIQUE001", "TEST^PATIENT"));
+    (void)client.add_entry(create_test_mwl_item("QRY010", "UNIQUE001", "TEST^PATIENT"));
 
     mwl_query_filter filter;
     filter.patient_id = "UNIQUE001";
@@ -410,9 +410,9 @@ bool test_query_by_patient_id() {
 bool test_query_by_accession_number() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
-    client.add_entry(create_test_mwl_item("UNIQUE_ACC", "PAT200"));
+    (void)client.add_entry(create_test_mwl_item("UNIQUE_ACC", "PAT200"));
 
     mwl_query_filter filter;
     filter.accession_number = "UNIQUE_ACC";
@@ -429,17 +429,17 @@ bool test_query_by_accession_number() {
 bool test_query_by_modality() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add CT entry
     auto ct_item = create_test_mwl_item("MOD001", "PAT301");
     ct_item.scheduled_steps[0].modality = "CT";
-    client.add_entry(ct_item);
+    (void)client.add_entry(ct_item);
 
     // Add MR entry
     auto mr_item = create_test_mwl_item("MOD002", "PAT302");
     mr_item.scheduled_steps[0].modality = "MR";
-    client.add_entry(mr_item);
+    (void)client.add_entry(mr_item);
 
     mwl_query_filter filter;
     filter.modality = "CT";
@@ -461,15 +461,15 @@ bool test_query_by_modality() {
 bool test_query_by_scheduled_date() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item1 = create_test_mwl_item("DATE001", "PAT401");
     item1.scheduled_steps[0].scheduled_start_date = "20241215";
-    client.add_entry(item1);
+    (void)client.add_entry(item1);
 
     auto item2 = create_test_mwl_item("DATE002", "PAT402");
     item2.scheduled_steps[0].scheduled_start_date = "20241216";
-    client.add_entry(item2);
+    (void)client.add_entry(item2);
 
     mwl_query_filter filter;
     filter.scheduled_date = "20241215";
@@ -484,13 +484,13 @@ bool test_query_by_scheduled_date() {
 bool test_query_with_max_results() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add 5 entries
     for (int i = 0; i < 5; i++) {
         auto item = create_test_mwl_item("MAX" + std::to_string(i), "PAT50" + std::to_string(i));
         item.scheduled_steps[0].modality = "US";
-        client.add_entry(item);
+        (void)client.add_entry(item);
     }
 
     mwl_query_filter filter;
@@ -507,11 +507,11 @@ bool test_query_with_max_results() {
 bool test_query_with_wildcard() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
-    client.add_entry(create_test_mwl_item("WILD001", "PAT601", "SMITH^JOHN"));
-    client.add_entry(create_test_mwl_item("WILD002", "PAT602", "SMITH^JANE"));
-    client.add_entry(create_test_mwl_item("WILD003", "PAT603", "JONES^MARY"));
+    (void)client.add_entry(create_test_mwl_item("WILD001", "PAT601", "SMITH^JOHN"));
+    (void)client.add_entry(create_test_mwl_item("WILD002", "PAT602", "SMITH^JANE"));
+    (void)client.add_entry(create_test_mwl_item("WILD003", "PAT603", "JONES^MARY"));
 
     mwl_query_filter filter;
     filter.patient_name = "SMITH*";  // Wildcard prefix match
@@ -526,11 +526,11 @@ bool test_query_with_wildcard() {
 bool test_query_with_mwl_item() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = create_test_mwl_item("ITEM_QRY", "PAT700");
     item.scheduled_steps[0].modality = "XR";
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     mapping::mwl_item query_template;
     query_template.scheduled_steps.push_back({});
@@ -550,16 +550,16 @@ bool test_query_with_mwl_item() {
 bool test_exists() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     TEST_ASSERT(!client.exists("NONEXISTENT_ACC"), "Should not exist initially");
 
     auto item = create_test_mwl_item("EXISTS001", "PAT800");
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     TEST_ASSERT(client.exists("EXISTS001"), "Should exist after adding");
 
-    client.cancel_entry("EXISTS001");
+    (void)client.cancel_entry("EXISTS001");
     TEST_ASSERT(!client.exists("EXISTS001"), "Should not exist after canceling");
 
     return true;
@@ -568,10 +568,10 @@ bool test_exists() {
 bool test_get_entry_success() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto item = create_test_mwl_item("GET001", "PAT900", "RETRIEVAL^TEST");
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     auto result = client.get_entry("GET001");
     TEST_ASSERT(result.has_value(), "Get should succeed");
@@ -586,7 +586,7 @@ bool test_get_entry_success() {
 bool test_get_entry_not_found() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     auto result = client.get_entry("NONEXISTENT");
     TEST_ASSERT(!result.has_value(), "Get should fail for non-existent entry");
@@ -602,7 +602,7 @@ bool test_get_entry_not_found() {
 bool test_add_entries_bulk() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     std::vector<mapping::mwl_item> items;
     for (int i = 0; i < 5; i++) {
@@ -625,10 +625,10 @@ bool test_add_entries_bulk() {
 bool test_add_entries_with_duplicates() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Pre-add one entry
-    client.add_entry(create_test_mwl_item("DUPE0", "DUPEPAT0"));
+    (void)client.add_entry(create_test_mwl_item("DUPE0", "DUPEPAT0"));
 
     std::vector<mapping::mwl_item> items;
     items.push_back(create_test_mwl_item("DUPE0", "DUPEPAT0"));  // Duplicate
@@ -645,16 +645,16 @@ bool test_add_entries_with_duplicates() {
 bool test_cancel_entries_before() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add entries with different dates
     auto old_item = create_test_mwl_item("OLD001", "OLDPAT001");
     old_item.scheduled_steps[0].scheduled_start_date = "20231115";
-    client.add_entry(old_item);
+    (void)client.add_entry(old_item);
 
     auto recent_item = create_test_mwl_item("RECENT001", "RECENTPAT001");
     recent_item.scheduled_steps[0].scheduled_start_date = "20241215";
-    client.add_entry(recent_item);
+    (void)client.add_entry(recent_item);
 
     auto result = client.cancel_entries_before("20241201");
     TEST_ASSERT(result.has_value(), "Cancel before should succeed");
@@ -669,7 +669,7 @@ bool test_cancel_entries_before() {
 bool test_cancel_entries_before_invalid_date() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Empty date should fail
     auto result = client.cancel_entries_before("");
@@ -685,12 +685,12 @@ bool test_cancel_entries_before_invalid_date() {
 bool test_cancel_entries_before_various_formats() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add test entry
     auto item = create_test_mwl_item("FMTTEST001", "FMTPAT001");
     item.scheduled_steps[0].scheduled_start_date = "20231115";
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     // YYYYMMDD format (standard DICOM)
     auto result = client.cancel_entries_before("20241201");
@@ -702,12 +702,12 @@ bool test_cancel_entries_before_various_formats() {
 bool test_cancel_entries_before_exact_boundary() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Add entry with specific date
     auto item = create_test_mwl_item("BOUND001", "BOUNDPAT001");
     item.scheduled_steps[0].scheduled_start_date = "20240615";
-    client.add_entry(item);
+    (void)client.add_entry(item);
 
     // Cancel before exact same date - entry should remain (< not <=)
     auto result = client.cancel_entries_before("20240615");
@@ -729,20 +729,20 @@ bool test_cancel_entries_before_exact_boundary() {
 bool test_statistics() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
     // Perform various operations
-    client.add_entry(create_test_mwl_item("STAT001", "STATPAT001"));
-    client.add_entry(create_test_mwl_item("STAT002", "STATPAT002"));
+    (void)client.add_entry(create_test_mwl_item("STAT001", "STATPAT001"));
+    (void)client.add_entry(create_test_mwl_item("STAT002", "STATPAT002"));
 
     mapping::mwl_item updates;
     updates.patient.patient_name = "UPDATED^NAME";
-    client.update_entry("STAT001", updates);
+    (void)client.update_entry("STAT001", updates);
 
-    client.cancel_entry("STAT002");
+    (void)client.cancel_entry("STAT002");
 
     mwl_query_filter filter;
-    client.query(filter);
+    (void)client.query(filter);
 
     auto stats = client.get_statistics();
     TEST_ASSERT(stats.add_count >= 2, "Should have at least 2 adds");
@@ -757,9 +757,9 @@ bool test_statistics() {
 bool test_reset_statistics() {
     mwl_client_config config;
     mwl_client client(config);
-    client.connect();
+    (void)client.connect();
 
-    client.add_entry(create_test_mwl_item("RESET001", "RESETPAT001"));
+    (void)client.add_entry(create_test_mwl_item("RESET001", "RESETPAT001"));
 
     auto stats_before = client.get_statistics();
     TEST_ASSERT(stats_before.add_count >= 1, "Should have adds before reset");
@@ -780,8 +780,8 @@ bool test_reset_statistics() {
 bool test_move_constructor() {
     mwl_client_config config;
     mwl_client client1(config);
-    client1.connect();
-    client1.add_entry(create_test_mwl_item("MOVE001", "MOVEPAT001"));
+    (void)client1.connect();
+    (void)client1.add_entry(create_test_mwl_item("MOVE001", "MOVEPAT001"));
 
     mwl_client client2(std::move(client1));
 
@@ -794,8 +794,8 @@ bool test_move_constructor() {
 bool test_move_assignment() {
     mwl_client_config config;
     mwl_client client1(config);
-    client1.connect();
-    client1.add_entry(create_test_mwl_item("MOVE002", "MOVEPAT002"));
+    (void)client1.connect();
+    (void)client1.add_entry(create_test_mwl_item("MOVE002", "MOVEPAT002"));
 
     mwl_client client2(config);
     client2 = std::move(client1);
