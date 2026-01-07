@@ -20,7 +20,7 @@ class in_memory_result_tracker::impl {
 public:
     explicit impl(const result_tracker_config& config) : config_(config) {}
 
-    [[nodiscard]] bool track(const posted_result& result) {
+    [[nodiscard]] VoidResult track(const posted_result& result) {
         std::unique_lock lock(mutex_);
 
         // Check capacity
@@ -44,16 +44,18 @@ public:
 
         ++stats_.total_tracked;
 
-        return true;
+        return VoidResult{std::monostate{}};
     }
 
-    [[nodiscard]] bool update(std::string_view study_uid,
-                              const posted_result& result) {
+    [[nodiscard]] VoidResult update(std::string_view study_uid,
+                                    const posted_result& result) {
         std::unique_lock lock(mutex_);
 
         auto it = results_by_uid_.find(std::string(study_uid));
         if (it == results_by_uid_.end()) {
-            return false;
+            return VoidResult{to_error_info(
+                tracker_error::not_found,
+                std::string("Study UID: ") + std::string(study_uid))};
         }
 
         // Update indices if accession number changed
@@ -74,7 +76,7 @@ public:
         }
 
         it->second = result;
-        return true;
+        return VoidResult{std::monostate{}};
     }
 
     [[nodiscard]] std::optional<posted_result> get_by_study_uid(
@@ -125,12 +127,14 @@ public:
         return results_by_uid_.contains(std::string(study_uid));
     }
 
-    [[nodiscard]] bool remove(std::string_view study_uid) {
+    [[nodiscard]] VoidResult remove(std::string_view study_uid) {
         std::unique_lock lock(mutex_);
 
         auto it = results_by_uid_.find(std::string(study_uid));
         if (it == results_by_uid_.end()) {
-            return false;
+            return VoidResult{to_error_info(
+                tracker_error::not_found,
+                std::string("Study UID: ") + std::string(study_uid))};
         }
 
         // Remove from indices
@@ -140,7 +144,7 @@ public:
         report_id_to_uid_.erase(it->second.report_id);
 
         results_by_uid_.erase(it);
-        return true;
+        return VoidResult{std::monostate{}};
     }
 
     void clear() {
@@ -264,12 +268,12 @@ in_memory_result_tracker::in_memory_result_tracker(
 in_memory_result_tracker& in_memory_result_tracker::operator=(
     in_memory_result_tracker&&) noexcept = default;
 
-bool in_memory_result_tracker::track(const posted_result& result) {
+VoidResult in_memory_result_tracker::track(const posted_result& result) {
     return impl_->track(result);
 }
 
-bool in_memory_result_tracker::update(std::string_view study_uid,
-                                       const posted_result& result) {
+VoidResult in_memory_result_tracker::update(std::string_view study_uid,
+                                            const posted_result& result) {
     return impl_->update(study_uid, result);
 }
 
@@ -292,7 +296,7 @@ bool in_memory_result_tracker::exists(std::string_view study_uid) const {
     return impl_->exists(study_uid);
 }
 
-bool in_memory_result_tracker::remove(std::string_view study_uid) {
+VoidResult in_memory_result_tracker::remove(std::string_view study_uid) {
     return impl_->remove(study_uid);
 }
 

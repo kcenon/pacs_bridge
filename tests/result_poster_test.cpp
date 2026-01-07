@@ -375,7 +375,7 @@ TEST_F(ResultTrackerTest, TrackNewResult) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
     EXPECT_EQ(tracker_->size(), 1);
     EXPECT_TRUE(tracker_->exists("1.2.3.4.5.6.7.8.9"));
 }
@@ -388,7 +388,7 @@ TEST_F(ResultTrackerTest, GetByStudyUid) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
 
     auto retrieved = tracker_->get_by_study_uid("1.2.3.4.5.6.7.8.9");
     ASSERT_TRUE(retrieved.has_value());
@@ -405,7 +405,7 @@ TEST_F(ResultTrackerTest, GetByAccessionNumber) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
 
     auto retrieved = tracker_->get_by_accession("ACC12345");
     ASSERT_TRUE(retrieved.has_value());
@@ -420,7 +420,7 @@ TEST_F(ResultTrackerTest, GetByReportId) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
 
     auto retrieved = tracker_->get_by_report_id("report-123");
     ASSERT_TRUE(retrieved.has_value());
@@ -441,13 +441,13 @@ TEST_F(ResultTrackerTest, UpdateExisting) {
     result.status = result_status::preliminary;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
 
     // Update status
     result.status = result_status::final_report;
     result.updated_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->update("1.2.3.4.5.6.7.8.9", result));
+    EXPECT_TRUE(tracker_->update("1.2.3.4.5.6.7.8.9", result).is_ok());
 
     auto retrieved = tracker_->get_by_study_uid("1.2.3.4.5.6.7.8.9");
     ASSERT_TRUE(retrieved.has_value());
@@ -461,7 +461,7 @@ TEST_F(ResultTrackerTest, UpdateNonExistent) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_FALSE(tracker_->update("nonexistent", result));
+    EXPECT_FALSE(tracker_->update("nonexistent", result).is_ok());
 }
 
 TEST_F(ResultTrackerTest, Remove) {
@@ -472,10 +472,10 @@ TEST_F(ResultTrackerTest, Remove) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
     EXPECT_EQ(tracker_->size(), 1);
 
-    EXPECT_TRUE(tracker_->remove("1.2.3.4.5.6.7.8.9"));
+    EXPECT_TRUE(tracker_->remove("1.2.3.4.5.6.7.8.9").is_ok());
     EXPECT_EQ(tracker_->size(), 0);
     EXPECT_FALSE(tracker_->exists("1.2.3.4.5.6.7.8.9"));
 
@@ -491,7 +491,7 @@ TEST_F(ResultTrackerTest, Clear) {
         result.study_instance_uid = "1.2.3.4.5.6.7.8." + std::to_string(i);
         result.status = result_status::final_report;
         result.posted_at = std::chrono::system_clock::now();
-        EXPECT_TRUE(tracker_->track(result));
+        EXPECT_TRUE(tracker_->track(result).is_ok());
     }
 
     EXPECT_EQ(tracker_->size(), 10);
@@ -507,7 +507,7 @@ TEST_F(ResultTrackerTest, Keys) {
         result.study_instance_uid = "1.2.3.4.5.6.7.8." + std::to_string(i);
         result.status = result_status::final_report;
         result.posted_at = std::chrono::system_clock::now();
-        EXPECT_TRUE(tracker_->track(result));
+        EXPECT_TRUE(tracker_->track(result).is_ok());
     }
 
     auto keys = tracker_->keys();
@@ -527,7 +527,7 @@ TEST_F(ResultTrackerTest, MaxEntriesEviction) {
         result.study_instance_uid = "1.2.3.4.5.6.7.8." + std::to_string(i);
         result.status = result_status::final_report;
         result.posted_at = std::chrono::system_clock::now();
-        EXPECT_TRUE(tracker_->track(result));
+        EXPECT_TRUE(tracker_->track(result).is_ok());
     }
 
     // Should have max_entries entries due to eviction
@@ -550,7 +550,7 @@ TEST_F(ResultTrackerTest, Statistics) {
     result.status = result_status::final_report;
     result.posted_at = std::chrono::system_clock::now();
 
-    EXPECT_TRUE(tracker_->track(result));
+    EXPECT_TRUE(tracker_->track(result).is_ok());
 
     stats = tracker_->get_statistics();
     EXPECT_EQ(stats.total_tracked, 1);
