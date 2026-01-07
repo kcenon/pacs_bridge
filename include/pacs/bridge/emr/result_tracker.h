@@ -11,6 +11,7 @@
  * @see https://github.com/kcenon/pacs_bridge/issues/105
  */
 
+#include "emr_types.h"
 #include "result_poster.h"
 
 #include <chrono>
@@ -23,6 +24,73 @@
 #include <vector>
 
 namespace pacs::bridge::emr {
+
+// =============================================================================
+// Result Tracker Error Codes (-1020 to -1029)
+// =============================================================================
+
+/**
+ * @brief Result tracker specific error codes
+ *
+ * Allocated range: -1020 to -1029
+ */
+enum class tracker_error : int {
+    /** Entry not found */
+    not_found = -1020,
+
+    /** Tracker is full (capacity exceeded) */
+    capacity_exceeded = -1021,
+
+    /** Invalid entry data */
+    invalid_entry = -1022,
+
+    /** Entry already exists (for unique operations) */
+    already_exists = -1023,
+
+    /** Operation failed */
+    operation_failed = -1024
+};
+
+/**
+ * @brief Convert tracker_error to error code integer
+ */
+[[nodiscard]] constexpr int to_error_code(tracker_error error) noexcept {
+    return static_cast<int>(error);
+}
+
+/**
+ * @brief Get human-readable description of tracker error
+ */
+[[nodiscard]] constexpr const char* to_string(tracker_error error) noexcept {
+    switch (error) {
+        case tracker_error::not_found:
+            return "Entry not found";
+        case tracker_error::capacity_exceeded:
+            return "Tracker capacity exceeded";
+        case tracker_error::invalid_entry:
+            return "Invalid entry data";
+        case tracker_error::already_exists:
+            return "Entry already exists";
+        case tracker_error::operation_failed:
+            return "Tracker operation failed";
+        default:
+            return "Unknown tracker error";
+    }
+}
+
+/**
+ * @brief Convert tracker_error to error_info for Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    tracker_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "emr.tracker",
+        details
+    };
+}
 
 // =============================================================================
 // Result Tracker Configuration
@@ -62,19 +130,19 @@ public:
      * @brief Track a posted result
      *
      * @param result Posted result to track
-     * @return true on success
+     * @return Success or error (e.g., capacity_exceeded)
      */
-    [[nodiscard]] virtual bool track(const posted_result& result) = 0;
+    [[nodiscard]] virtual VoidResult track(const posted_result& result) = 0;
 
     /**
      * @brief Update a tracked result
      *
      * @param study_uid Study Instance UID
      * @param result Updated result data
-     * @return true on success
+     * @return Success or error (e.g., not_found)
      */
-    [[nodiscard]] virtual bool update(std::string_view study_uid,
-                                       const posted_result& result) = 0;
+    [[nodiscard]] virtual VoidResult update(std::string_view study_uid,
+                                            const posted_result& result) = 0;
 
     /**
      * @brief Get tracked result by Study Instance UID
@@ -115,9 +183,9 @@ public:
      * @brief Remove a tracked result
      *
      * @param study_uid Study Instance UID
-     * @return true if removed
+     * @return Success or error (e.g., not_found)
      */
-    [[nodiscard]] virtual bool remove(std::string_view study_uid) = 0;
+    [[nodiscard]] virtual VoidResult remove(std::string_view study_uid) = 0;
 
     /**
      * @brief Clear all tracked results
@@ -199,10 +267,10 @@ public:
     // result_tracker Interface
     // =========================================================================
 
-    [[nodiscard]] bool track(const posted_result& result) override;
+    [[nodiscard]] VoidResult track(const posted_result& result) override;
 
-    [[nodiscard]] bool update(std::string_view study_uid,
-                              const posted_result& result) override;
+    [[nodiscard]] VoidResult update(std::string_view study_uid,
+                                    const posted_result& result) override;
 
     [[nodiscard]] std::optional<posted_result> get_by_study_uid(
         std::string_view study_uid) const override;
@@ -215,7 +283,7 @@ public:
 
     [[nodiscard]] bool exists(std::string_view study_uid) const override;
 
-    [[nodiscard]] bool remove(std::string_view study_uid) override;
+    [[nodiscard]] VoidResult remove(std::string_view study_uid) override;
 
     void clear() override;
 

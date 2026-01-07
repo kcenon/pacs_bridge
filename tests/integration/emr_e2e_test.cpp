@@ -454,7 +454,7 @@ bool test_result_posting_workflow() {
     posted.posted_at = std::chrono::system_clock::now();
 
     auto track_result = tracker.track(posted);
-    E2E_TEST_ASSERT(track_result, "Should track result successfully");
+    E2E_TEST_ASSERT(track_result.is_ok(), "Should track result successfully");
 
     // Verify tracking
     auto tracked = tracker.get_by_study_uid(study_result.study_instance_uid);
