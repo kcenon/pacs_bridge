@@ -2279,6 +2279,11 @@ public:
 /**
  * @class simple_executor
  * @brief 내부 스레드 풀을 가진 경량 IExecutor 구현
+ *
+ * 스레드 안전성 (Issue #229):
+ * - 모든 public 메서드는 스레드-안전합니다
+ * - shutdown()은 compare_exchange_strong을 사용하여 동시 종료 충돌 방지
+ * - 여러 스레드에서 동시에 shutdown() 호출 시 안전
  */
 class simple_executor : public kcenon::common::interfaces::IExecutor {
 public:
@@ -2294,6 +2299,15 @@ public:
     [[nodiscard]] std::size_t worker_count() const override;
     [[nodiscard]] bool is_running() const override;
     [[nodiscard]] std::size_t pending_tasks() const override;
+
+    /**
+     * @brief Executor 종료
+     *
+     * 스레드-안전: atomic compare_exchange_strong을 사용하여
+     * 하나의 스레드만 종료를 수행하도록 보장, double-join 충돌 방지
+     *
+     * @param wait_for_completion true면 대기 중인 작업 완료까지 대기
+     */
     void shutdown(bool wait_for_completion = true) override;
 };
 
