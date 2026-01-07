@@ -136,11 +136,11 @@ public:
         const hl7_message& message) {
         // Extract patient data
         auto patient_result = mapper_.to_patient(message);
-        if (!patient_result) {
+        if (patient_result.is_err()) {
             return to_error_info(adt_error::invalid_patient_data);
         }
 
-        auto& patient = *patient_result;
+        auto& patient = patient_result.unwrap();
         if (patient.patient_id.empty()) {
             return to_error_info(adt_error::missing_patient_id);
         }
@@ -171,11 +171,11 @@ public:
 
         // Get primary patient data from PID segment
         auto patient_result = mapper_.to_patient(message);
-        if (!patient_result) {
+        if (patient_result.is_err()) {
             return to_error_info(adt_error::invalid_patient_data);
         }
 
-        auto& primary_patient = *patient_result;
+        auto& primary_patient = patient_result.unwrap();
         if (primary_patient.patient_id.empty()) {
             return to_error_info(adt_error::missing_patient_id);
         }
@@ -221,11 +221,11 @@ public:
         bool allow_update) {
         // Extract patient data
         auto patient_result = mapper_.to_patient(message);
-        if (!patient_result) {
+        if (patient_result.is_err()) {
             return to_error_info(adt_error::invalid_patient_data);
         }
 
-        auto& patient = *patient_result;
+        auto& patient = patient_result.unwrap();
         if (patient.patient_id.empty()) {
             return to_error_info(adt_error::missing_patient_id);
         }

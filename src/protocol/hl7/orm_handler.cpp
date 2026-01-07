@@ -253,10 +253,10 @@ Result<orm_result> orm_handler::handle_new_order(
 
     // Convert to MWL item using mapper
     auto mwl_result = pimpl_->mapper_->to_mwl(message);
-    if (!mwl_result) {
+    if (mwl_result.is_err()) {
         return to_error_info(orm_error::invalid_order_data);
     }
-    auto& mwl = *mwl_result;
+    auto& mwl = mwl_result.unwrap();
 
     // Set Study Instance UID from ZDS or generate
     if (!order.study_instance_uid.empty()) {
@@ -345,10 +345,10 @@ Result<orm_result> orm_handler::handle_change_order(
 
     // Convert to MWL item
     auto mwl_result = pimpl_->mapper_->to_mwl(message);
-    if (!mwl_result) {
+    if (mwl_result.is_err()) {
         return to_error_info(orm_error::invalid_order_data);
     }
-    auto& mwl = *mwl_result;
+    auto& mwl = mwl_result.unwrap();
 
     // Preserve Study Instance UID from existing entry if not provided
     if (mwl.requested_procedure.study_instance_uid.empty() &&
