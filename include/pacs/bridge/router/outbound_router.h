@@ -33,6 +33,11 @@
 #include <unordered_map>
 #include <vector>
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 namespace pacs::bridge::router {
 
 // =============================================================================
@@ -302,6 +307,12 @@ struct outbound_router_config {
 
     /** Number of worker threads for async delivery */
     size_t worker_threads = 2;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for worker and health check task execution (nullptr = use internal
+     * std::thread) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 
     /** Enable delivery tracking/logging */
     bool enable_tracking = true;
