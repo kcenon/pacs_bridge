@@ -282,11 +282,13 @@ public:
 
     ~impl() { stop(true); }
 
-    std::expected<void, fhir_error> start() {
+    VoidResult start() {
         if (running_.exchange(true)) {
-            return std::unexpected(fhir_error::server_error);  // Already running
+            return VoidResult::err(error_info{
+                static_cast<int>(fhir_error::server_error),
+                "Server already running"});
         }
-        return {};
+        return VoidResult::ok();
     }
 
     void stop(bool wait_for_requests) {
@@ -657,7 +659,7 @@ fhir_server::~fhir_server() = default;
 fhir_server::fhir_server(fhir_server&&) noexcept = default;
 fhir_server& fhir_server::operator=(fhir_server&&) noexcept = default;
 
-std::expected<void, fhir_error> fhir_server::start() { return impl_->start(); }
+VoidResult fhir_server::start() { return impl_->start(); }
 
 void fhir_server::stop(bool wait_for_requests) {
     impl_->stop(wait_for_requests);

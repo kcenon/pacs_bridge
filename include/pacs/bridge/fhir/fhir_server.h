@@ -23,7 +23,6 @@
 #include "fhir_types.h"
 #include "resource_handler.h"
 
-#include <expected>
 #include <functional>
 #include <memory>
 #include <string>
@@ -176,9 +175,9 @@ public:
      * Binds to the configured port and starts accepting connections.
      * Returns immediately; server runs in background threads.
      *
-     * @return Success or fhir_error
+     * @return VoidResult indicating success or error
      */
-    [[nodiscard]] std::expected<void, fhir_error> start();
+    [[nodiscard]] VoidResult start();
 
     /**
      * @brief Stop the FHIR server
