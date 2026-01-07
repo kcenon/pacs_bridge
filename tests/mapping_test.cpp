@@ -204,10 +204,10 @@ bool test_mapper_custom_config() {
 bool test_mapper_orm_to_mwl() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_O01);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM O01 successfully");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM O01 successfully");
 
     hl7_dicom_mapper mapper;
-    auto map_result = mapper.to_mwl(*parse_result);
+    auto map_result = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(map_result.has_value(), "Should map to MWL successfully");
 
     const auto& mwl = *map_result;
@@ -231,10 +231,10 @@ bool test_mapper_orm_to_mwl() {
 bool test_mapper_patient_extraction() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_O01);
-    TEST_ASSERT(parse_result.has_value(), "Should parse successfully");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse successfully");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient successfully");
 
     TEST_ASSERT(patient->patient_id == "12345", "Patient ID should match");
@@ -254,10 +254,10 @@ bool test_mapper_invalid_message_type() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(adt_msg);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ADT successfully");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ADT successfully");
 
     hl7_dicom_mapper mapper;
-    auto map_result = mapper.to_mwl(*parse_result);
+    auto map_result = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(!map_result.has_value(), "Should fail for ADT message");
     TEST_ASSERT(map_result.error() == mapping_error::unsupported_message_type,
                 "Error should be unsupported_message_type");
@@ -270,10 +270,10 @@ bool test_mapper_can_map_to_mwl() {
 
     // ORM should be mappable
     auto orm_result = parser.parse(SAMPLE_ORM_O01);
-    TEST_ASSERT(orm_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(orm_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    TEST_ASSERT(mapper.can_map_to_mwl(*orm_result), "ORM should be mappable to MWL");
+    TEST_ASSERT(mapper.can_map_to_mwl(orm_result.value()), "ORM should be mappable to MWL");
 
     // ADT should not be mappable
     std::string adt_msg =
@@ -281,8 +281,8 @@ bool test_mapper_can_map_to_mwl() {
         "PID|1||12345|||DOE^JOHN||19800515|M\r";
 
     auto adt_result = parser.parse(adt_msg);
-    TEST_ASSERT(adt_result.has_value(), "Should parse ADT");
-    TEST_ASSERT(!mapper.can_map_to_mwl(*adt_result), "ADT should not be mappable to MWL");
+    TEST_ASSERT(adt_result.is_ok(), "Should parse ADT");
+    TEST_ASSERT(!mapper.can_map_to_mwl(adt_result.value()), "ADT should not be mappable to MWL");
 
     return true;
 }
@@ -425,7 +425,7 @@ bool test_complete_orm_workflow() {
     // Parse ORM message
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_O01);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM successfully");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM successfully");
 
     // Map to MWL
     mapper_config config;
@@ -434,7 +434,7 @@ bool test_complete_orm_workflow() {
     config.default_modality = "CR";
 
     hl7_dicom_mapper mapper(config);
-    auto mwl_result = mapper.to_mwl(*parse_result);
+    auto mwl_result = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl_result.has_value(), "Should create MWL item");
 
     const auto& mwl = *mwl_result;

@@ -237,8 +237,8 @@ private:
         auto parse_result = parser.parse(msg.to_string());
 
         std::string msg_control_id = "0";
-        if (parse_result.has_value()) {
-            msg_control_id = parse_result->get_value("MSH.10");
+        if (parse_result.is_ok()) {
+            msg_control_id = parse_result.value().get_value("MSH.10");
         }
 
         // Generate ACK
@@ -299,7 +299,7 @@ bool test_benchmark_message_parsing() {
                 stats.max_latency = latency;
             }
 
-            if (result.has_value()) {
+            if (result.is_ok()) {
                 stats.successful_operations++;
             } else {
                 stats.failed_operations++;
@@ -357,7 +357,7 @@ bool test_benchmark_message_building() {
             stats.max_latency = latency;
         }
 
-        if (result.has_value()) {
+        if (result.is_ok()) {
             stats.successful_operations++;
         } else {
             stats.failed_operations++;
@@ -392,14 +392,14 @@ bool test_benchmark_roundtrip_processing() {
 
         // Parse
         auto parse_result = parser.parse(SAMPLE_ORM);
-        if (!parse_result.has_value()) {
+        if (!parse_result.is_ok()) {
             stats.failed_operations++;
             stats.total_operations++;
             continue;
         }
 
         // Modify (simulate processing)
-        auto& parsed = *parse_result;
+        auto& parsed = parse_result.value();
         std::string msg_id(parsed.get_value("MSH.10"));
         std::string patient_id(parsed.get_value("PID.3"));
 
@@ -428,7 +428,7 @@ bool test_benchmark_roundtrip_processing() {
             stats.max_latency = latency;
         }
 
-        if (ack_result.has_value()) {
+        if (ack_result.is_ok()) {
             stats.successful_operations++;
         } else {
             stats.failed_operations++;

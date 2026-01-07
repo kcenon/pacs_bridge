@@ -116,8 +116,8 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse_mfn(std::string_view raw) {
-        return parser_->parse(std::string(raw));
+    Result<hl7_message> parse_mfn(std::string_view raw) {
+        return parser_->parse(raw);
     }
 
     // Extract master file identifier from MFI
@@ -148,58 +148,58 @@ protected:
 
 TEST_F(MfnHandlerTest, ParseMfnM01Staff) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MFN");
-    EXPECT_EQ(msg->trigger_event(), "M01");
-    EXPECT_EQ(extract_primary_key(*msg), "DR001");
+    EXPECT_STREQ(to_string(msg.value().type()), "MFN");
+    EXPECT_EQ(msg.value().trigger_event(), "M01");
+    EXPECT_EQ(extract_primary_key(msg.value()), "DR001");
 }
 
 TEST_F(MfnHandlerTest, ParseMfnM02Practitioner) {
     auto msg = parse_mfn(mfn_samples::MFN_M02_PRACTITIONER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MFN");
-    EXPECT_EQ(msg->trigger_event(), "M02");
+    EXPECT_STREQ(to_string(msg.value().type()), "MFN");
+    EXPECT_EQ(msg.value().trigger_event(), "M02");
 
     // Should have ORG segment
-    auto org = msg->segment("ORG");
+    auto org = msg.value().segment("ORG");
     ASSERT_TRUE(org != nullptr);
 }
 
 TEST_F(MfnHandlerTest, ParseMfnM05Location) {
     auto msg = parse_mfn(mfn_samples::MFN_M05_LOCATION);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MFN");
-    EXPECT_EQ(msg->trigger_event(), "M05");
+    EXPECT_STREQ(to_string(msg.value().type()), "MFN");
+    EXPECT_EQ(msg.value().trigger_event(), "M05");
 
     // Should have LOC segment
-    auto loc = msg->segment("LOC");
+    auto loc = msg.value().segment("LOC");
     ASSERT_TRUE(loc != nullptr);
 }
 
 TEST_F(MfnHandlerTest, ParseMfnM08Test) {
     auto msg = parse_mfn(mfn_samples::MFN_M08_TEST);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MFN");
-    EXPECT_EQ(msg->trigger_event(), "M08");
+    EXPECT_STREQ(to_string(msg.value().type()), "MFN");
+    EXPECT_EQ(msg.value().trigger_event(), "M08");
 
     // Should have OM segments
-    auto om1 = msg->segment("OM1");
+    auto om1 = msg.value().segment("OM1");
     ASSERT_TRUE(om1 != nullptr);
 }
 
 TEST_F(MfnHandlerTest, ParseMfnM10Charge) {
     auto msg = parse_mfn(mfn_samples::MFN_M10_CHARGE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MFN");
-    EXPECT_EQ(msg->trigger_event(), "M10");
+    EXPECT_STREQ(to_string(msg.value().type()), "MFN");
+    EXPECT_EQ(msg.value().trigger_event(), "M10");
 
     // Should have CDM segment
-    auto cdm = msg->segment("CDM");
+    auto cdm = msg.value().segment("CDM");
     ASSERT_TRUE(cdm != nullptr);
 }
 
@@ -209,17 +209,17 @@ TEST_F(MfnHandlerTest, ParseMfnM10Charge) {
 
 TEST_F(MfnHandlerTest, ExtractMasterFileIdentifier) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string mf_id = extract_master_file_id(*msg);
+    std::string mf_id = extract_master_file_id(msg.value());
     EXPECT_TRUE(mf_id.find("STF") != std::string::npos);
 }
 
 TEST_F(MfnHandlerTest, ExtractFileEventCode) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto mfi = msg->segment("MFI");
+    auto mfi = msg.value().segment("MFI");
     ASSERT_TRUE(mfi != nullptr);
 
     // MFI-2 is File Level Event Code (UPD = Update)
@@ -228,9 +228,9 @@ TEST_F(MfnHandlerTest, ExtractFileEventCode) {
 
 TEST_F(MfnHandlerTest, ExtractResponseLevel) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto mfi = msg->segment("MFI");
+    auto mfi = msg.value().segment("MFI");
     ASSERT_TRUE(mfi != nullptr);
 
     // MFI-6 is Response Level Code (NE = Never)
@@ -243,36 +243,36 @@ TEST_F(MfnHandlerTest, ExtractResponseLevel) {
 
 TEST_F(MfnHandlerTest, ExtractRecordEventCode) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string event_code = extract_record_event_code(*msg);
+    std::string event_code = extract_record_event_code(msg.value());
     // MAD = Add
     EXPECT_EQ(event_code, "MAD");
 }
 
 TEST_F(MfnHandlerTest, DeleteRecordEventCode) {
     auto msg = parse_mfn(mfn_samples::MFN_DELETE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string event_code = extract_record_event_code(*msg);
+    std::string event_code = extract_record_event_code(msg.value());
     // MDL = Delete
     EXPECT_EQ(event_code, "MDL");
 }
 
 TEST_F(MfnHandlerTest, UpdateRecordEventCode) {
     auto msg = parse_mfn(mfn_samples::MFN_UPDATE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string event_code = extract_record_event_code(*msg);
+    std::string event_code = extract_record_event_code(msg.value());
     // MUP = Update
     EXPECT_EQ(event_code, "MUP");
 }
 
 TEST_F(MfnHandlerTest, ExtractEffectiveDateTime) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto mfe = msg->segment("MFE");
+    auto mfe = msg.value().segment("MFE");
     ASSERT_TRUE(mfe != nullptr);
 
     // MFE-3 is Effective Date/Time
@@ -285,9 +285,9 @@ TEST_F(MfnHandlerTest, ExtractEffectiveDateTime) {
 
 TEST_F(MfnHandlerTest, ExtractStaffInfo) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto stf = msg->segment("STF");
+    auto stf = msg.value().segment("STF");
     ASSERT_TRUE(stf != nullptr);
 
     // STF-1 is Staff Identifier
@@ -298,9 +298,9 @@ TEST_F(MfnHandlerTest, ExtractStaffInfo) {
 
 TEST_F(MfnHandlerTest, ExtractPractitionerInfo) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pra = msg->segment("PRA");
+    auto pra = msg.value().segment("PRA");
     ASSERT_TRUE(pra != nullptr);
 
     // PRA-3 is Practitioner Group
@@ -313,9 +313,9 @@ TEST_F(MfnHandlerTest, ExtractPractitionerInfo) {
 
 TEST_F(MfnHandlerTest, ExtractLocationInfo) {
     auto msg = parse_mfn(mfn_samples::MFN_M05_LOCATION);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto loc = msg->segment("LOC");
+    auto loc = msg.value().segment("LOC");
     ASSERT_TRUE(loc != nullptr);
 
     // LOC-1 is Primary Key Value - LOC
@@ -326,9 +326,9 @@ TEST_F(MfnHandlerTest, ExtractLocationInfo) {
 
 TEST_F(MfnHandlerTest, ExtractLocationDepartment) {
     auto msg = parse_mfn(mfn_samples::MFN_M05_LOCATION);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ldp = msg->segment("LDP");
+    auto ldp = msg.value().segment("LDP");
     ASSERT_TRUE(ldp != nullptr);
 
     // LDP-2 is Location Department
@@ -341,9 +341,9 @@ TEST_F(MfnHandlerTest, ExtractLocationDepartment) {
 
 TEST_F(MfnHandlerTest, ExtractTestInfo) {
     auto msg = parse_mfn(mfn_samples::MFN_M08_TEST);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto om1 = msg->segment("OM1");
+    auto om1 = msg.value().segment("OM1");
     ASSERT_TRUE(om1 != nullptr);
 
     // OM1-2 is Producer's Test/Observation ID
@@ -352,9 +352,9 @@ TEST_F(MfnHandlerTest, ExtractTestInfo) {
 
 TEST_F(MfnHandlerTest, ExtractTestReferenceRange) {
     auto msg = parse_mfn(mfn_samples::MFN_M08_TEST);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto om2 = msg->segment("OM2");
+    auto om2 = msg.value().segment("OM2");
     ASSERT_TRUE(om2 != nullptr);
 
     // OM2-2 is Reference Range
@@ -367,9 +367,9 @@ TEST_F(MfnHandlerTest, ExtractTestReferenceRange) {
 
 TEST_F(MfnHandlerTest, ExtractChargeInfo) {
     auto msg = parse_mfn(mfn_samples::MFN_M10_CHARGE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto cdm = msg->segment("CDM");
+    auto cdm = msg.value().segment("CDM");
     ASSERT_TRUE(cdm != nullptr);
 
     // CDM-1 is Primary Key Value - CDM
@@ -380,9 +380,9 @@ TEST_F(MfnHandlerTest, ExtractChargeInfo) {
 
 TEST_F(MfnHandlerTest, ExtractPriceInfo) {
     auto msg = parse_mfn(mfn_samples::MFN_M10_CHARGE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto prc = msg->segment("PRC");
+    auto prc = msg.value().segment("PRC");
     ASSERT_TRUE(prc != nullptr);
 
     // PRC-3 is Price
@@ -399,9 +399,9 @@ TEST_F(MfnHandlerTest, MissingMfiSegment) {
         "MFE|MAD|20240115100000|20240115100000|DR001\r";
 
     auto msg = parse_mfn(invalid_mfn);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto mfi = msg->segment("MFI");
+    auto mfi = msg.value().segment("MFI");
     EXPECT_TRUE(mfi == nullptr);
 }
 
@@ -411,9 +411,9 @@ TEST_F(MfnHandlerTest, MissingMfeSegment) {
         "MFI|STF^Staff Master File|UPD^Update|20240115100000|||NE\r";
 
     auto msg = parse_mfn(mfn_no_mfe);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto mfe = msg->segment("MFE");
+    auto mfe = msg.value().segment("MFE");
     EXPECT_TRUE(mfe == nullptr);
 }
 
@@ -423,9 +423,9 @@ TEST_F(MfnHandlerTest, MissingMfeSegment) {
 
 TEST_F(MfnHandlerTest, BuildMfkResponse) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Master file update accepted");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Master file update accepted");
 
     // ack is hl7_message directly, no has_value check needed
     EXPECT_STREQ(to_string(ack.type()), "ACK");
@@ -433,9 +433,9 @@ TEST_F(MfnHandlerTest, BuildMfkResponse) {
 
 TEST_F(MfnHandlerTest, BuildErrorAckForMfn) {
     auto msg = parse_mfn(mfn_samples::MFN_M01_STAFF);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AE, "Invalid master file record");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AE, "Invalid master file record");
 
     // ack is hl7_message directly, no has_value check needed
     auto msa = ack.segment("MSA");

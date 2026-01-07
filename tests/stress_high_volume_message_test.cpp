@@ -122,7 +122,7 @@ TEST_F(StressHighVolumeTest, Parse1000Messages) {
     auto elapsed = measure_time_ms([&]() {
         for (int i = 0; i < count; ++i) {
             auto msg = parser_->parse(create_adt_message(i));
-            if (msg.has_value()) ++success;
+            if (msg.is_ok()) ++success;
         }
     });
 
@@ -140,7 +140,7 @@ TEST_F(StressHighVolumeTest, Parse5000Messages) {
     auto elapsed = measure_time_ms([&]() {
         for (int i = 0; i < count; ++i) {
             auto msg = parser_->parse(create_orm_message(i));
-            if (msg.has_value()) ++success;
+            if (msg.is_ok()) ++success;
         }
     });
 
@@ -162,7 +162,7 @@ TEST_F(StressHighVolumeTest, Parse10000SimpleMessages) {
     auto elapsed = measure_time_ms([&]() {
         for (int i = 0; i < count; ++i) {
             auto msg = parser_->parse(simple_msg);
-            if (msg.has_value()) ++success;
+            if (msg.is_ok()) ++success;
         }
     });
 
@@ -177,8 +177,8 @@ TEST_F(StressHighVolumeTest, ParseMessageWith100Segments) {
     std::string large_msg = create_large_message(100);
     auto msg = parser_->parse(large_msg);
 
-    ASSERT_TRUE(msg.has_value());
-    auto obx_segments = msg->segments("OBX");
+    ASSERT_TRUE(msg.is_ok());
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_EQ(obx_segments.size(), 100);
 }
 
@@ -186,8 +186,8 @@ TEST_F(StressHighVolumeTest, ParseMessageWith500Segments) {
     std::string large_msg = create_large_message(500);
     auto msg = parser_->parse(large_msg);
 
-    ASSERT_TRUE(msg.has_value());
-    auto obx_segments = msg->segments("OBX");
+    ASSERT_TRUE(msg.is_ok());
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_EQ(obx_segments.size(), 500);
 }
 
@@ -195,27 +195,27 @@ TEST_F(StressHighVolumeTest, ParseMessageWith1000Segments) {
     std::string large_msg = create_large_message(1000);
     auto msg = parser_->parse(large_msg);
 
-    ASSERT_TRUE(msg.has_value());
-    auto obx_segments = msg->segments("OBX");
+    ASSERT_TRUE(msg.is_ok());
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_EQ(obx_segments.size(), 1000);
 }
 
 TEST_F(StressHighVolumeTest, ParseMessageWith1KBField) {
     std::string msg = create_message_large_fields(1024);
     auto parsed = parser_->parse(msg);
-    ASSERT_TRUE(parsed.has_value());
+    ASSERT_TRUE(parsed.is_ok());
 }
 
 TEST_F(StressHighVolumeTest, ParseMessageWith10KBField) {
     std::string msg = create_message_large_fields(10 * 1024);
     auto parsed = parser_->parse(msg);
-    ASSERT_TRUE(parsed.has_value());
+    ASSERT_TRUE(parsed.is_ok());
 }
 
 TEST_F(StressHighVolumeTest, ParseMessageWith100KBField) {
     std::string msg = create_message_large_fields(100 * 1024);
     auto parsed = parser_->parse(msg);
-    ASSERT_TRUE(parsed.has_value());
+    ASSERT_TRUE(parsed.is_ok());
 }
 
 TEST_F(StressHighVolumeTest, ParseMessageWith1MBTotal) {
@@ -227,7 +227,7 @@ TEST_F(StressHighVolumeTest, ParseMessageWith1MBTotal) {
     auto msg = parser_->parse(large_msg);
     auto end = high_resolution_clock::now();
 
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     auto elapsed_ms = duration_cast<milliseconds>(end - start).count();
     // 1MB message should parse in reasonable time (< 5 seconds)
@@ -244,9 +244,9 @@ TEST_F(StressHighVolumeTest, ParseMixedMessageTypes) {
 
     auto elapsed = measure_time_ms([&]() {
         for (int i = 0; i < count_per_type; ++i) {
-            if (parser_->parse(create_adt_message(i)).has_value()) ++adt_success;
-            if (parser_->parse(create_orm_message(i)).has_value()) ++orm_success;
-            if (parser_->parse(create_oru_message(i)).has_value()) ++oru_success;
+            if (parser_->parse(create_adt_message(i)).is_ok()) ++adt_success;
+            if (parser_->parse(create_orm_message(i)).is_ok()) ++orm_success;
+            if (parser_->parse(create_oru_message(i)).is_ok()) ++oru_success;
         }
     });
 
@@ -270,7 +270,7 @@ TEST_F(StressHighVolumeTest, ParseRandomMessageTypes) {
             case 1: msg = create_orm_message(i); break;
             case 2: msg = create_oru_message(i); break;
         }
-        if (parser_->parse(msg).has_value()) ++success;
+        if (parser_->parse(msg).is_ok()) ++success;
     }
 
     EXPECT_EQ(success, total);
@@ -286,7 +286,7 @@ TEST_F(StressHighVolumeTest, SustainedLoadFor1Second) {
 
     while (duration_cast<seconds>(high_resolution_clock::now() - start).count() < 1) {
         auto msg = parser_->parse(create_adt_message(count));
-        if (msg.has_value()) ++count;
+        if (msg.is_ok()) ++count;
     }
 
     // Should process at least 500 messages in 1 second
@@ -300,7 +300,7 @@ TEST_F(StressHighVolumeTest, SustainedLoadFor5Seconds) {
 
     while (duration_cast<seconds>(high_resolution_clock::now() - start).count() < 5) {
         auto msg = parser_->parse(create_orm_message(count));
-        if (msg.has_value()) {
+        if (msg.is_ok()) {
             ++count;
         } else {
             ++errors;
@@ -322,7 +322,7 @@ TEST_F(StressHighVolumeTest, ParseAndDiscardMany) {
     // Parse many messages without keeping references
     for (int i = 0; i < 10000; ++i) {
         auto msg = parser_->parse(create_adt_message(i));
-        ASSERT_TRUE(msg.has_value());
+        ASSERT_TRUE(msg.is_ok());
         // Message immediately goes out of scope
     }
     // No memory issues should occur
@@ -334,11 +334,11 @@ TEST_F(StressHighVolumeTest, ParseAndStoreSome) {
 
     for (int i = 0; i < 10000; ++i) {
         auto msg = parser_->parse(create_adt_message(i));
-        ASSERT_TRUE(msg.has_value());
+        ASSERT_TRUE(msg.is_ok());
 
         // Keep every 10th message
         if (i % 10 == 0) {
-            stored.push_back(std::move(*msg));
+            stored.push_back(std::move(msg.value()));
         }
     }
 
@@ -363,7 +363,7 @@ TEST_F(StressHighVolumeTest, Build1000Messages) {
                 .message_type("ADT", "A01")
                 .control_id("MSG" + std::to_string(i))
                 .build();
-            if (msg.has_value()) ++success;
+            if (msg.is_ok()) ++success;
         }
     });
 
@@ -382,11 +382,11 @@ TEST_F(StressHighVolumeTest, RoundTrip1000Messages) {
         for (int i = 0; i < count; ++i) {
             std::string original = create_adt_message(i);
             auto parsed = parser_->parse(original);
-            if (!parsed.has_value()) continue;
+            if (!parsed.is_ok()) continue;
 
-            std::string rebuilt = parsed->serialize();
+            std::string rebuilt = parsed.value().serialize();
             auto reparsed = parser_->parse(rebuilt);
-            if (reparsed.has_value()) ++success;
+            if (reparsed.is_ok()) ++success;
         }
     });
 
@@ -404,10 +404,10 @@ TEST_F(StressHighVolumeTest, ParseEmptyStringsMixed) {
         if (i % 10 == 0) {
             // Every 10th is empty
             auto msg = parser_->parse("");
-            if (!msg.has_value()) ++invalid;
+            if (!msg.is_ok()) ++invalid;
         } else {
             auto msg = parser_->parse(create_adt_message(i));
-            if (msg.has_value()) ++valid;
+            if (msg.is_ok()) ++valid;
         }
     }
 
@@ -422,8 +422,8 @@ TEST_F(StressHighVolumeTest, VaryingMessageSizes) {
         // Vary OBX count from 1 to 100
         std::string msg = create_oru_message(i, i);
         auto parsed = parser_->parse(msg);
-        if (parsed.has_value()) {
-            auto obx_segments = parsed->segments("OBX");
+        if (parsed.is_ok()) {
+            auto obx_segments = parsed.value().segments("OBX");
             if (obx_segments.size() == static_cast<size_t>(i)) {
                 ++success;
             }
@@ -441,7 +441,7 @@ TEST_F(StressHighVolumeTest, RapidParserReuse) {
     // Rapidly reuse the same parser instance
     for (int i = 0; i < 10000; ++i) {
         auto msg = parser_->parse(create_adt_message(i % 100));
-        ASSERT_TRUE(msg.has_value());
+        ASSERT_TRUE(msg.is_ok());
     }
 }
 
@@ -449,15 +449,15 @@ TEST_F(StressHighVolumeTest, InterleavedParseAndBuild) {
     for (int i = 0; i < 1000; ++i) {
         // Parse
         auto parsed = parser_->parse(create_adt_message(i));
-        ASSERT_TRUE(parsed.has_value());
+        ASSERT_TRUE(parsed.is_ok());
 
         // Build ACK
-        auto ack = hl7_builder::create_ack(*parsed, ack_code::AA, "OK");
+        auto ack = hl7_builder::create_ack(parsed.value(), ack_code::AA, "OK");
         // ack is hl7_message directly, no has_value check needed
 
         // Parse ACK
         auto ack_parsed = parser_->parse(ack.serialize());
-        ASSERT_TRUE(ack_parsed.has_value());
+        ASSERT_TRUE(ack_parsed.is_ok());
     }
 }
 

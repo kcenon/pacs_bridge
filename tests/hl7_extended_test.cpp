@@ -565,9 +565,9 @@ TEST_F(HL7BuilderExtendedTest, CreateAckWithBuilder) {
                         .version("2.4")
                         .build();
 
-    ASSERT_TRUE(original.has_value());
+    ASSERT_RESULT_OK(original);
 
-    auto ack = hl7_builder::create_ack(*original, ack_code::AA, "Order accepted");
+    auto ack = hl7_builder::create_ack(original.value(), ack_code::AA, "Order accepted");
 
     EXPECT_TRUE(ack.has_segment("MSH"));
     EXPECT_TRUE(ack.has_segment("MSA"));
@@ -586,9 +586,9 @@ TEST_F(HL7BuilderExtendedTest, CreateNackWithBuilder) {
                         .version("2.4")
                         .build();
 
-    ASSERT_TRUE(original.has_value());
+    ASSERT_RESULT_OK(original);
 
-    auto nack = hl7_builder::create_ack(*original, ack_code::AE, "Patient not found");
+    auto nack = hl7_builder::create_ack(original.value(), ack_code::AE, "Patient not found");
 
     EXPECT_EQ(nack.get_value("MSA.1"), "AE");
     EXPECT_THAT(nack.get_value("MSA.3"), HasSubstr("Patient not found"));

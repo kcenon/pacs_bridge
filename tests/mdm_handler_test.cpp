@@ -108,8 +108,8 @@ protected:
     std::unique_ptr<hl7_parser> parser_;
 
     // Helper to parse MDM message
-    std::expected<hl7_message, hl7_error> parse_mdm(std::string_view raw) {
-        return parser_->parse(std::string(raw));
+    Result<hl7_message> parse_mdm(std::string_view raw) {
+        return parser_->parse(raw);
     }
 
     // Extract document unique ID from TXA segment
@@ -140,31 +140,31 @@ protected:
 
 TEST_F(MdmHandlerTest, ParseMdmT02Original) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MDM");
-    EXPECT_EQ(msg->trigger_event(), "T02");
-    EXPECT_EQ(extract_document_id(*msg), "DOC12345");
-    EXPECT_EQ(extract_document_status(*msg), "AU");
+    EXPECT_STREQ(to_string(msg.value().type()), "MDM");
+    EXPECT_EQ(msg.value().trigger_event(), "T02");
+    EXPECT_EQ(extract_document_id(msg.value()), "DOC12345");
+    EXPECT_EQ(extract_document_status(msg.value()), "AU");
 }
 
 TEST_F(MdmHandlerTest, ParseMdmT04StatusChange) {
     auto msg = parse_mdm(mdm_samples::MDM_T04_STATUS_CHANGE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MDM");
-    EXPECT_EQ(msg->trigger_event(), "T04");
-    EXPECT_EQ(extract_document_status(*msg), "LA");
+    EXPECT_STREQ(to_string(msg.value().type()), "MDM");
+    EXPECT_EQ(msg.value().trigger_event(), "T04");
+    EXPECT_EQ(extract_document_status(msg.value()), "LA");
 }
 
 TEST_F(MdmHandlerTest, ParseMdmT06Addendum) {
     auto msg = parse_mdm(mdm_samples::MDM_T06_ADDENDUM);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MDM");
-    EXPECT_EQ(msg->trigger_event(), "T06");
+    EXPECT_STREQ(to_string(msg.value().type()), "MDM");
+    EXPECT_EQ(msg.value().trigger_event(), "T06");
 
-    auto txa = msg->segment("TXA");
+    auto txa = msg.value().segment("TXA");
     ASSERT_TRUE(txa != nullptr);
     // TXA-13 contains parent document ID
     EXPECT_EQ(txa->field_value(13), "DOC12345");
@@ -172,20 +172,20 @@ TEST_F(MdmHandlerTest, ParseMdmT06Addendum) {
 
 TEST_F(MdmHandlerTest, ParseMdmT08Edit) {
     auto msg = parse_mdm(mdm_samples::MDM_T08_EDIT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MDM");
-    EXPECT_EQ(msg->trigger_event(), "T08");
+    EXPECT_STREQ(to_string(msg.value().type()), "MDM");
+    EXPECT_EQ(msg.value().trigger_event(), "T08");
 }
 
 TEST_F(MdmHandlerTest, ParseMdmT10Replacement) {
     auto msg = parse_mdm(mdm_samples::MDM_T10_REPLACEMENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MDM");
-    EXPECT_EQ(msg->trigger_event(), "T10");
+    EXPECT_STREQ(to_string(msg.value().type()), "MDM");
+    EXPECT_EQ(msg.value().trigger_event(), "T10");
 
-    auto txa = msg->segment("TXA");
+    auto txa = msg.value().segment("TXA");
     ASSERT_TRUE(txa != nullptr);
     // Replacement should reference original document
     EXPECT_EQ(txa->field_value(13), "DOC12345");
@@ -193,16 +193,16 @@ TEST_F(MdmHandlerTest, ParseMdmT10Replacement) {
 
 TEST_F(MdmHandlerTest, ParseRadiologyReport) {
     auto msg = parse_mdm(mdm_samples::MDM_RADIOLOGY_REPORT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "MDM");
+    EXPECT_STREQ(to_string(msg.value().type()), "MDM");
 
     // Should have OBR segment for radiology
-    auto obr = msg->segment("OBR");
+    auto obr = msg.value().segment("OBR");
     ASSERT_TRUE(obr != nullptr);
 
     // Should have multiple OBX segments
-    auto obx_segments = msg->segments("OBX");
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_GE(obx_segments.size(), 2);
 }
 
@@ -212,18 +212,18 @@ TEST_F(MdmHandlerTest, ParseRadiologyReport) {
 
 TEST_F(MdmHandlerTest, DocumentTypeHistoryPhysical) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string doc_type = extract_document_type(*msg);
+    std::string doc_type = extract_document_type(msg.value());
     EXPECT_TRUE(doc_type.find("HP") != std::string::npos ||
                 doc_type.find("History and Physical") != std::string::npos);
 }
 
 TEST_F(MdmHandlerTest, DocumentTypeRadiologyReport) {
     auto msg = parse_mdm(mdm_samples::MDM_RADIOLOGY_REPORT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string doc_type = extract_document_type(*msg);
+    std::string doc_type = extract_document_type(msg.value());
     EXPECT_TRUE(doc_type.find("RR") != std::string::npos ||
                 doc_type.find("Radiology Report") != std::string::npos);
 }
@@ -234,18 +234,18 @@ TEST_F(MdmHandlerTest, DocumentTypeRadiologyReport) {
 
 TEST_F(MdmHandlerTest, DocumentStatusAuthenticated) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // AU = Authenticated
-    EXPECT_EQ(extract_document_status(*msg), "AU");
+    EXPECT_EQ(extract_document_status(msg.value()), "AU");
 }
 
 TEST_F(MdmHandlerTest, DocumentStatusLegallyAuthenticated) {
     auto msg = parse_mdm(mdm_samples::MDM_T04_STATUS_CHANGE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // LA = Legally Authenticated
-    EXPECT_EQ(extract_document_status(*msg), "LA");
+    EXPECT_EQ(extract_document_status(msg.value()), "LA");
 }
 
 // =============================================================================
@@ -254,9 +254,9 @@ TEST_F(MdmHandlerTest, DocumentStatusLegallyAuthenticated) {
 
 TEST_F(MdmHandlerTest, ExtractPatientFromMdm) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pid = msg->segment("PID");
+    auto pid = msg.value().segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // Patient ID
@@ -271,9 +271,9 @@ TEST_F(MdmHandlerTest, ExtractPatientFromMdm) {
 
 TEST_F(MdmHandlerTest, ExtractObxContent) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto obx_segments = msg->segments("OBX");
+    auto obx_segments = msg.value().segments("OBX");
     ASSERT_GE(obx_segments.size(), 1);
 
     // OBX-5 contains the observation value (report text)
@@ -283,9 +283,9 @@ TEST_F(MdmHandlerTest, ExtractObxContent) {
 
 TEST_F(MdmHandlerTest, MultipleObxSegments) {
     auto msg = parse_mdm(mdm_samples::MDM_RADIOLOGY_REPORT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto obx_segments = msg->segments("OBX");
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_EQ(obx_segments.size(), 2);
 
     // First OBX should be impression
@@ -304,10 +304,10 @@ TEST_F(MdmHandlerTest, MissingTxaSegment) {
         "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r";
 
     auto msg = parse_mdm(invalid_mdm);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // Should parse but TXA should be missing
-    auto txa = msg->segment("TXA");
+    auto txa = msg.value().segment("TXA");
     EXPECT_TRUE(txa == nullptr);
 }
 
@@ -317,9 +317,9 @@ TEST_F(MdmHandlerTest, EmptyDocumentId) {
         "TXA|1|HP^History and Physical|TX|20240115140000|||||||||||AU\r";
 
     auto msg = parse_mdm(mdm_no_doc_id);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_TRUE(extract_document_id(*msg).empty());
+    EXPECT_TRUE(extract_document_id(msg.value()).empty());
 }
 
 // =============================================================================
@@ -328,9 +328,9 @@ TEST_F(MdmHandlerTest, EmptyDocumentId) {
 
 TEST_F(MdmHandlerTest, BuildAckForMdm) {
     auto msg = parse_mdm(mdm_samples::MDM_T02_ORIGINAL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Message accepted");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Message accepted");
 
     // ack is hl7_message directly, no has_value check needed
     EXPECT_STREQ(to_string(ack.type()), "ACK");

@@ -111,8 +111,8 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse_rde(std::string_view raw) {
-        return parser_->parse(std::string(raw));
+    Result<hl7_message> parse_rde(std::string_view raw) {
+        return parser_->parse(raw);
     }
 
     // Extract medication code from RXE
@@ -136,49 +136,49 @@ protected:
 
 TEST_F(RdeHandlerTest, ParseRdeO11NewOrder) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "RDE");
-    EXPECT_EQ(msg->trigger_event(), "O11");
-    EXPECT_EQ(extract_order_control(*msg), "NW");
+    EXPECT_STREQ(to_string(msg.value().type()), "RDE");
+    EXPECT_EQ(msg.value().trigger_event(), "O11");
+    EXPECT_EQ(extract_order_control(msg.value()), "NW");
 }
 
 TEST_F(RdeHandlerTest, ParseRdeO11IvOrder) {
     auto msg = parse_rde(rde_samples::RDE_O11_IV_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "RDE");
+    EXPECT_STREQ(to_string(msg.value().type()), "RDE");
 
-    auto rxr = msg->segment("RXR");
+    auto rxr = msg.value().segment("RXR");
     ASSERT_TRUE(rxr != nullptr);
     EXPECT_TRUE(rxr->field_value(1).find("IV") != std::string::npos);
 }
 
 TEST_F(RdeHandlerTest, ParseRdeMultipleMeds) {
     auto msg = parse_rde(rde_samples::RDE_O11_MULTIPLE_MEDS);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto orc_segments = msg->segments("ORC");
+    auto orc_segments = msg.value().segments("ORC");
     EXPECT_EQ(orc_segments.size(), 2);
 
-    auto rxe_segments = msg->segments("RXE");
+    auto rxe_segments = msg.value().segments("RXE");
     EXPECT_EQ(rxe_segments.size(), 2);
 }
 
 TEST_F(RdeHandlerTest, ParseRdeO25Refill) {
     auto msg = parse_rde(rde_samples::RDE_O25_REFILL);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "RDE");
-    EXPECT_EQ(msg->trigger_event(), "O25");
-    EXPECT_EQ(extract_order_control(*msg), "RF");
+    EXPECT_STREQ(to_string(msg.value().type()), "RDE");
+    EXPECT_EQ(msg.value().trigger_event(), "O25");
+    EXPECT_EQ(extract_order_control(msg.value()), "RF");
 }
 
 TEST_F(RdeHandlerTest, ParseRdeDiscontinue) {
     auto msg = parse_rde(rde_samples::RDE_DISCONTINUE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_EQ(extract_order_control(*msg), "DC");
+    EXPECT_EQ(extract_order_control(msg.value()), "DC");
 }
 
 // =============================================================================
@@ -187,17 +187,17 @@ TEST_F(RdeHandlerTest, ParseRdeDiscontinue) {
 
 TEST_F(RdeHandlerTest, ExtractMedicationCode) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string med_code = extract_medication_code(*msg);
+    std::string med_code = extract_medication_code(msg.value());
     EXPECT_TRUE(med_code.find("AMOXICILLIN") != std::string::npos);
 }
 
 TEST_F(RdeHandlerTest, ExtractDosageInfo) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxe = msg->segment("RXE");
+    auto rxe = msg.value().segment("RXE");
     ASSERT_TRUE(rxe != nullptr);
 
     // RXE-3 is Give Amount - Minimum
@@ -210,9 +210,9 @@ TEST_F(RdeHandlerTest, ExtractDosageInfo) {
 
 TEST_F(RdeHandlerTest, ExtractRouteOfAdministration) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxr = msg->segment("RXR");
+    auto rxr = msg.value().segment("RXR");
     ASSERT_TRUE(rxr != nullptr);
 
     EXPECT_TRUE(rxr->field_value(1).find("PO") != std::string::npos ||
@@ -221,9 +221,9 @@ TEST_F(RdeHandlerTest, ExtractRouteOfAdministration) {
 
 TEST_F(RdeHandlerTest, IvRouteOfAdministration) {
     auto msg = parse_rde(rde_samples::RDE_O11_IV_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxr = msg->segment("RXR");
+    auto rxr = msg.value().segment("RXR");
     ASSERT_TRUE(rxr != nullptr);
 
     EXPECT_TRUE(rxr->field_value(1).find("IV") != std::string::npos);
@@ -235,9 +235,9 @@ TEST_F(RdeHandlerTest, IvRouteOfAdministration) {
 
 TEST_F(RdeHandlerTest, ExtractTimingQuantity) {
     auto msg = parse_rde(rde_samples::RDE_O11_IV_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto tq1 = msg->segment("TQ1");
+    auto tq1 = msg.value().segment("TQ1");
     ASSERT_TRUE(tq1 != nullptr);
 
     // TQ1-3 is Repeat Pattern (Q12H)
@@ -246,9 +246,9 @@ TEST_F(RdeHandlerTest, ExtractTimingQuantity) {
 
 TEST_F(RdeHandlerTest, ExtractDispenseQuantity) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxe = msg->segment("RXE");
+    auto rxe = msg.value().segment("RXE");
     ASSERT_TRUE(rxe != nullptr);
 
     // RXE-10 is Dispense Amount
@@ -263,9 +263,9 @@ TEST_F(RdeHandlerTest, ExtractDispenseQuantity) {
 
 TEST_F(RdeHandlerTest, ExtractAllergyInfo) {
     auto msg = parse_rde(rde_samples::RDE_WITH_ALLERGY);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto al1 = msg->segment("AL1");
+    auto al1 = msg.value().segment("AL1");
     ASSERT_TRUE(al1 != nullptr);
 
     // AL1-2 is Allergen Type (DA = Drug Allergy)
@@ -282,9 +282,9 @@ TEST_F(RdeHandlerTest, ExtractAllergyInfo) {
 
 TEST_F(RdeHandlerTest, ExtractComponentInfo) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxc = msg->segment("RXC");
+    auto rxc = msg.value().segment("RXC");
     ASSERT_TRUE(rxc != nullptr);
 
     // RXC-1 is Component Type (B = Base)
@@ -299,9 +299,9 @@ TEST_F(RdeHandlerTest, ExtractComponentInfo) {
 
 TEST_F(RdeHandlerTest, ExtractPrescriberInfo) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxe = msg->segment("RXE");
+    auto rxe = msg.value().segment("RXE");
     ASSERT_TRUE(rxe != nullptr);
 
     // RXE-13 is Ordering Provider
@@ -314,9 +314,9 @@ TEST_F(RdeHandlerTest, ExtractPrescriberInfo) {
 
 TEST_F(RdeHandlerTest, ExtractPatientFromRde) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pid = msg->segment("PID");
+    auto pid = msg.value().segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     EXPECT_TRUE(pid->field_value(3).find("12345") != std::string::npos);
@@ -334,9 +334,9 @@ TEST_F(RdeHandlerTest, MissingRxeSegment) {
         "ORC|NW|ORD001^HIS|RX001^PHARMACY||E\r";
 
     auto msg = parse_rde(invalid_rde);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto rxe = msg->segment("RXE");
+    auto rxe = msg.value().segment("RXE");
     EXPECT_TRUE(rxe == nullptr);
 }
 
@@ -347,9 +347,9 @@ TEST_F(RdeHandlerTest, EmptyMedicationCode) {
         "RXE|1||||\r";
 
     auto msg = parse_rde(rde_no_med);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_TRUE(extract_medication_code(*msg).empty());
+    EXPECT_TRUE(extract_medication_code(msg.value()).empty());
 }
 
 // =============================================================================
@@ -358,9 +358,9 @@ TEST_F(RdeHandlerTest, EmptyMedicationCode) {
 
 TEST_F(RdeHandlerTest, BuildAckForRde) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Order received");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Order received");
 
     // ack is hl7_message directly, no has_value check needed
     EXPECT_STREQ(to_string(ack.type()), "ACK");
@@ -368,9 +368,9 @@ TEST_F(RdeHandlerTest, BuildAckForRde) {
 
 TEST_F(RdeHandlerTest, BuildAckForInvalidOrder) {
     auto msg = parse_rde(rde_samples::RDE_WITH_ALLERGY);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AR, "Drug allergy conflict detected");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AR, "Drug allergy conflict detected");
 
     // ack is hl7_message directly, no has_value check needed
     auto msa = ack.segment("MSA");

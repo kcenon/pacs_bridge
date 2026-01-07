@@ -208,9 +208,9 @@ TEST_F(OutboundRouterTest, RouteBeforeStart) {
                           .control_id("MSG001")
                           .build();
 
-    ASSERT_TRUE(msg_result.has_value());
+    ASSERT_TRUE(msg_result.is_ok());
 
-    auto route_result = router.route(*msg_result);
+    auto route_result = router.route(msg_result.value());
     EXPECT_FALSE(route_result.has_value());
     EXPECT_EQ(route_result.error(), outbound_error::not_running);
 }

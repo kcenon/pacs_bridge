@@ -42,8 +42,8 @@ protected:
             .patient_id("12345")
             .patient_name("DOE", "JOHN")
             .build();
-        ASSERT_TRUE(result.has_value()) << "Failed to create test message";
-        test_message_ = std::move(*result);
+        ASSERT_TRUE(result.is_ok()) << "Failed to create test message";
+        test_message_ = std::move(result.value());
     }
 
     hl7_message test_message_;

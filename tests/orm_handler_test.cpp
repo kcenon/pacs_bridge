@@ -245,15 +245,15 @@ bool test_orm_error_to_string() {
 bool test_extract_order_info_nw() {
     hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_NW);
-    TEST_ASSERT(parse_result.has_value(), "Should parse NW message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse NW message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    auto info_result = handler.extract_order_info(*parse_result);
-    TEST_ASSERT(info_result.has_value(), "Should extract order info");
+    auto info_result = handler.extract_order_info(parse_result.value());
+    TEST_ASSERT(info_result.is_ok(), "Should extract order info");
 
-    const auto& info = *info_result;
+    const auto& info = info_result.value();
     TEST_ASSERT(info.control == order_control::new_order,
                 "Control should be new_order");
     TEST_ASSERT(info.status == order_status::scheduled,
@@ -277,15 +277,15 @@ bool test_extract_order_info_nw() {
 bool test_extract_order_info_xo() {
     hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_XO);
-    TEST_ASSERT(parse_result.has_value(), "Should parse XO message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse XO message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    auto info_result = handler.extract_order_info(*parse_result);
-    TEST_ASSERT(info_result.has_value(), "Should extract order info");
+    auto info_result = handler.extract_order_info(parse_result.value());
+    TEST_ASSERT(info_result.is_ok(), "Should extract order info");
 
-    const auto& info = *info_result;
+    const auto& info = info_result.value();
     TEST_ASSERT(info.control == order_control::change_order,
                 "Control should be change_order");
 
@@ -295,15 +295,15 @@ bool test_extract_order_info_xo() {
 bool test_extract_order_info_ca() {
     hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_CA);
-    TEST_ASSERT(parse_result.has_value(), "Should parse CA message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse CA message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    auto info_result = handler.extract_order_info(*parse_result);
-    TEST_ASSERT(info_result.has_value(), "Should extract order info");
+    auto info_result = handler.extract_order_info(parse_result.value());
+    TEST_ASSERT(info_result.is_ok(), "Should extract order info");
 
-    const auto& info = *info_result;
+    const auto& info = info_result.value();
     TEST_ASSERT(info.control == order_control::cancel_order,
                 "Control should be cancel_order");
     TEST_ASSERT(info.status == order_status::cancelled,
@@ -362,12 +362,12 @@ bool test_handler_with_custom_config() {
 bool test_can_handle_orm_message() {
     hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_NW);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    TEST_ASSERT(handler.can_handle(*parse_result) == true,
+    TEST_ASSERT(handler.can_handle(parse_result.value()) == true,
                 "Should be able to handle ORM message");
 
     return true;
@@ -381,12 +381,12 @@ bool test_cannot_handle_adt_message() {
 
     hl7_parser parser;
     auto parse_result = parser.parse(adt_msg);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ADT message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ADT message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    TEST_ASSERT(handler.can_handle(*parse_result) == false,
+    TEST_ASSERT(handler.can_handle(parse_result.value()) == false,
                 "Should not be able to handle ADT message");
 
     return true;
@@ -456,12 +456,12 @@ bool test_reset_statistics() {
 bool test_generate_ack_success() {
     hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_NW);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    auto ack = handler.generate_ack(*parse_result, true);
+    auto ack = handler.generate_ack(parse_result.value(), true);
 
     auto header = ack.header();
     TEST_ASSERT(header.type == message_type::ACK, "ACK type should be ACK");
@@ -479,12 +479,12 @@ bool test_generate_ack_success() {
 bool test_generate_ack_error() {
     hl7_parser parser;
     auto parse_result = parser.parse(SAMPLE_ORM_NW);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM message");
 
     auto mwl = std::make_shared<mock_mwl_client>();
     orm_handler handler(std::static_pointer_cast<pacs_adapter::mwl_client>(mwl));
 
-    auto ack = handler.generate_ack(*parse_result, false, "AE", "Order not found");
+    auto ack = handler.generate_ack(parse_result.value(), false, "AE", "Order not found");
 
     const auto* msa = ack.segment("MSA");
     TEST_ASSERT(msa != nullptr, "ACK should have MSA segment");

@@ -247,8 +247,8 @@ private:
         auto parse_result = parser.parse(original.to_string());
 
         std::string msg_control_id = "0";
-        if (parse_result.has_value()) {
-            msg_control_id = parse_result->get_value("MSH.10");
+        if (parse_result.is_ok()) {
+            msg_control_id = parse_result.value().get_value("MSH.10");
         }
 
         auto now = std::chrono::system_clock::now();
@@ -751,8 +751,8 @@ bool test_message_duplicate_detection() {
 
     for (const auto& raw_msg : messages) {
         auto parsed = parser.parse(raw_msg);
-        if (parsed.has_value()) {
-            unique_ids.insert(std::string(parsed->get_value("MSH.10")));
+        if (parsed.is_ok()) {
+            unique_ids.insert(std::string(parsed.value().get_value("MSH.10")));
         }
     }
 
