@@ -618,6 +618,22 @@ private:
 
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
     /**
+     * @brief Clean up completed futures from worker_futures_ vector
+     *
+     * Removes futures that are ready (completed) to prevent unbounded growth.
+     */
+    void cleanup_completed_futures() {
+        worker_futures_.erase(
+            std::remove_if(worker_futures_.begin(), worker_futures_.end(),
+                           [](const std::future<void>& f) {
+                               return f.valid() &&
+                                      f.wait_for(std::chrono::milliseconds{0}) ==
+                                          std::future_status::ready;
+                           }),
+            worker_futures_.end());
+    }
+
+    /**
      * @brief Schedule worker job using IExecutor
      *
      * Processes a single work item and reschedules itself for continuous operation.
@@ -626,6 +642,9 @@ private:
         if (stop_workers_ || !config_.executor) {
             return;
         }
+
+        // Clean up completed futures to prevent unbounded growth
+        cleanup_completed_futures();
 
         auto job = std::make_unique<mpps_workflow_worker_job>([this]() {
             if (stop_workers_) {
