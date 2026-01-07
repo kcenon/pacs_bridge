@@ -38,7 +38,7 @@ hl7_parser::~hl7_parser() = default;
 hl7_parser::hl7_parser(hl7_parser&&) noexcept = default;
 hl7_parser& hl7_parser::operator=(hl7_parser&&) noexcept = default;
 
-std::expected<hl7_message, hl7_error> hl7_parser::parse(
+Result<hl7_message> hl7_parser::parse(
     std::string_view data, parse_details* details) const {
     // Start tracing span
     auto span = tracing::trace_manager::instance().start_span(
@@ -61,20 +61,20 @@ std::expected<hl7_message, hl7_error> hl7_parser::parse(
 
     // Size checks
     if (processed.empty()) {
-        return std::unexpected(hl7_error::empty_message);
+        return to_error_info(hl7_error::empty_message);
     }
 
     if (processed.size() > pimpl_->options_.max_message_size) {
-        return std::unexpected(hl7_error::message_too_large);
+        return to_error_info(hl7_error::message_too_large);
     }
 
     // Extract encoding characters
     auto encoding_result = extract_encoding(processed);
-    if (!encoding_result) {
-        return std::unexpected(encoding_result.error());
+    if (!encoding_result.is_ok()) {
+        return encoding_result.error();
     }
 
-    auto result = parse(processed, *encoding_result, details);
+    auto result = parse(processed, encoding_result.value(), details);
 
     if (details) {
         auto end = std::chrono::steady_clock::now();
@@ -95,20 +95,20 @@ std::expected<hl7_message, hl7_error> hl7_parser::parse(
         }
     }
 
-    if (!result) {
+    if (!result.is_ok()) {
         span.set_error("HL7 parsing failed");
     }
 
     return result;
 }
 
-std::expected<hl7_message, hl7_error> hl7_parser::parse(
+Result<hl7_message> hl7_parser::parse(
     std::span<const uint8_t> data, parse_details* details) const {
     std::string_view sv(reinterpret_cast<const char*>(data.data()), data.size());
     return parse(sv, details);
 }
 
-std::expected<hl7_message, hl7_error> hl7_parser::parse(
+Result<hl7_message> hl7_parser::parse(
     std::string_view data, const hl7_encoding_characters& encoding,
     parse_details* details) const {
     auto result = hl7_message::parse(data, encoding);
@@ -142,22 +142,26 @@ std::expected<hl7_message, hl7_error> hl7_parser::parse(
 
             // In strict mode, fail on validation errors
             if (!pimpl_->options_.lenient_mode) {
-                return std::unexpected(hl7_error::validation_failed);
+                return to_error_info(hl7_error::validation_failed);
             }
         }
     }
 
-    return result;
+    // Convert std::expected to Result
+    if (result) {
+        return *result;
+    }
+    return to_error_info(result.error());
 }
 
-std::expected<hl7_encoding_characters, hl7_error> hl7_parser::extract_encoding(
+Result<hl7_encoding_characters> hl7_parser::extract_encoding(
     std::string_view data) {
     if (data.length() < 8) {
-        return std::unexpected(hl7_error::invalid_msh);
+        return to_error_info(hl7_error::invalid_msh);
     }
 
     if (data.substr(0, 3) != "MSH") {
-        return std::unexpected(hl7_error::missing_msh);
+        return to_error_info(hl7_error::missing_msh);
     }
 
     hl7_encoding_characters encoding;
@@ -173,12 +177,12 @@ std::expected<hl7_encoding_characters, hl7_error> hl7_parser::extract_encoding(
     return encoding;
 }
 
-std::expected<hl7_message_header, hl7_error> hl7_parser::extract_header(
+Result<hl7_message_header> hl7_parser::extract_header(
     std::string_view data) {
     // Parse just enough to get the header
     auto encoding_result = extract_encoding(data);
-    if (!encoding_result) {
-        return std::unexpected(encoding_result.error());
+    if (!encoding_result.is_ok()) {
+        return encoding_result.error();
     }
 
     // Find end of MSH segment
@@ -188,16 +192,16 @@ std::expected<hl7_message_header, hl7_error> hl7_parser::extract_header(
     }
 
     // Parse MSH segment
-    auto msh_result = hl7_segment::parse(data.substr(0, msh_end), *encoding_result);
+    auto msh_result = hl7_segment::parse(data.substr(0, msh_end), encoding_result.value());
     if (!msh_result) {
-        return std::unexpected(msh_result.error());
+        return to_error_info(msh_result.error());
     }
 
     // Build header from MSH
     hl7_message_header header;
     const auto& msh = *msh_result;
 
-    header.encoding = *encoding_result;
+    header.encoding = encoding_result.value();
     header.sending_application = std::string(msh.field_value(3));
     header.sending_facility = std::string(msh.field_value(4));
     header.receiving_application = std::string(msh.field_value(5));
@@ -344,9 +348,13 @@ void hl7_parser::set_options(const parser_options& options) {
     pimpl_->options_ = options;
 }
 
-std::expected<hl7_segment, hl7_error> hl7_parser::parse_segment(
+Result<hl7_segment> hl7_parser::parse_segment(
     std::string_view segment_data, const hl7_encoding_characters& encoding) {
-    return hl7_segment::parse(segment_data, encoding);
+    auto result = hl7_segment::parse(segment_data, encoding);
+    if (result) {
+        return *result;
+    }
+    return to_error_info(result.error());
 }
 
 std::vector<std::string_view> hl7_parser::split_segments(std::string_view data) {
@@ -405,7 +413,7 @@ hl7_streaming_parser::hl7_streaming_parser(const parser_options& options)
 
 hl7_streaming_parser::~hl7_streaming_parser() = default;
 
-std::expected<void, hl7_error> hl7_streaming_parser::feed(std::string_view data) {
+VoidResult hl7_streaming_parser::feed(std::string_view data) {
     pimpl_->buffer_.append(data);
 
     // Process complete segments
@@ -431,14 +439,14 @@ std::expected<void, hl7_error> hl7_streaming_parser::feed(std::string_view data)
             // First segment should be MSH
             if (!pimpl_->encoding_) {
                 auto enc_result = hl7_parser::extract_encoding(segment_data);
-                if (!enc_result) {
-                    return std::unexpected(enc_result.error());
+                if (!enc_result.is_ok()) {
+                    return enc_result.error();
                 }
-                pimpl_->encoding_ = *enc_result;
+                pimpl_->encoding_ = enc_result.value();
 
                 auto header_result = hl7_parser::extract_header(segment_data);
-                if (header_result) {
-                    pimpl_->header_ = *header_result;
+                if (header_result.is_ok()) {
+                    pimpl_->header_ = header_result.value();
                 }
             }
 
@@ -447,7 +455,7 @@ std::expected<void, hl7_error> hl7_streaming_parser::feed(std::string_view data)
                 hl7_segment::parse(segment_data, *pimpl_->encoding_);
             if (!seg_result) {
                 if (!pimpl_->options_.lenient_mode) {
-                    return std::unexpected(seg_result.error());
+                    return to_error_info(seg_result.error());
                 }
             } else {
                 // Invoke callback
@@ -467,15 +475,14 @@ std::expected<void, hl7_error> hl7_streaming_parser::feed(std::string_view data)
         pimpl_->buffer_.erase(0, seg_end + 1);
     }
 
-    return {};
+    return kcenon::common::ok();
 }
 
 void hl7_streaming_parser::set_segment_callback(segment_callback callback) {
     pimpl_->callback_ = std::move(callback);
 }
 
-std::expected<std::optional<hl7_message>, hl7_error>
-hl7_streaming_parser::finish() {
+Result<std::optional<hl7_message>> hl7_streaming_parser::finish() {
     // Process any remaining data
     if (!pimpl_->buffer_.empty()) {
         // Final segment without terminator
@@ -503,7 +510,7 @@ hl7_streaming_parser::finish() {
     }
 
     if (pimpl_->segments_.empty()) {
-        return std::nullopt;
+        return Result<std::optional<hl7_message>>::ok(std::nullopt);
     }
 
     // Build message from collected segments
@@ -517,7 +524,7 @@ hl7_streaming_parser::finish() {
     pimpl_->segments_.clear();
     pimpl_->segment_index_ = 0;
 
-    return msg;
+    return Result<std::optional<hl7_message>>::ok(std::move(msg));
 }
 
 void hl7_streaming_parser::reset() {

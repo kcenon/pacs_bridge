@@ -164,11 +164,7 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse(std::string_view raw) {
-        return parser_->parse(std::string(raw));
-    }
-
-    std::expected<hl7_message, hl7_error> parse(const std::string& raw) {
+    Result<hl7_message> parse(std::string_view raw) {
         return parser_->parse(raw);
     }
 
@@ -230,9 +226,9 @@ protected:
 
 TEST_F(Hl7EncodingTest, ParseAsciiMessage) {
     auto msg = parse(encoding_samples::MSG_ASCII);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_TRUE(name.find("DOE") != std::string::npos);
     EXPECT_TRUE(is_valid_utf8(name));
 }
@@ -243,31 +239,31 @@ TEST_F(Hl7EncodingTest, ParseAsciiMessage) {
 
 TEST_F(Hl7EncodingTest, ParseUtf8Korean) {
     auto msg = parse(encoding_samples::MSG_UTF8_KOREAN);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string charset = extract_character_set(*msg);
+    std::string charset = extract_character_set(msg.value());
     EXPECT_TRUE(charset.find("UTF-8") != std::string::npos ||
                 charset.find("UNICODE") != std::string::npos);
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
     EXPECT_TRUE(is_valid_utf8(name));
 }
 
 TEST_F(Hl7EncodingTest, ParseUtf8Japanese) {
     auto msg = parse(encoding_samples::MSG_UTF8_JAPANESE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
     EXPECT_TRUE(is_valid_utf8(name));
 }
 
 TEST_F(Hl7EncodingTest, ParseUtf8Chinese) {
     auto msg = parse(encoding_samples::MSG_UTF8_CHINESE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
     EXPECT_TRUE(is_valid_utf8(name));
 }
@@ -278,36 +274,36 @@ TEST_F(Hl7EncodingTest, ParseUtf8Chinese) {
 
 TEST_F(Hl7EncodingTest, ParseIso88591German) {
     auto msg = parse(encoding_samples::MSG_ISO_8859_1_GERMAN);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string charset = extract_character_set(*msg);
+    std::string charset = extract_character_set(msg.value());
     EXPECT_TRUE(charset.find("8859") != std::string::npos);
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
 }
 
 TEST_F(Hl7EncodingTest, ParseIso88591French) {
     auto msg = parse(encoding_samples::MSG_ISO_8859_1_FRENCH);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
 }
 
 TEST_F(Hl7EncodingTest, ParseIso88591Nordic) {
     auto msg = parse(encoding_samples::MSG_ISO_8859_1_NORDIC);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
 }
 
 TEST_F(Hl7EncodingTest, ParseIso88591Spanish) {
     auto msg = parse(encoding_samples::MSG_ISO_8859_1_SPANISH);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_FALSE(name.empty());
 }
 
@@ -317,27 +313,27 @@ TEST_F(Hl7EncodingTest, ParseIso88591Spanish) {
 
 TEST_F(Hl7EncodingTest, DetectUtf8Encoding) {
     auto msg = parse(encoding_samples::MSG_UTF8_KOREAN);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string charset = extract_character_set(*msg);
+    std::string charset = extract_character_set(msg.value());
     EXPECT_TRUE(charset.find("UTF-8") != std::string::npos ||
                 charset.find("UNICODE") != std::string::npos);
 }
 
 TEST_F(Hl7EncodingTest, DetectIso88591Encoding) {
     auto msg = parse(encoding_samples::MSG_ISO_8859_1_GERMAN);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string charset = extract_character_set(*msg);
+    std::string charset = extract_character_set(msg.value());
     EXPECT_TRUE(charset.find("8859") != std::string::npos);
 }
 
 TEST_F(Hl7EncodingTest, DefaultEncodingWhenNotSpecified) {
     auto msg = parse(encoding_samples::MSG_ASCII);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // When no encoding specified, should handle as ASCII/default
-    std::string charset = extract_character_set(*msg);
+    std::string charset = extract_character_set(msg.value());
     // Empty or default charset is acceptable
 }
 
@@ -347,9 +343,9 @@ TEST_F(Hl7EncodingTest, DefaultEncodingWhenNotSpecified) {
 
 TEST_F(Hl7EncodingTest, ParseEscapeSequences) {
     auto msg = parse(encoding_samples::MSG_ESCAPE_CHARS);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pid = msg->segment("PID");
+    auto pid = msg.value().segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // O'BRIEN should be preserved
@@ -360,9 +356,9 @@ TEST_F(Hl7EncodingTest, ParseEscapeSequences) {
 
 TEST_F(Hl7EncodingTest, ParseAddressWithEscapedFieldSeparator) {
     auto msg = parse(encoding_samples::MSG_ESCAPE_CHARS);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pid = msg->segment("PID");
+    auto pid = msg.value().segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // Address with \F\ escape (field separator in address)
@@ -372,9 +368,9 @@ TEST_F(Hl7EncodingTest, ParseAddressWithEscapedFieldSeparator) {
 
 TEST_F(Hl7EncodingTest, ParseObxWithEscapeSequences) {
     auto msg = parse(encoding_samples::MSG_ESCAPE_CHARS);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto obx = msg->segment("OBX");
+    auto obx = msg.value().segment("OBX");
     ASSERT_TRUE(obx != nullptr);
 
     // OBX-5 contains \T\ (subcomponent separator) and \R\ (repetition)
@@ -399,29 +395,29 @@ TEST_F(Hl7EncodingTest, HandleInvalidUtf8Sequence) {
 
 TEST_F(Hl7EncodingTest, RoundTripUtf8) {
     auto msg = parse(encoding_samples::MSG_UTF8_KOREAN);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // Build the message back
-    std::string rebuilt = msg->serialize();
+    std::string rebuilt = msg.value().serialize();
     EXPECT_FALSE(rebuilt.empty());
 
     // Parse the rebuilt message
     auto reparsed = parse(rebuilt);
-    ASSERT_TRUE(reparsed.has_value());
+    ASSERT_TRUE(reparsed.is_ok());
 
     // Verify content preserved
-    EXPECT_EQ(extract_patient_name(*msg), extract_patient_name(*reparsed));
+    EXPECT_EQ(extract_patient_name(msg.value()), extract_patient_name(reparsed.value()));
 }
 
 TEST_F(Hl7EncodingTest, RoundTripAscii) {
     auto msg = parse(encoding_samples::MSG_ASCII);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string rebuilt = msg->serialize();
+    std::string rebuilt = msg.value().serialize();
     auto reparsed = parse(rebuilt);
-    ASSERT_TRUE(reparsed.has_value());
+    ASSERT_TRUE(reparsed.is_ok());
 
-    EXPECT_EQ(extract_patient_name(*msg), extract_patient_name(*reparsed));
+    EXPECT_EQ(extract_patient_name(msg.value()), extract_patient_name(reparsed.value()));
 }
 
 // =============================================================================
@@ -451,9 +447,9 @@ TEST_F(Hl7EncodingTest, ValidateAsciiSubsetOfUtf8) {
 TEST_F(Hl7EncodingTest, ParseThreeByteUtf8) {
     // Korean characters are 3-byte UTF-8
     auto msg = parse(encoding_samples::MSG_UTF8_KOREAN);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     // Each Korean character should be 3 bytes
     EXPECT_GT(name.size(), 3);
 }
@@ -466,9 +462,9 @@ TEST_F(Hl7EncodingTest, ParseTwoByteUtf8) {
         "PID|1||12345^^^HOSPITAL^MR||M\xC3\xBCLLER^HANS||19800515|M\r";
 
     auto msg = parse(msg_with_umlaut);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string name = extract_patient_name(*msg);
+    std::string name = extract_patient_name(msg.value());
     EXPECT_TRUE(is_valid_utf8(name));
 }
 
@@ -488,9 +484,9 @@ TEST_F(Hl7EncodingTest, BuildMessageWithUtf8) {
     builder.message_type("ADT", "A01");
 
     auto msg = builder.build();
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string charset = extract_character_set(*msg);
+    std::string charset = extract_character_set(msg.value());
     EXPECT_TRUE(charset.find("UTF-8") != std::string::npos ||
                 charset.find("UNICODE") != std::string::npos);
 }

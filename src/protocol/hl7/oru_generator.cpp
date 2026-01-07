@@ -23,13 +23,13 @@ public:
 
     explicit impl(const oru_generator_config& config) : config_(config) {}
 
-    [[nodiscard]] std::expected<hl7_message, hl7_error> generate(
+    [[nodiscard]] Result<hl7_message> generate(
         const oru_study_info& study,
         std::string_view report_text,
         report_status status) const {
 
         if (!study.is_valid()) {
-            return std::unexpected(hl7_error::missing_required_field);
+            return to_error_info(hl7_error::missing_required_field);
         }
 
         // Create builder with configured options
@@ -98,14 +98,14 @@ public:
 
         // Build OBX segment for report text
         auto result = build_obx_segment(builder, report_text, status);
-        if (!result) {
-            return std::unexpected(result.error());
+        if (!result.is_ok()) {
+            return result.error();
         }
 
         return builder.build();
     }
 
-    [[nodiscard]] std::expected<void, hl7_error> build_obx_segment(
+    [[nodiscard]] VoidResult build_obx_segment(
         hl7_builder& builder,
         std::string_view report_text,
         report_status status) const {
@@ -139,7 +139,7 @@ public:
         // OBX-14: Date/Time of observation
         obx.set_field(14, hl7_timestamp::now().to_string());
 
-        return {};
+        return kcenon::common::ok();
     }
 
     [[nodiscard]] static std::string encode_report_text(
@@ -269,7 +269,7 @@ oru_generator::~oru_generator() = default;
 oru_generator::oru_generator(oru_generator&&) noexcept = default;
 oru_generator& oru_generator::operator=(oru_generator&&) noexcept = default;
 
-std::expected<hl7_message, hl7_error> oru_generator::generate(
+Result<hl7_message> oru_generator::generate(
     const oru_study_info& study,
     std::string_view report_text,
     report_status status) const {
@@ -286,7 +286,7 @@ std::expected<hl7_message, hl7_error> oru_generator::generate(
         end - start);
     metrics.record_hl7_processing_duration("ORU", duration);
 
-    if (result) {
+    if (result.is_ok()) {
         metrics.record_hl7_message_sent("ORU");
     } else {
         metrics.record_hl7_error("ORU", "generation_failed");
@@ -295,25 +295,25 @@ std::expected<hl7_message, hl7_error> oru_generator::generate(
     return result;
 }
 
-std::expected<hl7_message, hl7_error> oru_generator::generate_preliminary(
+Result<hl7_message> oru_generator::generate_preliminary(
     const oru_study_info& study,
     std::string_view report_text) const {
     return generate(study, report_text, report_status::preliminary);
 }
 
-std::expected<hl7_message, hl7_error> oru_generator::generate_final(
+Result<hl7_message> oru_generator::generate_final(
     const oru_study_info& study,
     std::string_view report_text) const {
     return generate(study, report_text, report_status::final_report);
 }
 
-std::expected<hl7_message, hl7_error> oru_generator::generate_corrected(
+Result<hl7_message> oru_generator::generate_corrected(
     const oru_study_info& study,
     std::string_view report_text) const {
     return generate(study, report_text, report_status::corrected);
 }
 
-std::expected<hl7_message, hl7_error> oru_generator::generate_cancelled(
+Result<hl7_message> oru_generator::generate_cancelled(
     const oru_study_info& study,
     std::string_view cancellation_reason) const {
     std::string reason = cancellation_reason.empty()
@@ -322,16 +322,16 @@ std::expected<hl7_message, hl7_error> oru_generator::generate_cancelled(
     return generate(study, reason, report_status::cancelled);
 }
 
-std::expected<std::string, hl7_error> oru_generator::generate_string(
+Result<std::string> oru_generator::generate_string(
     const oru_study_info& study,
     std::string_view report_text,
     report_status status) {
     oru_generator gen;
     auto result = gen.generate(study, report_text, status);
-    if (!result) {
-        return std::unexpected(result.error());
+    if (!result.is_ok()) {
+        return result.error();
     }
-    return result->serialize();
+    return result.value().serialize();
 }
 
 const oru_generator_config& oru_generator::config() const noexcept {

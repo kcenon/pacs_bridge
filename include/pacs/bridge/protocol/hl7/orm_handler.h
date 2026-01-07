@@ -27,7 +27,6 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
-#include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -112,6 +111,24 @@ enum class orm_error : int {
         default:
             return "Unknown ORM handler error";
     }
+}
+
+/**
+ * @brief Convert orm_error to error_info for Result<T>
+ *
+ * @param error ORM error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    orm_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "hl7::orm",
+        details
+    };
 }
 
 // =============================================================================
@@ -511,7 +528,7 @@ public:
      * @param message HL7 ORM message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<orm_result, orm_error> handle(
+    [[nodiscard]] Result<orm_result> handle(
         const hl7_message& message);
 
     /**
@@ -542,7 +559,7 @@ public:
      * @param message HL7 ORM message with NW control
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<orm_result, orm_error> handle_new_order(
+    [[nodiscard]] Result<orm_result> handle_new_order(
         const hl7_message& message);
 
     /**
@@ -554,7 +571,7 @@ public:
      * @param message HL7 ORM message with XO control
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<orm_result, orm_error> handle_change_order(
+    [[nodiscard]] Result<orm_result> handle_change_order(
         const hl7_message& message);
 
     /**
@@ -565,7 +582,7 @@ public:
      * @param message HL7 ORM message with CA control
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<orm_result, orm_error> handle_cancel_order(
+    [[nodiscard]] Result<orm_result> handle_cancel_order(
         const hl7_message& message);
 
     /**
@@ -576,7 +593,7 @@ public:
      * @param message HL7 ORM message with DC control
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<orm_result, orm_error> handle_discontinue_order(
+    [[nodiscard]] Result<orm_result> handle_discontinue_order(
         const hl7_message& message);
 
     /**
@@ -588,7 +605,7 @@ public:
      * @param message HL7 ORM message with SC control
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<orm_result, orm_error> handle_status_change(
+    [[nodiscard]] Result<orm_result> handle_status_change(
         const hl7_message& message);
 
     // =========================================================================
@@ -604,7 +621,7 @@ public:
      * @param message HL7 ORM message
      * @return Extracted order information or error
      */
-    [[nodiscard]] std::expected<order_info, orm_error> extract_order_info(
+    [[nodiscard]] Result<order_info> extract_order_info(
         const hl7_message& message) const;
 
     /**

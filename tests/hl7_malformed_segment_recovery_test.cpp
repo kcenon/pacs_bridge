@@ -36,7 +36,7 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse(const std::string& raw) {
+    Result<hl7_message> parse(const std::string& raw) {
         return parser_->parse(raw);
     }
 
@@ -74,9 +74,9 @@ TEST_F(Hl7MalformedRecoveryTest, TruncatedAtSegmentBoundary) {
         "PV1";  // Segment name only
     auto msg = parse(truncated);
     // Should parse complete segments
-    if (msg.has_value()) {
-        EXPECT_TRUE(msg->segment("MSH") != nullptr);
-        EXPECT_TRUE(msg->segment("PID") != nullptr);
+    if (msg.is_ok()) {
+        EXPECT_TRUE(msg.value().segment("MSH") != nullptr);
+        EXPECT_TRUE(msg.value().segment("PID") != nullptr);
     }
 }
 
@@ -99,9 +99,9 @@ TEST_F(Hl7MalformedRecoveryTest, CorruptedSegmentName) {
         "PV1|1|I|WARD^101^A\r";
     auto msg = parse(corrupted);
     // Should skip corrupted segment or recover
-    if (msg.has_value()) {
-        EXPECT_TRUE(msg->segment("MSH") != nullptr);
-        EXPECT_TRUE(msg->segment("PV1") != nullptr);
+    if (msg.is_ok()) {
+        EXPECT_TRUE(msg.value().segment("MSH") != nullptr);
+        EXPECT_TRUE(msg.value().segment("PV1") != nullptr);
     }
 }
 
@@ -120,7 +120,7 @@ TEST_F(Hl7MalformedRecoveryTest, DoubleFieldSeparators) {
         "PID|1|||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r";  // Extra | after set ID
     auto msg = parse(corrupted);
     // Should handle double separators as empty field
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7MalformedRecoveryTest, MissingFieldSeparators) {
@@ -150,7 +150,7 @@ TEST_F(Hl7MalformedRecoveryTest, SegmentWithOnlySetId) {
         "PID|1\r"  // Only set ID
         "PV1|1|I\r";
     auto msg = parse(incomplete);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7MalformedRecoveryTest, ExtraLongSegmentName) {
@@ -175,11 +175,11 @@ TEST_F(Hl7MalformedRecoveryTest, ValidSegmentsAroundCorrupted) {
         "PV1|1|I|WARD^101^A\r";
     auto msg = parse(mixed);
     // Should recover valid segments
-    if (msg.has_value()) {
-        EXPECT_TRUE(msg->segment("MSH") != nullptr);
-        EXPECT_TRUE(msg->segment("EVN") != nullptr);
-        EXPECT_TRUE(msg->segment("PID") != nullptr);
-        EXPECT_TRUE(msg->segment("PV1") != nullptr);
+    if (msg.is_ok()) {
+        EXPECT_TRUE(msg.value().segment("MSH") != nullptr);
+        EXPECT_TRUE(msg.value().segment("EVN") != nullptr);
+        EXPECT_TRUE(msg.value().segment("PID") != nullptr);
+        EXPECT_TRUE(msg.value().segment("PV1") != nullptr);
     }
 }
 
@@ -268,12 +268,12 @@ TEST_F(Hl7MalformedRecoveryTest, RecoverValidMessageAfterFailedParse) {
     // First parse a corrupted message
     std::string corrupted = "TOTALLY INVALID MESSAGE";
     auto msg1 = parse(corrupted);
-    EXPECT_FALSE(msg1.has_value());
+    EXPECT_FALSE(msg1.is_ok());
 
     // Then parse a valid message - parser should recover
     std::string valid = create_valid_message();
     auto msg2 = parse(valid);
-    EXPECT_TRUE(msg2.has_value());
+    EXPECT_TRUE(msg2.is_ok());
 }
 
 // =============================================================================
@@ -289,8 +289,8 @@ TEST_F(Hl7MalformedRecoveryTest, CorruptedObxSegment) {
         "OBX|2|TX|NOTE2||Second note||||||F\r";
     auto msg = parse(corrupted);
     // Should parse valid OBX segments
-    if (msg.has_value()) {
-        auto obx_segments = msg->segments("OBX");
+    if (msg.is_ok()) {
+        auto obx_segments = msg.value().segments("OBX");
         // At least one valid OBX should be recovered
         EXPECT_GE(obx_segments.size(), 1);
     }
@@ -337,17 +337,17 @@ TEST_F(Hl7MalformedRecoveryTest, ExcessiveComponents) {
 
 TEST_F(Hl7MalformedRecoveryTest, EmptyMessageReturnsNoValue) {
     auto msg = parse("");
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 TEST_F(Hl7MalformedRecoveryTest, InvalidStartReturnsNoValue) {
     auto msg = parse("THIS IS NOT HL7");
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 TEST_F(Hl7MalformedRecoveryTest, ValidMessageReturnsValue) {
     auto msg = parse(create_valid_message());
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 // =============================================================================

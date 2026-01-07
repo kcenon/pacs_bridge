@@ -67,7 +67,7 @@ const std::string SAMPLE_ORU_R01 =
 hl7::hl7_message parse_message(const std::string& msg) {
     hl7::hl7_parser parser;
     auto result = parser.parse(msg);
-    return std::move(*result);
+    return std::move(result.value());
 }
 
 // =============================================================================

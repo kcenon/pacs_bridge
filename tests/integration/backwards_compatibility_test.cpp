@@ -139,8 +139,8 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse(std::string_view raw) {
-        return parser_->parse(std::string(raw));
+    Result<hl7_message> parse(std::string_view raw) {
+        return parser_->parse(raw);
     }
 
     // Extract HL7 version from message
@@ -164,32 +164,32 @@ protected:
 
 TEST_F(BackwardsCompatibilityTest, ParseVersion23) {
     auto msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(msg.has_value());
-    EXPECT_EQ(extract_version(*msg), "2.3");
+    ASSERT_TRUE(msg.is_ok());
+    EXPECT_EQ(extract_version(msg.value()), "2.3");
 }
 
 TEST_F(BackwardsCompatibilityTest, ParseVersion231) {
     auto msg = parse(version_samples::ADT_V231);
-    ASSERT_TRUE(msg.has_value());
-    EXPECT_EQ(extract_version(*msg), "2.3.1");
+    ASSERT_TRUE(msg.is_ok());
+    EXPECT_EQ(extract_version(msg.value()), "2.3.1");
 }
 
 TEST_F(BackwardsCompatibilityTest, ParseVersion24) {
     auto msg = parse(version_samples::ADT_V24);
-    ASSERT_TRUE(msg.has_value());
-    EXPECT_EQ(extract_version(*msg), "2.4");
+    ASSERT_TRUE(msg.is_ok());
+    EXPECT_EQ(extract_version(msg.value()), "2.4");
 }
 
 TEST_F(BackwardsCompatibilityTest, ParseVersion25) {
     auto msg = parse(version_samples::ADT_V25);
-    ASSERT_TRUE(msg.has_value());
-    EXPECT_EQ(extract_version(*msg), "2.5");
+    ASSERT_TRUE(msg.is_ok());
+    EXPECT_EQ(extract_version(msg.value()), "2.5");
 }
 
 TEST_F(BackwardsCompatibilityTest, ParseVersion251) {
     auto msg = parse(version_samples::ADT_V251);
-    ASSERT_TRUE(msg.has_value());
-    EXPECT_EQ(extract_version(*msg), "2.5.1");
+    ASSERT_TRUE(msg.is_ok());
+    EXPECT_EQ(extract_version(msg.value()), "2.5.1");
 }
 
 // =============================================================================
@@ -198,25 +198,25 @@ TEST_F(BackwardsCompatibilityTest, ParseVersion251) {
 
 TEST_F(BackwardsCompatibilityTest, V23MessageStructure) {
     auto msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.3 should have basic segments
-    EXPECT_TRUE(msg->segment("MSH") != nullptr);
-    EXPECT_TRUE(msg->segment("EVN") != nullptr);
-    EXPECT_TRUE(msg->segment("PID") != nullptr);
-    EXPECT_TRUE(msg->segment("PV1") != nullptr);
+    EXPECT_TRUE(msg.value().segment("MSH") != nullptr);
+    EXPECT_TRUE(msg.value().segment("EVN") != nullptr);
+    EXPECT_TRUE(msg.value().segment("PID") != nullptr);
+    EXPECT_TRUE(msg.value().segment("PV1") != nullptr);
 }
 
 TEST_F(BackwardsCompatibilityTest, V251MessageStructure) {
     auto msg = parse(version_samples::ADT_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.5.1 may have additional segments like SFT
-    EXPECT_TRUE(msg->segment("MSH") != nullptr);
-    EXPECT_TRUE(msg->segment("SFT") != nullptr);  // Software segment
-    EXPECT_TRUE(msg->segment("EVN") != nullptr);
-    EXPECT_TRUE(msg->segment("PID") != nullptr);
-    EXPECT_TRUE(msg->segment("PV1") != nullptr);
+    EXPECT_TRUE(msg.value().segment("MSH") != nullptr);
+    EXPECT_TRUE(msg.value().segment("SFT") != nullptr);  // Software segment
+    EXPECT_TRUE(msg.value().segment("EVN") != nullptr);
+    EXPECT_TRUE(msg.value().segment("PID") != nullptr);
+    EXPECT_TRUE(msg.value().segment("PV1") != nullptr);
 }
 
 // =============================================================================
@@ -225,29 +225,29 @@ TEST_F(BackwardsCompatibilityTest, V251MessageStructure) {
 
 TEST_F(BackwardsCompatibilityTest, V23PatientId) {
     auto msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.3 uses PID-3 without identifier type
-    std::string pid = extract_patient_id(*msg);
+    std::string pid = extract_patient_id(msg.value());
     EXPECT_TRUE(pid.find("12345") != std::string::npos);
 }
 
 TEST_F(BackwardsCompatibilityTest, V24PatientIdWithType) {
     auto msg = parse(version_samples::ADT_V24);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.4 includes patient ID (MR type may be in subcomponents)
-    std::string pid = extract_patient_id(*msg);
+    std::string pid = extract_patient_id(msg.value());
     EXPECT_TRUE(pid.find("12345") != std::string::npos);
     // Note: field_value returns first component, full field includes MR in subcomponents
 }
 
 TEST_F(BackwardsCompatibilityTest, V251MultiplePatientIds) {
     auto msg = parse(version_samples::ADT_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.5.1 may have multiple patient IDs
-    std::string pid = extract_patient_id(*msg);
+    std::string pid = extract_patient_id(msg.value());
     EXPECT_TRUE(pid.find("12345") != std::string::npos);
     // May contain repetition separator for multiple IDs
 }
@@ -258,22 +258,22 @@ TEST_F(BackwardsCompatibilityTest, V251MultiplePatientIds) {
 
 TEST_F(BackwardsCompatibilityTest, V23MessageTypeFormat) {
     auto msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.3 uses simple type^event format
     // Use type() and trigger_event() for proper parsing
-    EXPECT_STREQ(to_string(msg->type()), "ADT");
-    EXPECT_EQ(msg->trigger_event(), "A01");
+    EXPECT_STREQ(to_string(msg.value().type()), "ADT");
+    EXPECT_EQ(msg.value().trigger_event(), "A01");
 }
 
 TEST_F(BackwardsCompatibilityTest, V251MessageTypeFormat) {
     auto msg = parse(version_samples::ADT_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.5.1 uses type^event^structure format
     // Parser provides type and trigger_event separately
-    EXPECT_STREQ(to_string(msg->type()), "ADT");
-    EXPECT_EQ(msg->trigger_event(), "A01");
+    EXPECT_STREQ(to_string(msg.value().type()), "ADT");
+    EXPECT_EQ(msg.value().trigger_event(), "A01");
 }
 
 // =============================================================================
@@ -282,18 +282,18 @@ TEST_F(BackwardsCompatibilityTest, V251MessageTypeFormat) {
 
 TEST_F(BackwardsCompatibilityTest, OrmV23Format) {
     auto msg = parse(version_samples::ORM_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "ORM");
-    EXPECT_TRUE(msg->segment("ORC") != nullptr);
-    EXPECT_TRUE(msg->segment("OBR") != nullptr);
+    EXPECT_STREQ(to_string(msg.value().type()), "ORM");
+    EXPECT_TRUE(msg.value().segment("ORC") != nullptr);
+    EXPECT_TRUE(msg.value().segment("OBR") != nullptr);
 }
 
 TEST_F(BackwardsCompatibilityTest, OrmV24Format) {
     auto msg = parse(version_samples::ORM_V24);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto orc = msg->segment("ORC");
+    auto orc = msg.value().segment("ORC");
     ASSERT_TRUE(orc != nullptr);
 
     // v2.4 ORC has more detailed placer/filler numbers
@@ -303,10 +303,10 @@ TEST_F(BackwardsCompatibilityTest, OrmV24Format) {
 
 TEST_F(BackwardsCompatibilityTest, OrmV251WithTq1) {
     auto msg = parse(version_samples::ORM_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.5.1 may include TQ1 for timing
-    auto tq1 = msg->segment("TQ1");
+    auto tq1 = msg.value().segment("TQ1");
     EXPECT_TRUE(tq1 != nullptr);
 }
 
@@ -316,20 +316,20 @@ TEST_F(BackwardsCompatibilityTest, OrmV251WithTq1) {
 
 TEST_F(BackwardsCompatibilityTest, OruV23Results) {
     auto msg = parse(version_samples::ORU_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto obx_segments = msg->segments("OBX");
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_GE(obx_segments.size(), 1);
 }
 
 TEST_F(BackwardsCompatibilityTest, OruV251Results) {
     auto msg = parse(version_samples::ORU_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // v2.5.1 ORU includes ORC segment
-    EXPECT_TRUE(msg->segment("ORC") != nullptr);
+    EXPECT_TRUE(msg.value().segment("ORC") != nullptr);
 
-    auto obx_segments = msg->segments("OBX");
+    auto obx_segments = msg.value().segments("OBX");
     EXPECT_GE(obx_segments.size(), 2);
 }
 
@@ -339,9 +339,9 @@ TEST_F(BackwardsCompatibilityTest, OruV251Results) {
 
 TEST_F(BackwardsCompatibilityTest, BuildAckForV23Message) {
     auto msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Message accepted");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Message accepted");
 
     // ACK should match source version
     EXPECT_EQ(extract_version(ack), "2.3");
@@ -349,9 +349,9 @@ TEST_F(BackwardsCompatibilityTest, BuildAckForV23Message) {
 
 TEST_F(BackwardsCompatibilityTest, BuildAckForV251Message) {
     auto msg = parse(version_samples::ADT_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Message accepted");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Message accepted");
 
     // ACK should match source version
     EXPECT_EQ(extract_version(ack), "2.5.1");
@@ -372,15 +372,15 @@ TEST_F(BackwardsCompatibilityTest, ExtractPatientNameAllVersions) {
 
     for (const auto& raw : messages) {
         auto msg = parse(raw);
-        ASSERT_TRUE(msg.has_value());
+        ASSERT_TRUE(msg.is_ok());
 
-        auto pid = msg->segment("PID");
+        auto pid = msg.value().segment("PID");
         ASSERT_TRUE(pid != nullptr);
 
         // All versions should have patient name in PID-5
         std::string name(pid->field_value(5));
         EXPECT_TRUE(name.find("DOE") != std::string::npos)
-            << "Failed to find DOE in version " << extract_version(*msg);
+            << "Failed to find DOE in version " << extract_version(msg.value());
     }
 }
 
@@ -395,15 +395,15 @@ TEST_F(BackwardsCompatibilityTest, ExtractDateOfBirthAllVersions) {
 
     for (const auto& raw : messages) {
         auto msg = parse(raw);
-        ASSERT_TRUE(msg.has_value());
+        ASSERT_TRUE(msg.is_ok());
 
-        auto pid = msg->segment("PID");
+        auto pid = msg.value().segment("PID");
         ASSERT_TRUE(pid != nullptr);
 
         // PID-7 is DOB in all versions
         std::string dob(pid->field_value(7));
         EXPECT_TRUE(dob.find("19800515") != std::string::npos)
-            << "Failed to find DOB in version " << extract_version(*msg);
+            << "Failed to find DOB in version " << extract_version(msg.value());
     }
 }
 
@@ -413,7 +413,7 @@ TEST_F(BackwardsCompatibilityTest, ExtractDateOfBirthAllVersions) {
 
 TEST_F(BackwardsCompatibilityTest, ParseV23ThenBuildV24) {
     auto v23_msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(v23_msg.has_value());
+    ASSERT_TRUE(v23_msg.is_ok());
 
     // Build new message based on v2.3 data
     auto builder = hl7_builder::create();
@@ -425,8 +425,8 @@ TEST_F(BackwardsCompatibilityTest, ParseV23ThenBuildV24) {
            .message_type("ADT", "A01");
 
     auto v24_msg = builder.build();
-    ASSERT_TRUE(v24_msg.has_value());
-    EXPECT_EQ(extract_version(*v24_msg), "2.4");
+    ASSERT_TRUE(v24_msg.is_ok());
+    EXPECT_EQ(extract_version(v24_msg.value()), "2.4");
 }
 
 // =============================================================================
@@ -435,9 +435,9 @@ TEST_F(BackwardsCompatibilityTest, ParseV23ThenBuildV24) {
 
 TEST_F(BackwardsCompatibilityTest, CharsetV23Default) {
     auto msg = parse(version_samples::ADT_V23);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto msh = msg->segment("MSH");
+    auto msh = msg.value().segment("MSH");
     ASSERT_TRUE(msh != nullptr);
 
     // v2.3 typically doesn't specify charset
@@ -448,9 +448,9 @@ TEST_F(BackwardsCompatibilityTest, CharsetV23Default) {
 
 TEST_F(BackwardsCompatibilityTest, CharsetV251Explicit) {
     auto msg = parse(version_samples::ADT_V251);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto msh = msg->segment("MSH");
+    auto msh = msg.value().segment("MSH");
     ASSERT_TRUE(msh != nullptr);
 
     // v2.5.1 explicitly specifies UTF-8

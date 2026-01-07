@@ -375,10 +375,10 @@ private:
         std::string sending_app = "TEST";
         std::string sending_facility = "FACILITY";
 
-        if (parse_result.has_value()) {
-            msg_control_id = parse_result->get_value("MSH.10");
-            sending_app = parse_result->get_value("MSH.3");
-            sending_facility = parse_result->get_value("MSH.4");
+        if (parse_result.is_ok()) {
+            msg_control_id = parse_result.value().get_value("MSH.10");
+            sending_app = parse_result.value().get_value("MSH.3");
+            sending_facility = parse_result.value().get_value("MSH.4");
         }
 
         // Build ACK message

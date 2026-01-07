@@ -28,7 +28,34 @@
 #include <variant>
 #include <vector>
 
+// Result<T> pattern - use stub for standalone builds
+#ifdef PACS_BRIDGE_STANDALONE_BUILD
+#include <pacs/bridge/internal/result_stub.h>
+#else
+#include <kcenon/common/patterns/result.h>
+#endif
+
 namespace pacs::bridge::hl7 {
+
+// =============================================================================
+// Result Type Aliases
+// =============================================================================
+
+/**
+ * @brief Result type alias for HL7 operations
+ */
+template<typename T>
+using Result = kcenon::common::Result<T>;
+
+/**
+ * @brief VoidResult type alias for operations with no return value
+ */
+using VoidResult = kcenon::common::VoidResult;
+
+/**
+ * @brief Error info type alias
+ */
+using error_info = kcenon::common::error_info;
 
 // =============================================================================
 // HL7 Protocol Constants
@@ -233,6 +260,24 @@ enum class hl7_error : int {
         default:
             return "Unknown HL7 error";
     }
+}
+
+/**
+ * @brief Convert hl7_error to error_info for Result<T>
+ *
+ * @param error HL7 error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    hl7_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "hl7",
+        details
+    };
 }
 
 // =============================================================================

@@ -198,8 +198,7 @@ siu_handler::~siu_handler() = default;
 siu_handler::siu_handler(siu_handler&&) noexcept = default;
 siu_handler& siu_handler::operator=(siu_handler&&) noexcept = default;
 
-std::expected<siu_result, siu_error> siu_handler::handle(
-    const hl7_message& message) {
+Result<siu_result> siu_handler::handle(const hl7_message& message) {
     auto start = std::chrono::steady_clock::now();
     pimpl_->stats_.total_processed++;
 
@@ -212,18 +211,18 @@ std::expected<siu_result, siu_error> siu_handler::handle(
     if (header.type != message_type::SIU) {
         pimpl_->stats_.failure_count++;
         metrics.record_hl7_error("SIU", "not_siu_message");
-        return std::unexpected(siu_error::not_siu_message);
+        return to_error_info(siu_error::not_siu_message);
     }
 
     // Extract appointment information
     auto appt_result = extract_appointment_info(message);
-    if (!appt_result) {
+    if (!appt_result.is_ok()) {
         pimpl_->stats_.failure_count++;
         metrics.record_hl7_error("SIU", "extraction_failed");
-        return std::unexpected(appt_result.error());
+        return appt_result.error();
     }
 
-    const auto& appt = *appt_result;
+    const auto& appt = appt_result.value();
 
     // Validate if configured
     if (pimpl_->config_.validate_appointment_data) {
@@ -231,12 +230,12 @@ std::expected<siu_result, siu_error> siu_handler::handle(
         if (!errors.empty()) {
             pimpl_->stats_.failure_count++;
             metrics.record_hl7_error("SIU", "invalid_appointment_data");
-            return std::unexpected(siu_error::invalid_appointment_data);
+            return to_error_info(siu_error::invalid_appointment_data);
         }
     }
 
     // Dispatch to appropriate handler based on trigger event
-    std::expected<siu_result, siu_error> result;
+    Result<siu_result> result = Result<siu_result>::uninitialized();
     switch (appt.trigger) {
         case siu_trigger_event::s12_new_appointment:
             pimpl_->stats_.s12_count++;
@@ -261,7 +260,7 @@ std::expected<siu_result, siu_error> siu_handler::handle(
         default:
             pimpl_->stats_.failure_count++;
             metrics.record_hl7_error("SIU", "unsupported_trigger_event");
-            return std::unexpected(siu_error::unsupported_trigger_event);
+            return to_error_info(siu_error::unsupported_trigger_event);
     }
 
     // Update statistics
@@ -275,7 +274,7 @@ std::expected<siu_result, siu_error> siu_handler::handle(
         end - start);
     metrics.record_hl7_processing_duration("SIU", duration_ns);
 
-    if (result) {
+    if (result.is_ok()) {
         pimpl_->stats_.success_count++;
         metrics.record_hl7_message_sent("SIU_ACK");
     } else {
@@ -300,14 +299,13 @@ std::vector<std::string> siu_handler::supported_triggers() const {
     return {"S12", "S13", "S14", "S15"};
 }
 
-std::expected<siu_result, siu_error> siu_handler::handle_s12(
-    const hl7_message& message) {
+Result<siu_result> siu_handler::handle_s12(const hl7_message& message) {
     // Extract appointment info
     auto appt_result = extract_appointment_info(message);
-    if (!appt_result) {
-        return std::unexpected(appt_result.error());
+    if (!appt_result.is_ok()) {
+        return appt_result.error();
     }
-    const auto& appt = *appt_result;
+    const auto& appt = appt_result.value();
 
     // Get appointment key
     std::string appt_key = pimpl_->get_appointment_key(appt);
@@ -323,17 +321,17 @@ std::expected<siu_result, siu_error> siu_handler::handle_s12(
             // Update existing entry
             auto update_result = pimpl_->mwl_client_->update_entry(appt_key, mwl);
             if (!update_result) {
-                return std::unexpected(siu_error::mwl_update_failed);
+                return to_error_info(siu_error::mwl_update_failed);
             }
             pimpl_->stats_.entries_updated++;
         } else {
-            return std::unexpected(siu_error::duplicate_appointment);
+            return to_error_info(siu_error::duplicate_appointment);
         }
     } else {
         // Create new entry
         auto add_result = pimpl_->mwl_client_->add_entry(mwl);
         if (!add_result) {
-            return std::unexpected(siu_error::mwl_create_failed);
+            return to_error_info(siu_error::mwl_create_failed);
         }
         pimpl_->stats_.entries_created++;
     }
@@ -360,14 +358,13 @@ std::expected<siu_result, siu_error> siu_handler::handle_s12(
     return result;
 }
 
-std::expected<siu_result, siu_error> siu_handler::handle_s13(
-    const hl7_message& message) {
+Result<siu_result> siu_handler::handle_s13(const hl7_message& message) {
     // Extract appointment info
     auto appt_result = extract_appointment_info(message);
-    if (!appt_result) {
-        return std::unexpected(appt_result.error());
+    if (!appt_result.is_ok()) {
+        return appt_result.error();
     }
-    const auto& appt = *appt_result;
+    const auto& appt = appt_result.value();
 
     // Get appointment key
     std::string appt_key = pimpl_->get_appointment_key(appt);
@@ -380,7 +377,7 @@ std::expected<siu_result, siu_error> siu_handler::handle_s13(
             // Create new entry (delegate to S12 handler logic)
             return handle_s12(message);
         }
-        return std::unexpected(siu_error::appointment_not_found);
+        return to_error_info(siu_error::appointment_not_found);
     }
 
     // Get existing entry for callback
@@ -403,7 +400,7 @@ std::expected<siu_result, siu_error> siu_handler::handle_s13(
     // Update entry
     auto update_result = pimpl_->mwl_client_->update_entry(appt_key, mwl);
     if (!update_result) {
-        return std::unexpected(siu_error::mwl_update_failed);
+        return to_error_info(siu_error::mwl_update_failed);
     }
     pimpl_->stats_.entries_updated++;
 
@@ -428,14 +425,13 @@ std::expected<siu_result, siu_error> siu_handler::handle_s13(
     return result;
 }
 
-std::expected<siu_result, siu_error> siu_handler::handle_s14(
-    const hl7_message& message) {
+Result<siu_result> siu_handler::handle_s14(const hl7_message& message) {
     // Extract appointment info
     auto appt_result = extract_appointment_info(message);
-    if (!appt_result) {
-        return std::unexpected(appt_result.error());
+    if (!appt_result.is_ok()) {
+        return appt_result.error();
     }
-    const auto& appt = *appt_result;
+    const auto& appt = appt_result.value();
 
     // Get appointment key
     std::string appt_key = pimpl_->get_appointment_key(appt);
@@ -443,7 +439,7 @@ std::expected<siu_result, siu_error> siu_handler::handle_s14(
     // Check if entry exists
     auto existing_result = pimpl_->mwl_client_->get_entry(appt_key);
     if (!existing_result) {
-        return std::unexpected(siu_error::appointment_not_found);
+        return to_error_info(siu_error::appointment_not_found);
     }
     auto old_mwl = *existing_result;
 
@@ -460,7 +456,7 @@ std::expected<siu_result, siu_error> siu_handler::handle_s14(
     // Update entry
     auto update_result = pimpl_->mwl_client_->update_entry(appt_key, mwl);
     if (!update_result) {
-        return std::unexpected(siu_error::mwl_update_failed);
+        return to_error_info(siu_error::mwl_update_failed);
     }
     pimpl_->stats_.entries_updated++;
 
@@ -485,27 +481,26 @@ std::expected<siu_result, siu_error> siu_handler::handle_s14(
     return result;
 }
 
-std::expected<siu_result, siu_error> siu_handler::handle_s15(
-    const hl7_message& message) {
+Result<siu_result> siu_handler::handle_s15(const hl7_message& message) {
     // Extract appointment info
     auto appt_result = extract_appointment_info(message);
-    if (!appt_result) {
-        return std::unexpected(appt_result.error());
+    if (!appt_result.is_ok()) {
+        return appt_result.error();
     }
-    const auto& appt = *appt_result;
+    const auto& appt = appt_result.value();
 
     // Get appointment key
     std::string appt_key = pimpl_->get_appointment_key(appt);
 
     // Check if entry exists
     if (!pimpl_->mwl_client_->exists(appt_key)) {
-        return std::unexpected(siu_error::appointment_not_found);
+        return to_error_info(siu_error::appointment_not_found);
     }
 
     // Cancel (remove) entry
     auto cancel_result = pimpl_->mwl_client_->cancel_entry(appt_key);
     if (!cancel_result) {
-        return std::unexpected(siu_error::mwl_cancel_failed);
+        return to_error_info(siu_error::mwl_cancel_failed);
     }
     pimpl_->stats_.entries_cancelled++;
 
@@ -528,7 +523,7 @@ std::expected<siu_result, siu_error> siu_handler::handle_s15(
     return result;
 }
 
-std::expected<appointment_info, siu_error> siu_handler::extract_appointment_info(
+Result<appointment_info> siu_handler::extract_appointment_info(
     const hl7_message& message) const {
     appointment_info info;
     auto header = message.header();
@@ -537,13 +532,13 @@ std::expected<appointment_info, siu_error> siu_handler::extract_appointment_info
     // Get trigger event from MSH-9.2
     info.trigger = parse_siu_trigger_event(header.trigger_event);
     if (info.trigger == siu_trigger_event::unknown) {
-        return std::unexpected(siu_error::unsupported_trigger_event);
+        return to_error_info(siu_error::unsupported_trigger_event);
     }
 
     // Extract SCH segment
     const auto* sch = message.segment("SCH");
     if (!sch) {
-        return std::unexpected(siu_error::missing_required_field);
+        return to_error_info(siu_error::missing_required_field);
     }
 
     // Placer Appointment ID (SCH-1)
@@ -568,7 +563,7 @@ std::expected<appointment_info, siu_error> siu_handler::extract_appointment_info
     // Extract PID segment
     const auto* pid = message.segment("PID");
     if (!pid) {
-        return std::unexpected(siu_error::missing_required_field);
+        return to_error_info(siu_error::missing_required_field);
     }
 
     // Patient ID (PID-3)

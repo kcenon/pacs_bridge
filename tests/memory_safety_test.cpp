@@ -269,8 +269,8 @@ private:
         auto parse_result = parser.parse(msg.to_string());
 
         std::string msg_control_id = "0";
-        if (parse_result.has_value()) {
-            msg_control_id = parse_result->get_value("MSH.10");
+        if (parse_result.is_ok()) {
+            msg_control_id = parse_result.value().get_value("MSH.10");
         }
 
         // Generate ACK
@@ -312,7 +312,7 @@ bool test_parser_memory_cleanup() {
     const int iterations = 10000;
     for (int i = 0; i < iterations; ++i) {
         auto result = parser.parse(SAMPLE_ORM);
-        TEST_ASSERT(result.has_value(), "Parse should succeed");
+        TEST_ASSERT(result.is_ok(), "Parse should succeed");
 
         if (i % 1000 == 0) {
             tracker.record_sample();
@@ -362,7 +362,7 @@ bool test_builder_memory_cleanup() {
             .receiving_facility("HOSPITAL")
             .control_id("MSG" + std::to_string(i))
             .build();
-        TEST_ASSERT(result.has_value(), "Build should succeed");
+        TEST_ASSERT(result.is_ok(), "Build should succeed");
 
         if (i % 1000 == 0) {
             tracker.record_sample();
@@ -723,9 +723,9 @@ bool test_message_raii_compliance() {
         {
             hl7::hl7_parser parser;
             auto result = parser.parse(SAMPLE_ORM);
-            TEST_ASSERT(result.has_value(), "Parse should succeed");
+            TEST_ASSERT(result.is_ok(), "Parse should succeed");
 
-            std::string value(result->get_value("MSH.10"));
+            std::string value(result.value().get_value("MSH.10"));
             TEST_ASSERT(!value.empty(), "Should extract value");
         }
         // Parsed message should be destroyed here
@@ -765,8 +765,8 @@ bool test_exception_safety_memory() {
         auto result4 = parser.parse("PID|1||12345"); // No MSH
 
         // These should all fail gracefully
-        TEST_ASSERT(!result1.has_value(), "Empty should fail");
-        TEST_ASSERT(!result2.has_value(), "Invalid should fail");
+        TEST_ASSERT(!result1.is_ok(), "Empty should fail");
+        TEST_ASSERT(!result2.is_ok(), "Invalid should fail");
 
         if (i % 1000 == 0) {
             tracker.record_sample();
@@ -817,7 +817,7 @@ bool test_large_message_memory() {
     const int iterations = 100;
     for (int i = 0; i < iterations; ++i) {
         auto result = parser.parse(large_message);
-        TEST_ASSERT(result.has_value(), "Large message parse should succeed");
+        TEST_ASSERT(result.is_ok(), "Large message parse should succeed");
 
         if (i % 20 == 0) {
             tracker.record_sample();

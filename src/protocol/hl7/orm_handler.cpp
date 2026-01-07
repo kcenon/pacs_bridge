@@ -133,7 +133,7 @@ orm_handler::~orm_handler() = default;
 orm_handler::orm_handler(orm_handler&&) noexcept = default;
 orm_handler& orm_handler::operator=(orm_handler&&) noexcept = default;
 
-std::expected<orm_result, orm_error> orm_handler::handle(
+Result<orm_result> orm_handler::handle(
     const hl7_message& message) {
     // Record message received metric
     auto& metrics = monitoring::bridge_metrics_collector::instance();
@@ -147,18 +147,18 @@ std::expected<orm_result, orm_error> orm_handler::handle(
     if (header.type != message_type::ORM) {
         pimpl_->stats_.failure_count++;
         metrics.record_hl7_error("ORM", "not_orm_message");
-        return std::unexpected(orm_error::not_orm_message);
+        return to_error_info(orm_error::not_orm_message);
     }
 
     // Extract order information
     auto order_info_result = extract_order_info(message);
-    if (!order_info_result) {
+    if (!order_info_result.is_ok()) {
         pimpl_->stats_.failure_count++;
         metrics.record_hl7_error("ORM", "extraction_failed");
-        return std::unexpected(order_info_result.error());
+        return order_info_result.error();
     }
 
-    const auto& order = *order_info_result;
+    const auto& order = order_info_result.value();
 
     // Validate if configured
     if (pimpl_->config_.validate_order_data) {
@@ -166,12 +166,12 @@ std::expected<orm_result, orm_error> orm_handler::handle(
         if (!errors.empty()) {
             pimpl_->stats_.failure_count++;
             metrics.record_hl7_error("ORM", "invalid_order_data");
-            return std::unexpected(orm_error::invalid_order_data);
+            return to_error_info(orm_error::invalid_order_data);
         }
     }
 
     // Dispatch to appropriate handler based on order control
-    std::expected<orm_result, orm_error> result;
+    Result<orm_result> result = Result<orm_result>::uninitialized();
     switch (order.control) {
         case order_control::new_order:
             pimpl_->stats_.nw_count++;
@@ -201,7 +201,7 @@ std::expected<orm_result, orm_error> orm_handler::handle(
         default:
             pimpl_->stats_.failure_count++;
             metrics.record_hl7_error("ORM", "unsupported_order_control");
-            return std::unexpected(orm_error::unsupported_order_control);
+            return to_error_info(orm_error::unsupported_order_control);
     }
 
     // Update statistics and record processing duration
@@ -215,7 +215,7 @@ std::expected<orm_result, orm_error> orm_handler::handle(
         end - start);
     metrics.record_hl7_processing_duration("ORM", duration_ns);
 
-    if (result) {
+    if (result.is_ok()) {
         pimpl_->stats_.success_count++;
         // Record ACK sent
         metrics.record_hl7_message_sent("ORM_ACK");
@@ -242,19 +242,19 @@ std::vector<std::string> orm_handler::supported_controls() const {
     return {"NW", "XO", "CA", "DC", "SC"};
 }
 
-std::expected<orm_result, orm_error> orm_handler::handle_new_order(
+Result<orm_result> orm_handler::handle_new_order(
     const hl7_message& message) {
     // Extract order info
     auto order_result = extract_order_info(message);
-    if (!order_result) {
-        return std::unexpected(order_result.error());
+    if (!order_result.is_ok()) {
+        return order_result.error();
     }
-    const auto& order = *order_result;
+    const auto& order = order_result.value();
 
     // Convert to MWL item using mapper
     auto mwl_result = pimpl_->mapper_->to_mwl(message);
     if (!mwl_result) {
-        return std::unexpected(orm_error::invalid_order_data);
+        return to_error_info(orm_error::invalid_order_data);
     }
     auto& mwl = *mwl_result;
 
@@ -278,17 +278,17 @@ std::expected<orm_result, orm_error> orm_handler::handle_new_order(
             auto update_result = pimpl_->mwl_client_->update_entry(
                 order.filler_order_number, mwl);
             if (!update_result) {
-                return std::unexpected(orm_error::mwl_update_failed);
+                return to_error_info(orm_error::mwl_update_failed);
             }
             pimpl_->stats_.entries_updated++;
         } else {
-            return std::unexpected(orm_error::duplicate_order);
+            return to_error_info(orm_error::duplicate_order);
         }
     } else {
         // Create new entry
         auto add_result = pimpl_->mwl_client_->add_entry(mwl);
         if (!add_result) {
-            return std::unexpected(orm_error::mwl_create_failed);
+            return to_error_info(orm_error::mwl_create_failed);
         }
         pimpl_->stats_.entries_created++;
     }
@@ -315,14 +315,14 @@ std::expected<orm_result, orm_error> orm_handler::handle_new_order(
     return result;
 }
 
-std::expected<orm_result, orm_error> orm_handler::handle_change_order(
+Result<orm_result> orm_handler::handle_change_order(
     const hl7_message& message) {
     // Extract order info
     auto order_result = extract_order_info(message);
-    if (!order_result) {
-        return std::unexpected(order_result.error());
+    if (!order_result.is_ok()) {
+        return order_result.error();
     }
-    const auto& order = *order_result;
+    const auto& order = order_result.value();
 
     // Check if entry exists
     bool exists = pimpl_->mwl_client_->exists(order.filler_order_number);
@@ -332,7 +332,7 @@ std::expected<orm_result, orm_error> orm_handler::handle_change_order(
             // Create new entry (delegate to new_order handler logic)
             return handle_new_order(message);
         }
-        return std::unexpected(orm_error::order_not_found);
+        return to_error_info(orm_error::order_not_found);
     }
 
     // Get existing entry for callback
@@ -346,7 +346,7 @@ std::expected<orm_result, orm_error> orm_handler::handle_change_order(
     // Convert to MWL item
     auto mwl_result = pimpl_->mapper_->to_mwl(message);
     if (!mwl_result) {
-        return std::unexpected(orm_error::invalid_order_data);
+        return to_error_info(orm_error::invalid_order_data);
     }
     auto& mwl = *mwl_result;
 
@@ -361,7 +361,7 @@ std::expected<orm_result, orm_error> orm_handler::handle_change_order(
     auto update_result =
         pimpl_->mwl_client_->update_entry(order.filler_order_number, mwl);
     if (!update_result) {
-        return std::unexpected(orm_error::mwl_update_failed);
+        return to_error_info(orm_error::mwl_update_failed);
     }
     pimpl_->stats_.entries_updated++;
 
@@ -386,25 +386,25 @@ std::expected<orm_result, orm_error> orm_handler::handle_change_order(
     return result;
 }
 
-std::expected<orm_result, orm_error> orm_handler::handle_cancel_order(
+Result<orm_result> orm_handler::handle_cancel_order(
     const hl7_message& message) {
     // Extract order info
     auto order_result = extract_order_info(message);
-    if (!order_result) {
-        return std::unexpected(order_result.error());
+    if (!order_result.is_ok()) {
+        return order_result.error();
     }
-    const auto& order = *order_result;
+    const auto& order = order_result.value();
 
     // Check if entry exists
     if (!pimpl_->mwl_client_->exists(order.filler_order_number)) {
-        return std::unexpected(orm_error::order_not_found);
+        return to_error_info(orm_error::order_not_found);
     }
 
     // Cancel (remove) entry
     auto cancel_result =
         pimpl_->mwl_client_->cancel_entry(order.filler_order_number);
     if (!cancel_result) {
-        return std::unexpected(orm_error::mwl_cancel_failed);
+        return to_error_info(orm_error::mwl_cancel_failed);
     }
     pimpl_->stats_.entries_cancelled++;
 
@@ -428,20 +428,20 @@ std::expected<orm_result, orm_error> orm_handler::handle_cancel_order(
     return result;
 }
 
-std::expected<orm_result, orm_error> orm_handler::handle_discontinue_order(
+Result<orm_result> orm_handler::handle_discontinue_order(
     const hl7_message& message) {
     // Extract order info
     auto order_result = extract_order_info(message);
-    if (!order_result) {
-        return std::unexpected(order_result.error());
+    if (!order_result.is_ok()) {
+        return order_result.error();
     }
-    const auto& order = *order_result;
+    const auto& order = order_result.value();
 
     // Check if entry exists
     auto existing_result =
         pimpl_->mwl_client_->get_entry(order.filler_order_number);
     if (!existing_result) {
-        return std::unexpected(orm_error::order_not_found);
+        return to_error_info(orm_error::order_not_found);
     }
     auto mwl = *existing_result;
 
@@ -454,7 +454,7 @@ std::expected<orm_result, orm_error> orm_handler::handle_discontinue_order(
     auto update_result =
         pimpl_->mwl_client_->update_entry(order.filler_order_number, mwl);
     if (!update_result) {
-        return std::unexpected(orm_error::mwl_update_failed);
+        return to_error_info(orm_error::mwl_update_failed);
     }
     pimpl_->stats_.entries_updated++;
 
@@ -480,20 +480,20 @@ std::expected<orm_result, orm_error> orm_handler::handle_discontinue_order(
     return result;
 }
 
-std::expected<orm_result, orm_error> orm_handler::handle_status_change(
+Result<orm_result> orm_handler::handle_status_change(
     const hl7_message& message) {
     // Extract order info
     auto order_result = extract_order_info(message);
-    if (!order_result) {
-        return std::unexpected(order_result.error());
+    if (!order_result.is_ok()) {
+        return order_result.error();
     }
-    const auto& order = *order_result;
+    const auto& order = order_result.value();
 
     // Check if entry exists
     auto existing_result =
         pimpl_->mwl_client_->get_entry(order.filler_order_number);
     if (!existing_result) {
-        return std::unexpected(orm_error::order_not_found);
+        return to_error_info(orm_error::order_not_found);
     }
     auto mwl = *existing_result;
 
@@ -520,7 +520,7 @@ std::expected<orm_result, orm_error> orm_handler::handle_status_change(
     auto update_result =
         pimpl_->mwl_client_->update_entry(order.filler_order_number, mwl);
     if (!update_result) {
-        return std::unexpected(orm_error::mwl_update_failed);
+        return to_error_info(orm_error::mwl_update_failed);
     }
     pimpl_->stats_.entries_updated++;
 
@@ -547,7 +547,7 @@ std::expected<orm_result, orm_error> orm_handler::handle_status_change(
     return result;
 }
 
-std::expected<order_info, orm_error> orm_handler::extract_order_info(
+Result<order_info> orm_handler::extract_order_info(
     const hl7_message& message) const {
     order_info info;
     auto header = message.header();
@@ -556,13 +556,13 @@ std::expected<order_info, orm_error> orm_handler::extract_order_info(
     // Extract ORC segment
     const auto* orc = message.segment("ORC");
     if (!orc) {
-        return std::unexpected(orm_error::missing_required_field);
+        return to_error_info(orm_error::missing_required_field);
     }
 
     // Order Control (ORC-1)
     info.control = parse_order_control(orc->field_value(1));
     if (info.control == order_control::unknown) {
-        return std::unexpected(orm_error::unsupported_order_control);
+        return to_error_info(orm_error::unsupported_order_control);
     }
 
     // Placer Order Number (ORC-2)
@@ -588,7 +588,7 @@ std::expected<order_info, orm_error> orm_handler::extract_order_info(
     // Extract PID segment
     const auto* pid = message.segment("PID");
     if (!pid) {
-        return std::unexpected(orm_error::missing_required_field);
+        return to_error_info(orm_error::missing_required_field);
     }
 
     // Patient ID (PID-3)
@@ -605,7 +605,7 @@ std::expected<order_info, orm_error> orm_handler::extract_order_info(
     // Extract OBR segment
     const auto* obr = message.segment("OBR");
     if (!obr) {
-        return std::unexpected(orm_error::missing_required_field);
+        return to_error_info(orm_error::missing_required_field);
     }
 
     // Procedure Code (OBR-4)

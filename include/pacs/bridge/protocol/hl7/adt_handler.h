@@ -30,7 +30,6 @@
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
 #include <concepts>
-#include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -115,6 +114,24 @@ enum class adt_error : int {
         default:
             return "Unknown ADT handler error";
     }
+}
+
+/**
+ * @brief Convert adt_error to error_info for Result<T>
+ *
+ * @param error ADT error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    adt_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "hl7::adt",
+        details
+    };
 }
 
 // =============================================================================
@@ -367,7 +384,7 @@ public:
      * @param message HL7 ADT message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<adt_result, adt_error> handle(
+    [[nodiscard]] Result<adt_result> handle(
         const hl7_message& message);
 
     /**
@@ -398,7 +415,7 @@ public:
      * @param message HL7 ADT^A01 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<adt_result, adt_error> handle_admit(
+    [[nodiscard]] Result<adt_result> handle_admit(
         const hl7_message& message);
 
     /**
@@ -409,7 +426,7 @@ public:
      * @param message HL7 ADT^A04 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<adt_result, adt_error> handle_register(
+    [[nodiscard]] Result<adt_result> handle_register(
         const hl7_message& message);
 
     /**
@@ -420,7 +437,7 @@ public:
      * @param message HL7 ADT^A08 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<adt_result, adt_error> handle_update(
+    [[nodiscard]] Result<adt_result> handle_update(
         const hl7_message& message);
 
     /**
@@ -432,7 +449,7 @@ public:
      * @param message HL7 ADT^A40 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<adt_result, adt_error> handle_merge(
+    [[nodiscard]] Result<adt_result> handle_merge(
         const hl7_message& message);
 
     // =========================================================================

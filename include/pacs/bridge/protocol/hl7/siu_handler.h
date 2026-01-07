@@ -26,7 +26,6 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
-#include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -111,6 +110,24 @@ enum class siu_error : int {
         default:
             return "Unknown SIU handler error";
     }
+}
+
+/**
+ * @brief Convert siu_error to error_info for Result<T>
+ *
+ * @param error SIU error code
+ * @param details Optional additional details
+ * @return error_info for use with Result<T>
+ */
+[[nodiscard]] inline error_info to_error_info(
+    siu_error error,
+    const std::string& details = "") {
+    return error_info{
+        static_cast<int>(error),
+        to_string(error),
+        "hl7::siu",
+        details
+    };
 }
 
 // =============================================================================
@@ -518,7 +535,7 @@ public:
      * @param message HL7 SIU message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<siu_result, siu_error> handle(
+    [[nodiscard]] Result<siu_result> handle(
         const hl7_message& message);
 
     /**
@@ -549,7 +566,7 @@ public:
      * @param message HL7 SIU^S12 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<siu_result, siu_error> handle_s12(
+    [[nodiscard]] Result<siu_result> handle_s12(
         const hl7_message& message);
 
     /**
@@ -562,7 +579,7 @@ public:
      * @param message HL7 SIU^S13 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<siu_result, siu_error> handle_s13(
+    [[nodiscard]] Result<siu_result> handle_s13(
         const hl7_message& message);
 
     /**
@@ -573,7 +590,7 @@ public:
      * @param message HL7 SIU^S14 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<siu_result, siu_error> handle_s14(
+    [[nodiscard]] Result<siu_result> handle_s14(
         const hl7_message& message);
 
     /**
@@ -584,7 +601,7 @@ public:
      * @param message HL7 SIU^S15 message
      * @return Processing result or error
      */
-    [[nodiscard]] std::expected<siu_result, siu_error> handle_s15(
+    [[nodiscard]] Result<siu_result> handle_s15(
         const hl7_message& message);
 
     // =========================================================================
@@ -600,7 +617,7 @@ public:
      * @param message HL7 SIU message
      * @return Extracted appointment information or error
      */
-    [[nodiscard]] std::expected<appointment_info, siu_error>
+    [[nodiscard]] Result<appointment_info>
     extract_appointment_info(const hl7_message& message) const;
 
     /**

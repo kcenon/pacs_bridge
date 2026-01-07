@@ -108,10 +108,10 @@ const std::string ORM_MULTIPLE_IDS =
 bool test_patient_mandatory_fields() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with complete patient");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with complete patient");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient successfully");
 
     // Verify mandatory fields are present
@@ -128,10 +128,10 @@ bool test_patient_mandatory_fields() {
 bool test_patient_minimal_info() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_MINIMAL_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with minimal patient");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with minimal patient");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract minimal patient successfully");
 
     // Verify mandatory fields
@@ -154,13 +154,13 @@ bool test_patient_missing_required_field() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(msg_no_id);
-    TEST_ASSERT(parse_result.has_value(), "Should parse message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse message");
 
     mapper_config config;
     config.allow_partial_mapping = false;
     hl7_dicom_mapper mapper(config);
 
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     // With strict validation, missing patient ID should cause error
     // Implementation may vary - adjust based on actual behavior
     TEST_ASSERT(!patient.has_value() || patient->patient_id.empty(),
@@ -176,10 +176,10 @@ bool test_patient_missing_required_field() {
 bool test_patient_optional_fields() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient");
 
     // Verify optional fields
@@ -193,10 +193,10 @@ bool test_patient_optional_fields() {
 bool test_patient_empty_optional_fields() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_EMPTY_OPTIONAL);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with empty optional fields");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with empty optional fields");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with empty optional fields");
 
     // Mandatory fields should be present
@@ -214,10 +214,10 @@ bool test_patient_empty_optional_fields() {
 bool test_patient_multiple_identifiers() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_MULTIPLE_IDS);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with multiple IDs");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with multiple IDs");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with multiple IDs");
 
     // Primary ID should be the first one (MR type)
@@ -237,10 +237,10 @@ bool test_patient_multiple_identifiers() {
 bool test_patient_korean_name() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_KOREAN_NAME);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with Korean name");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with Korean name");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with Korean name");
 
     // Verify Korean name is preserved
@@ -265,10 +265,10 @@ bool test_patient_korean_name() {
 bool test_patient_ideographic_name() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_IDEOGRAPHIC_NAME);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with ideographic name");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with ideographic name");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with ideographic name");
 
     // DICOM PN can have multiple representations:
@@ -283,7 +283,7 @@ bool test_patient_ideographic_name() {
 bool test_patient_name_components() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     // Test HL7 to DICOM name conversion
     hl7::hl7_person_name hl7_name;
@@ -310,10 +310,10 @@ bool test_patient_name_components() {
 bool test_study_basic_mapping() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Check requested procedure (study)
@@ -329,10 +329,10 @@ bool test_study_basic_mapping() {
 bool test_study_referring_physician() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Referring physician mapping is implementation-specific
@@ -351,10 +351,10 @@ bool test_study_referring_physician() {
 bool test_study_procedure_description() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Procedure description should be mapped from OBR-4
@@ -414,10 +414,10 @@ bool test_study_uid_generation() {
 bool test_order_accession_number() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Accession number should be mapped from ORC-3 or OBR-3
@@ -430,10 +430,10 @@ bool test_order_accession_number() {
 bool test_order_placer_filler_numbers() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Placer order number from ORC-2/OBR-2
@@ -446,10 +446,10 @@ bool test_order_placer_filler_numbers() {
 bool test_order_requesting_physician() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Requesting physician mapping is implementation-specific
@@ -468,10 +468,10 @@ bool test_order_requesting_physician() {
 bool test_order_scheduled_step() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Should have at least one scheduled procedure step
@@ -489,10 +489,10 @@ bool test_order_scheduled_step() {
 bool test_order_modality_mapping() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_COMPLETE_PATIENT);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM");
 
     hl7_dicom_mapper mapper;
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(mwl.has_value(), "Should create MWL item");
 
     // Check modality in scheduled step
@@ -517,7 +517,7 @@ bool test_edge_empty_message() {
     auto parse_result = parser.parse(empty_msg);
 
     // Empty message should fail to parse
-    TEST_ASSERT(!parse_result.has_value(), "Empty message should fail to parse");
+    TEST_ASSERT(!parse_result.is_ok(), "Empty message should fail to parse");
 
     return true;
 }
@@ -525,10 +525,10 @@ bool test_edge_empty_message() {
 bool test_edge_special_characters() {
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_SPECIAL_CHARS);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ORM with special characters");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ORM with special characters");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with special chars");
 
     // Name with apostrophe and hyphen
@@ -550,7 +550,7 @@ bool test_edge_escape_sequences() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(ORM_SPECIAL_CHARS);
-    TEST_ASSERT(parse_result.has_value(), "Should parse with escape sequences");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse with escape sequences");
 
     // Verify that escape sequences are handled correctly
     // The address contains \F\ which should be converted to |
@@ -570,10 +570,10 @@ bool test_edge_long_values() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(msg_long);
-    TEST_ASSERT(parse_result.has_value(), "Should parse message with long values");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse message with long values");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with long name");
 
     // DICOM has limits on some field lengths, but patient name (PN) is 64 chars per component
@@ -598,10 +598,10 @@ bool test_edge_unicode_handling() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(msg_umlaut);
-    TEST_ASSERT(parse_result.has_value(), "Should parse message with German umlaut");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse message with German umlaut");
 
     hl7_dicom_mapper mapper;
-    auto patient = mapper.to_patient(*parse_result);
+    auto patient = mapper.to_patient(parse_result.value());
     TEST_ASSERT(patient.has_value(), "Should extract patient with umlaut name");
 
     return true;
@@ -649,12 +649,12 @@ bool test_edge_invalid_message_type() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(adt_msg);
-    TEST_ASSERT(parse_result.has_value(), "Should parse ADT message");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse ADT message");
 
     hl7_dicom_mapper mapper;
-    TEST_ASSERT(!mapper.can_map_to_mwl(*parse_result), "ADT should not be mappable to MWL");
+    TEST_ASSERT(!mapper.can_map_to_mwl(parse_result.value()), "ADT should not be mappable to MWL");
 
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
     TEST_ASSERT(!mwl.has_value(), "ADT to MWL should fail");
     TEST_ASSERT(mwl.error() == mapping_error::unsupported_message_type,
                 "Error should be unsupported_message_type");
@@ -675,10 +675,10 @@ bool test_edge_partial_mapping() {
 
     hl7::hl7_parser parser;
     auto parse_result = parser.parse(minimal_msg);
-    TEST_ASSERT(parse_result.has_value(), "Should parse minimal ORM");
+    TEST_ASSERT(parse_result.is_ok(), "Should parse minimal ORM");
 
     hl7_dicom_mapper mapper(config);
-    auto mwl = mapper.to_mwl(*parse_result);
+    auto mwl = mapper.to_mwl(parse_result.value());
 
     // With partial mapping allowed, should succeed with available data
     // The result depends on implementation

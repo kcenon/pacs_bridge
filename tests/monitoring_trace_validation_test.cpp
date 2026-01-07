@@ -201,10 +201,10 @@ public:
         // Parse message
         auto msg = parser_.parse(raw_message);
 
-        if (msg.has_value()) {
-            span->set_attribute("message_type", hl7::to_string(msg->type()));
-            span->set_attribute("trigger_event", std::string(msg->trigger_event()));
-            span->set_attribute("message_control_id", get_message_control_id(*msg));
+        if (msg.is_ok()) {
+            span->set_attribute("message_type", hl7::to_string(msg.value().type()));
+            span->set_attribute("trigger_event", std::string(msg.value().trigger_event()));
+            span->set_attribute("message_control_id", get_message_control_id(msg.value()));
             span->add_event("message_parsed");
             span->set_status(true);
         } else {
@@ -214,7 +214,7 @@ public:
         }
 
         span->end();
-        return msg.has_value();
+        return msg.is_ok();
     }
 
     std::string get_current_traceparent() const {

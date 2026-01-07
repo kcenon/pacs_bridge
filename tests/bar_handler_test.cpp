@@ -111,8 +111,8 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse_bar(std::string_view raw) {
-        return parser_->parse(std::string(raw));
+    Result<hl7_message> parse_bar(std::string_view raw) {
+        return parser_->parse(raw);
     }
 
     // Extract account number from PV1
@@ -136,55 +136,55 @@ protected:
 
 TEST_F(BarHandlerTest, ParseBarP01AddAccount) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "BAR");
-    EXPECT_EQ(msg->trigger_event(), "P01");
-    EXPECT_EQ(extract_account_number(*msg), "V123456");
+    EXPECT_STREQ(to_string(msg.value().type()), "BAR");
+    EXPECT_EQ(msg.value().trigger_event(), "P01");
+    EXPECT_EQ(extract_account_number(msg.value()), "V123456");
 }
 
 TEST_F(BarHandlerTest, ParseBarP02PurgeAccount) {
     auto msg = parse_bar(bar_samples::BAR_P02_PURGE_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "BAR");
-    EXPECT_EQ(msg->trigger_event(), "P02");
+    EXPECT_STREQ(to_string(msg.value().type()), "BAR");
+    EXPECT_EQ(msg.value().trigger_event(), "P02");
 }
 
 TEST_F(BarHandlerTest, ParseBarP05UpdateAccount) {
     auto msg = parse_bar(bar_samples::BAR_P05_UPDATE_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "BAR");
-    EXPECT_EQ(msg->trigger_event(), "P05");
+    EXPECT_STREQ(to_string(msg.value().type()), "BAR");
+    EXPECT_EQ(msg.value().trigger_event(), "P05");
 
     // Should have multiple diagnosis codes
-    auto dg1_segments = msg->segments("DG1");
+    auto dg1_segments = msg.value().segments("DG1");
     EXPECT_EQ(dg1_segments.size(), 2);
 }
 
 TEST_F(BarHandlerTest, ParseBarP06EndAccount) {
     auto msg = parse_bar(bar_samples::BAR_P06_END_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "BAR");
-    EXPECT_EQ(msg->trigger_event(), "P06");
+    EXPECT_STREQ(to_string(msg.value().type()), "BAR");
+    EXPECT_EQ(msg.value().trigger_event(), "P06");
 
     // PV1-45 should have discharge date
-    auto pv1 = msg->segment("PV1");
+    auto pv1 = msg.value().segment("PV1");
     ASSERT_TRUE(pv1 != nullptr);
     EXPECT_FALSE(pv1->field_value(45).empty());
 }
 
 TEST_F(BarHandlerTest, ParseBarP10Apc) {
     auto msg = parse_bar(bar_samples::BAR_P10_APC);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "BAR");
-    EXPECT_EQ(msg->trigger_event(), "P10");
+    EXPECT_STREQ(to_string(msg.value().type()), "BAR");
+    EXPECT_EQ(msg.value().trigger_event(), "P10");
 
     // Should have PR1 segment for procedures
-    auto pr1 = msg->segment("PR1");
+    auto pr1 = msg.value().segment("PR1");
     ASSERT_TRUE(pr1 != nullptr);
 }
 
@@ -194,17 +194,17 @@ TEST_F(BarHandlerTest, ParseBarP10Apc) {
 
 TEST_F(BarHandlerTest, ExtractInsuranceCompany) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string insurance = extract_insurance_company(*msg);
+    std::string insurance = extract_insurance_company(msg.value());
     EXPECT_TRUE(insurance.find("BLUE CROSS") != std::string::npos);
 }
 
 TEST_F(BarHandlerTest, MultipleInsurancePlans) {
     auto msg = parse_bar(bar_samples::BAR_MULTIPLE_INSURANCE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto in1_segments = msg->segments("IN1");
+    auto in1_segments = msg.value().segments("IN1");
     EXPECT_EQ(in1_segments.size(), 2);
 
     // Primary insurance
@@ -215,9 +215,9 @@ TEST_F(BarHandlerTest, MultipleInsurancePlans) {
 
 TEST_F(BarHandlerTest, InsuranceSubscriberInfo) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto in1 = msg->segment("IN1");
+    auto in1 = msg.value().segment("IN1");
     ASSERT_TRUE(in1 != nullptr);
 
     // IN1-16 is Insured's Name
@@ -232,9 +232,9 @@ TEST_F(BarHandlerTest, InsuranceSubscriberInfo) {
 
 TEST_F(BarHandlerTest, ExtractDiagnosisCodes) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto dg1 = msg->segment("DG1");
+    auto dg1 = msg.value().segment("DG1");
     ASSERT_TRUE(dg1 != nullptr);
 
     // DG1-3 contains diagnosis code
@@ -244,9 +244,9 @@ TEST_F(BarHandlerTest, ExtractDiagnosisCodes) {
 
 TEST_F(BarHandlerTest, MultipleDiagnoses) {
     auto msg = parse_bar(bar_samples::BAR_P05_UPDATE_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto dg1_segments = msg->segments("DG1");
+    auto dg1_segments = msg.value().segments("DG1");
     EXPECT_EQ(dg1_segments.size(), 2);
 
     // Primary diagnosis
@@ -261,9 +261,9 @@ TEST_F(BarHandlerTest, MultipleDiagnoses) {
 
 TEST_F(BarHandlerTest, ExtractGuarantor) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto gt1 = msg->segment("GT1");
+    auto gt1 = msg.value().segment("GT1");
     ASSERT_TRUE(gt1 != nullptr);
 
     // GT1-3 is Guarantor Name
@@ -278,9 +278,9 @@ TEST_F(BarHandlerTest, ExtractGuarantor) {
 
 TEST_F(BarHandlerTest, ExtractPatientFromBar) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pid = msg->segment("PID");
+    auto pid = msg.value().segment("PID");
     ASSERT_TRUE(pid != nullptr);
 
     // Patient ID
@@ -295,9 +295,9 @@ TEST_F(BarHandlerTest, ExtractPatientFromBar) {
 
 TEST_F(BarHandlerTest, ExtractVisitInfo) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pv1 = msg->segment("PV1");
+    auto pv1 = msg.value().segment("PV1");
     ASSERT_TRUE(pv1 != nullptr);
 
     // PV1-2 is Patient Class (I = Inpatient)
@@ -308,9 +308,9 @@ TEST_F(BarHandlerTest, ExtractVisitInfo) {
 
 TEST_F(BarHandlerTest, OutpatientVisit) {
     auto msg = parse_bar(bar_samples::BAR_P10_APC);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pv1 = msg->segment("PV1");
+    auto pv1 = msg.value().segment("PV1");
     ASSERT_TRUE(pv1 != nullptr);
 
     // PV1-2 is Patient Class (O = Outpatient)
@@ -328,9 +328,9 @@ TEST_F(BarHandlerTest, MissingPv1Segment) {
         "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r";
 
     auto msg = parse_bar(invalid_bar);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto pv1 = msg->segment("PV1");
+    auto pv1 = msg.value().segment("PV1");
     EXPECT_TRUE(pv1 == nullptr);
 }
 
@@ -341,9 +341,9 @@ TEST_F(BarHandlerTest, EmptyAccountNumber) {
         "PV1|1|I|WARD^101^A\r";
 
     auto msg = parse_bar(bar_no_account);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_TRUE(extract_account_number(*msg).empty());
+    EXPECT_TRUE(extract_account_number(msg.value()).empty());
 }
 
 // =============================================================================
@@ -352,9 +352,9 @@ TEST_F(BarHandlerTest, EmptyAccountNumber) {
 
 TEST_F(BarHandlerTest, BuildAckForBar) {
     auto msg = parse_bar(bar_samples::BAR_P01_ADD_ACCOUNT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Account created successfully");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Account created successfully");
 
     // ack is hl7_message directly, no has_value check needed
     EXPECT_STREQ(to_string(ack.type()), "ACK");

@@ -38,7 +38,7 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse(const std::string& raw) {
+    Result<hl7_message> parse(const std::string& raw) {
         return parser_->parse(raw);
     }
 
@@ -60,22 +60,22 @@ protected:
 
 TEST_F(Hl7ValidationEdgeCaseTest, EmptyString) {
     auto msg = parse("");
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, WhitespaceOnly) {
     auto msg = parse("   \t\n   ");
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, SingleCharacter) {
     auto msg = parse("M");
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, OnlyMsh) {
     auto msg = parse("MSH");
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 // =============================================================================
@@ -85,7 +85,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, OnlyMsh) {
 TEST_F(Hl7ValidationEdgeCaseTest, MshWithOnlyDelimiters) {
     auto msg = parse("MSH|^~\\&\r");
     // Should parse but be incomplete
-    EXPECT_TRUE(msg.has_value() || !msg.has_value());  // Parser-dependent
+    EXPECT_TRUE(msg.is_ok() || !msg.is_ok());  // Parser-dependent
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, MshMissingVersion) {
@@ -101,7 +101,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, MshWithNonStandardDelimiters) {
     std::string msg_alt_delim = "MSH#^~\\&#HIS#HOSPITAL#PACS#RADIOLOGY#20240115103000##ADT^A01#MSG001#P#2.4\r";
     auto msg = parse(msg_alt_delim);
     // Non-standard delimiters should be rejected or handled
-    EXPECT_FALSE(msg.has_value());
+    EXPECT_FALSE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, MshWithEmptyFields) {
@@ -121,8 +121,8 @@ TEST_F(Hl7ValidationEdgeCaseTest, VeryLongFieldValue) {
         "PID|1||" + long_value + "^^^HOSPITAL^MR||DOE^JOHN\r";
     auto msg = parse(msg_long);
     // Should handle long fields gracefully
-    if (msg.has_value()) {
-        auto pid = msg->segment("PID");
+    if (msg.is_ok()) {
+        auto pid = msg.value().segment("PID");
         if (pid) {
             EXPECT_GE(pid->field_value(3).size(), 10000);
         }
@@ -136,8 +136,8 @@ TEST_F(Hl7ValidationEdgeCaseTest, MaximumSegmentCount) {
                          std::to_string(i) + "||||||F\r";
     }
     auto msg = parse(many_segments);
-    if (msg.has_value()) {
-        auto obx_segments = msg->segments("OBX");
+    if (msg.is_ok()) {
+        auto obx_segments = msg.value().segments("OBX");
         EXPECT_GE(obx_segments.size(), 100);
     }
 }
@@ -147,7 +147,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, EmptyFieldBetweenValues) {
         "MSH|^~\\&|HIS||PACS||20240115103000||ADT^A01|||2.4\r"
         "PID|1||12345|||||||||||||\r";
     auto msg = parse(msg_gaps);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 // =============================================================================
@@ -178,8 +178,8 @@ TEST_F(Hl7ValidationEdgeCaseTest, UnknownSegmentType) {
         "PID|1||12345\r";
     auto msg = parse(msg_unknown);
     // Unknown segments should be preserved
-    if (msg.has_value()) {
-        auto xyz = msg->segment("XYZ");
+    if (msg.is_ok()) {
+        auto xyz = msg.value().segment("XYZ");
         // May or may not be available depending on implementation
     }
 }
@@ -203,7 +203,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, DateTimeVariousFormats) {
             "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|" + dt + "||ADT^A01|MSG001|P|2.4\r"
             "PID|1||12345\r";
         auto msg = parse(msg_dt);
-        EXPECT_TRUE(msg.has_value()) << "Failed for date format: " << dt;
+        EXPECT_TRUE(msg.is_ok()) << "Failed for date format: " << dt;
     }
 }
 
@@ -212,7 +212,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, DateTimeWithTimezone) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000+0900||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345\r";
     auto msg = parse(msg_tz);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, InvalidDateTime) {
@@ -232,7 +232,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, NumericSetIdZero) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|0||12345\r";
     auto msg = parse(msg_zero);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, NumericSetIdNegative) {
@@ -260,7 +260,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, ManyComponents) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345^A^B^C^D^E^F^G^H^I^J^K^L^M^N^O^P^Q^R^S^T\r";
     auto msg = parse(msg_many_comp);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, DeepSubcomponents) {
@@ -268,7 +268,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, DeepSubcomponents) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345&A&B&C&D&E^^^HOSPITAL^MR\r";
     auto msg = parse(msg_deep);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, EmptyComponents) {
@@ -276,7 +276,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, EmptyComponents) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||^^^^\r";
     auto msg = parse(msg_empty_comp);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 // =============================================================================
@@ -293,7 +293,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, ManyRepetitions) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||" + repeating_ids + "||DOE^JOHN\r";
     auto msg = parse(msg_many_rep);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, EmptyRepetition) {
@@ -340,7 +340,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, UnixLineEndings) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345\r";
     auto msg = parse(msg_unix);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, WindowsLineEndings) {
@@ -377,7 +377,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, Version231) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.3.1\r"
         "PID|1||12345\r";
     auto msg = parse(msg_v231);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, Version24) {
@@ -385,7 +385,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, Version24) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345\r";
     auto msg = parse(msg_v24);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, Version251) {
@@ -393,7 +393,7 @@ TEST_F(Hl7ValidationEdgeCaseTest, Version251) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.5.1\r"
         "PID|1||12345\r";
     auto msg = parse(msg_v251);
-    EXPECT_TRUE(msg.has_value());
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, UnknownVersion) {
@@ -413,8 +413,8 @@ TEST_F(Hl7ValidationEdgeCaseTest, ProductionMode) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|P|2.4\r"
         "PID|1||12345\r";
     auto msg = parse(msg_prod);
-    ASSERT_TRUE(msg.has_value());
-    auto msh = msg->segment("MSH");
+    ASSERT_TRUE(msg.is_ok());
+    auto msh = msg.value().segment("MSH");
     ASSERT_NE(msh, nullptr);
     EXPECT_EQ(msh->field_value(11), "P");
 }
@@ -424,8 +424,8 @@ TEST_F(Hl7ValidationEdgeCaseTest, TestMode) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|T|2.4\r"
         "PID|1||12345\r";
     auto msg = parse(msg_test);
-    ASSERT_TRUE(msg.has_value());
-    auto msh = msg->segment("MSH");
+    ASSERT_TRUE(msg.is_ok());
+    auto msh = msg.value().segment("MSH");
     ASSERT_NE(msh, nullptr);
     EXPECT_EQ(msh->field_value(11), "T");
 }
@@ -435,8 +435,8 @@ TEST_F(Hl7ValidationEdgeCaseTest, DebugMode) {
         "MSH|^~\\&|HIS|HOSPITAL|PACS|RADIOLOGY|20240115103000||ADT^A01|MSG001|D|2.4\r"
         "PID|1||12345\r";
     auto msg = parse(msg_debug);
-    ASSERT_TRUE(msg.has_value());
-    auto msh = msg->segment("MSH");
+    ASSERT_TRUE(msg.is_ok());
+    auto msh = msg.value().segment("MSH");
     ASSERT_NE(msh, nullptr);
     EXPECT_EQ(msh->field_value(11), "D");
 }

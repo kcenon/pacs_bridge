@@ -122,32 +122,32 @@ TEST_F(ORUGeneratorTest, GenerateFinalReport) {
     std::string report_text = "Normal chest radiograph. No acute cardiopulmonary disease.";
 
     auto result = gen.generate_final(study, report_text);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // Verify message structure
-    EXPECT_TRUE(result->has_segment("MSH"));
-    EXPECT_TRUE(result->has_segment("PID"));
-    EXPECT_TRUE(result->has_segment("ORC"));
-    EXPECT_TRUE(result->has_segment("OBR"));
-    EXPECT_TRUE(result->has_segment("OBX"));
+    EXPECT_TRUE(result.value().has_segment("MSH"));
+    EXPECT_TRUE(result.value().has_segment("PID"));
+    EXPECT_TRUE(result.value().has_segment("ORC"));
+    EXPECT_TRUE(result.value().has_segment("OBR"));
+    EXPECT_TRUE(result.value().has_segment("OBX"));
 
     // Verify message type
-    auto header = result->header();
+    auto header = result.value().header();
     EXPECT_EQ(header.type_string, "ORU");
     EXPECT_EQ(header.trigger_event, "R01");
 
     // Verify patient info
-    EXPECT_EQ(result->get_value("PID.3.1"), "12345");
-    EXPECT_EQ(result->get_value("PID.5.1"), "DOE");
-    EXPECT_EQ(result->get_value("PID.5.2"), "JOHN");
+    EXPECT_EQ(result.value().get_value("PID.3.1"), "12345");
+    EXPECT_EQ(result.value().get_value("PID.5.1"), "DOE");
+    EXPECT_EQ(result.value().get_value("PID.5.2"), "JOHN");
 
     // Verify order info
-    EXPECT_EQ(result->get_value("ORC.1"), "RE");
-    EXPECT_EQ(result->get_value("OBR.4.1"), "71020");
+    EXPECT_EQ(result.value().get_value("ORC.1"), "RE");
+    EXPECT_EQ(result.value().get_value("OBR.4.1"), "71020");
 
     // Verify result status
-    EXPECT_EQ(result->get_value("OBR.25"), "F");
-    EXPECT_EQ(result->get_value("OBX.11"), "F");
+    EXPECT_EQ(result.value().get_value("OBR.25"), "F");
+    EXPECT_EQ(result.value().get_value("OBX.11"), "F");
 }
 
 TEST_F(ORUGeneratorTest, GeneratePreliminaryReport) {
@@ -156,10 +156,10 @@ TEST_F(ORUGeneratorTest, GeneratePreliminaryReport) {
     std::string report_text = "Preliminary findings: Possible nodule in right lower lobe.";
 
     auto result = gen.generate_preliminary(study, report_text);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->get_value("OBR.25"), "P");
-    EXPECT_EQ(result->get_value("OBX.11"), "P");
+    EXPECT_EQ(result.value().get_value("OBR.25"), "P");
+    EXPECT_EQ(result.value().get_value("OBX.11"), "P");
 }
 
 TEST_F(ORUGeneratorTest, GenerateCorrectedReport) {
@@ -168,10 +168,10 @@ TEST_F(ORUGeneratorTest, GenerateCorrectedReport) {
     std::string report_text = "CORRECTED REPORT: Previous nodule identified as artifact.";
 
     auto result = gen.generate_corrected(study, report_text);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->get_value("OBR.25"), "C");
-    EXPECT_EQ(result->get_value("OBX.11"), "C");
+    EXPECT_EQ(result.value().get_value("OBR.25"), "C");
+    EXPECT_EQ(result.value().get_value("OBX.11"), "C");
 }
 
 TEST_F(ORUGeneratorTest, GenerateCancelledReport) {
@@ -179,10 +179,10 @@ TEST_F(ORUGeneratorTest, GenerateCancelledReport) {
     auto study = create_sample_study();
 
     auto result = gen.generate_cancelled(study, "Study cancelled by ordering physician");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->get_value("OBR.25"), "X");
-    EXPECT_EQ(result->get_value("OBX.11"), "X");
+    EXPECT_EQ(result.value().get_value("OBR.25"), "X");
+    EXPECT_EQ(result.value().get_value("OBX.11"), "X");
 }
 
 TEST_F(ORUGeneratorTest, GenerateCancelledReportDefaultReason) {
@@ -190,10 +190,10 @@ TEST_F(ORUGeneratorTest, GenerateCancelledReportDefaultReason) {
     auto study = create_sample_study();
 
     auto result = gen.generate_cancelled(study);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // Should have default cancellation message
-    EXPECT_EQ(result->get_value("OBX.11"), "X");
+    EXPECT_EQ(result.value().get_value("OBX.11"), "X");
 }
 
 // =============================================================================
@@ -211,9 +211,9 @@ TEST_F(ORUGeneratorTest, CustomConfiguration) {
     auto study = create_sample_study();
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    auto header = result->header();
+    auto header = result.value().header();
     EXPECT_EQ(header.sending_application, "CUSTOM_PACS");
     EXPECT_EQ(header.sending_facility, "CUSTOM_RAD");
     EXPECT_EQ(header.receiving_application, "CUSTOM_RIS");
@@ -231,11 +231,11 @@ TEST_F(ORUGeneratorTest, LOINCCodesEnabled) {
     auto study = create_sample_study();
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->get_value("OBX.3.1"), "18782-3");
-    EXPECT_EQ(result->get_value("OBX.3.2"), "Radiology Study observation");
-    EXPECT_EQ(result->get_value("OBX.3.3"), "LN");
+    EXPECT_EQ(result.value().get_value("OBX.3.1"), "18782-3");
+    EXPECT_EQ(result.value().get_value("OBX.3.2"), "Radiology Study observation");
+    EXPECT_EQ(result.value().get_value("OBX.3.3"), "LN");
 }
 
 TEST_F(ORUGeneratorTest, LOINCCodesDisabled) {
@@ -246,10 +246,10 @@ TEST_F(ORUGeneratorTest, LOINCCodesDisabled) {
     auto study = create_sample_study();
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->get_value("OBX.3.1"), "REPORT");
-    EXPECT_EQ(result->get_value("OBX.3.2"), "Radiology Report");
+    EXPECT_EQ(result.value().get_value("OBX.3.1"), "REPORT");
+    EXPECT_EQ(result.value().get_value("OBX.3.2"), "Radiology Report");
 }
 
 TEST_F(ORUGeneratorTest, GetConfig) {
@@ -386,10 +386,10 @@ TEST_F(ORUGeneratorTest, GenerateStringStatic) {
     auto result = oru_generator::generate_string(
         study, "Test report", report_status::final_report);
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_THAT(*result, StartsWith("MSH|"));
-    EXPECT_THAT(*result, HasSubstr("ORU^R01"));
-    EXPECT_THAT(*result, HasSubstr("DOE^JOHN"));
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_THAT(result.value(), StartsWith("MSH|"));
+    EXPECT_THAT(result.value(), HasSubstr("ORU^R01"));
+    EXPECT_THAT(result.value(), HasSubstr("DOE^JOHN"));
 }
 
 // =============================================================================
@@ -402,8 +402,8 @@ TEST_F(ORUGeneratorTest, GenerateWithInvalidStudy) {
     // Missing required fields
 
     auto result = gen.generate_final(invalid_study, "Test report");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), hl7_error::missing_required_field);
+    EXPECT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, to_error_code(hl7_error::missing_required_field));
 }
 
 // =============================================================================
@@ -415,24 +415,24 @@ TEST_F(ORUGeneratorTest, OBXSegmentStructure) {
     auto study = create_sample_study();
 
     auto result = gen.generate_final(study, "Test report content");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // OBX-1: Set ID
-    EXPECT_EQ(result->get_value("OBX.1"), "1");
+    EXPECT_EQ(result.value().get_value("OBX.1"), "1");
 
     // OBX-2: Value Type (FT = Formatted Text)
-    EXPECT_EQ(result->get_value("OBX.2"), "FT");
+    EXPECT_EQ(result.value().get_value("OBX.2"), "FT");
 
     // OBX-3: Observation Identifier (covered in LOINC tests)
 
     // OBX-5: Observation Value
-    EXPECT_FALSE(result->get_value("OBX.5").empty());
+    EXPECT_FALSE(result.value().get_value("OBX.5").empty());
 
     // OBX-11: Observation Result Status
-    EXPECT_EQ(result->get_value("OBX.11"), "F");
+    EXPECT_EQ(result.value().get_value("OBX.11"), "F");
 
     // OBX-14: Date/Time of Observation
-    EXPECT_FALSE(result->get_value("OBX.14").empty());
+    EXPECT_FALSE(result.value().get_value("OBX.14").empty());
 }
 
 // =============================================================================
@@ -444,12 +444,12 @@ TEST_F(ORUGeneratorTest, RadiologistInOBR32) {
     auto study = create_sample_study();
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // OBR-32: Principal Result Interpreter
-    EXPECT_EQ(result->get_value("OBR.32.1"), "RAD001");
-    EXPECT_EQ(result->get_value("OBR.32.2"), "JONES");
-    EXPECT_EQ(result->get_value("OBR.32.3"), "MARY");
+    EXPECT_EQ(result.value().get_value("OBR.32.1"), "RAD001");
+    EXPECT_EQ(result.value().get_value("OBR.32.2"), "JONES");
+    EXPECT_EQ(result.value().get_value("OBR.32.3"), "MARY");
 }
 
 TEST_F(ORUGeneratorTest, RadiologistMissing) {
@@ -460,10 +460,10 @@ TEST_F(ORUGeneratorTest, RadiologistMissing) {
     study.radiologist_given_name = "";
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // OBR-32 should be empty
-    EXPECT_TRUE(result->get_value("OBR.32.1").empty());
+    EXPECT_TRUE(result.value().get_value("OBR.32.1").empty());
 }
 
 // =============================================================================
@@ -475,14 +475,14 @@ TEST_F(ORUGeneratorTest, GeneratedMessageParses) {
     auto study = create_sample_study();
 
     auto result = gen.generate_final(study, "Normal chest radiograph.");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // Serialize and re-parse
-    std::string serialized = result->serialize();
+    std::string serialized = result.value().serialize();
     auto reparsed = hl7_message::parse(serialized);
 
     ASSERT_TRUE(reparsed.has_value());
-    EXPECT_EQ(reparsed->segment_count(), result->segment_count());
+    EXPECT_EQ(reparsed->segment_count(), result.value().segment_count());
     EXPECT_EQ(reparsed->get_value("PID.5.1"), "DOE");
 }
 
@@ -504,9 +504,9 @@ TEST_F(ORUGeneratorTest, ObservationDateTimeProvided) {
     study.observation_datetime = ts;
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    std::string obr7 = std::string(result->get_value("OBR.7"));
+    std::string obr7 = std::string(result.value().get_value("OBR.7"));
     EXPECT_THAT(obr7, StartsWith("20240615"));
 }
 
@@ -516,10 +516,10 @@ TEST_F(ORUGeneratorTest, ObservationDateTimeDefault) {
     study.observation_datetime = std::nullopt;
 
     auto result = gen.generate_final(study, "Test report");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // OBR-7 should have current timestamp
-    EXPECT_FALSE(result->get_value("OBR.7").empty());
+    EXPECT_FALSE(result.value().get_value("OBR.7").empty());
 }
 
 }  // namespace

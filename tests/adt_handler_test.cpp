@@ -209,11 +209,11 @@ bool test_handle_a01_admit_new_patient() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
-    TEST_ASSERT(result->success, "Result should be successful");
-    TEST_ASSERT(result->trigger == adt_trigger_event::A01,
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
+    TEST_ASSERT(result.value().success, "Result should be successful");
+    TEST_ASSERT(result.value().trigger == adt_trigger_event::A01,
                 "Trigger should be A01");
-    TEST_ASSERT(result->patient_id == "12345", "Patient ID should be 12345");
+    TEST_ASSERT(result.value().patient_id == "12345", "Patient ID should be 12345");
 
     // Verify patient is in cache
     TEST_ASSERT(cache->contains("12345"), "Patient should be in cache");
@@ -239,11 +239,11 @@ bool test_handle_a04_register_outpatient() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
-    TEST_ASSERT(result->success, "Result should be successful");
-    TEST_ASSERT(result->trigger == adt_trigger_event::A04,
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
+    TEST_ASSERT(result.value().success, "Result should be successful");
+    TEST_ASSERT(result.value().trigger == adt_trigger_event::A04,
                 "Trigger should be A04");
-    TEST_ASSERT(result->patient_id == "54321", "Patient ID should be 54321");
+    TEST_ASSERT(result.value().patient_id == "54321", "Patient ID should be 54321");
 
     // Verify patient is in cache
     TEST_ASSERT(cache->contains("54321"), "Patient should be in cache");
@@ -263,16 +263,16 @@ bool test_handle_a08_update_patient() {
     auto a01_msg = hl7_message::parse(SAMPLE_ADT_A01);
     TEST_ASSERT(a01_msg.has_value(), "A01 message should parse");
     auto a01_result = handler.handle(*a01_msg);
-    TEST_ASSERT(a01_result.has_value(), "A01 should succeed");
+    TEST_ASSERT(a01_result.is_ok(), "A01 should succeed");
 
     // Then update with A08
     auto a08_msg = hl7_message::parse(SAMPLE_ADT_A08);
     TEST_ASSERT(a08_msg.has_value(), "A08 message should parse");
 
     auto result = handler.handle(*a08_msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
-    TEST_ASSERT(result->success, "Result should be successful");
-    TEST_ASSERT(result->trigger == adt_trigger_event::A08,
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
+    TEST_ASSERT(result.value().success, "Result should be successful");
+    TEST_ASSERT(result.value().trigger == adt_trigger_event::A08,
                 "Trigger should be A08");
 
     // Verify statistics
@@ -292,8 +292,8 @@ bool test_handle_a08_patient_not_found() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(!result.has_value(), "Handle should fail");
-    TEST_ASSERT(result.error() == adt_error::patient_not_found,
+    TEST_ASSERT(!result.is_ok(), "Handle should fail");
+    TEST_ASSERT(result.error().code == to_error_code(adt_error::patient_not_found),
                 "Error should be patient_not_found");
 
     return true;
@@ -310,8 +310,8 @@ bool test_handle_a08_create_if_configured() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed with config");
-    TEST_ASSERT(result->success, "Result should be successful");
+    TEST_ASSERT(result.is_ok(), "Handle should succeed with config");
+    TEST_ASSERT(result.value().success, "Result should be successful");
 
     // Patient should be created
     TEST_ASSERT(cache->contains("12345"), "Patient should be in cache");
@@ -334,12 +334,12 @@ bool test_handle_a40_merge_patients() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
-    TEST_ASSERT(result->success, "Result should be successful");
-    TEST_ASSERT(result->trigger == adt_trigger_event::A40,
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
+    TEST_ASSERT(result.value().success, "Result should be successful");
+    TEST_ASSERT(result.value().trigger == adt_trigger_event::A40,
                 "Trigger should be A40");
-    TEST_ASSERT(result->patient_id == "12345", "Primary ID should be 12345");
-    TEST_ASSERT(result->merged_patient_id == "99999",
+    TEST_ASSERT(result.value().patient_id == "12345", "Primary ID should be 12345");
+    TEST_ASSERT(result.value().merged_patient_id == "99999",
                 "Merged ID should be 99999");
 
     // Primary patient should exist
@@ -363,8 +363,8 @@ bool test_handle_non_adt_message() {
     TEST_ASSERT(msg.has_value(), "ORM message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(!result.has_value(), "Handle should fail for non-ADT");
-    TEST_ASSERT(result.error() == adt_error::not_adt_message,
+    TEST_ASSERT(!result.is_ok(), "Handle should fail for non-ADT");
+    TEST_ASSERT(result.error().code == to_error_code(adt_error::not_adt_message),
                 "Error should be not_adt_message");
 
     return true;
@@ -387,7 +387,7 @@ bool test_patient_created_callback() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
     TEST_ASSERT(created_patient_id == "12345",
                 "Callback should receive patient ID");
 
@@ -412,7 +412,7 @@ bool test_patient_updated_callback() {
     // Update patient
     auto a08_msg = hl7_message::parse(SAMPLE_ADT_A08);
     auto result = handler.handle(*a08_msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
     TEST_ASSERT(old_id == "12345" && new_id == "12345",
                 "Callback should receive both patients");
 
@@ -437,7 +437,7 @@ bool test_patient_merged_callback() {
     // Handle merge
     auto msg = hl7_message::parse(SAMPLE_ADT_A40);
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
     TEST_ASSERT(primary_id == "12345", "Primary ID should be correct");
     TEST_ASSERT(secondary_id == "99999", "Secondary ID should be correct");
 
@@ -456,10 +456,10 @@ bool test_ack_generation() {
     TEST_ASSERT(msg.has_value(), "Message should parse");
 
     auto result = handler.handle(*msg);
-    TEST_ASSERT(result.has_value(), "Handle should succeed");
+    TEST_ASSERT(result.is_ok(), "Handle should succeed");
 
     // Check ACK message
-    auto ack_header = result->ack_message.header();
+    auto ack_header = result.value().ack_message.header();
     TEST_ASSERT(ack_header.type == message_type::ACK, "ACK type should be ACK");
 
     return true;
@@ -536,7 +536,7 @@ bool test_concurrent_processing() {
             auto msg = hl7_message::parse(msg_str);
             if (msg) {
                 auto result = handler.handle(*msg);
-                if (result && result->success) {
+                if (result.is_ok() && result.value().success) {
                     success_count++;
                 } else {
                     failure_count++;

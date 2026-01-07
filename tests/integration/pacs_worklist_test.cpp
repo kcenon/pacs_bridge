@@ -188,9 +188,9 @@ private:
         hl7::hl7_parser parser;
         auto parse_result = parser.parse(msg.to_string());
 
-        if (parse_result.has_value()) {
-            std::string accession(parse_result->get_value("ORC.4"));
-            std::string status(parse_result->get_value("ORC.5"));
+        if (parse_result.is_ok()) {
+            std::string accession(parse_result.value().get_value("ORC.4"));
+            std::string status(parse_result.value().get_value("ORC.5"));
 
             if (!accession.empty()) {
                 std::lock_guard<std::mutex> lock(mutex_);
@@ -217,8 +217,8 @@ private:
         auto parse_result = parser.parse(original.to_string());
 
         std::string msg_control_id = "0";
-        if (parse_result.has_value()) {
-            msg_control_id = parse_result->get_value("MSH.10");
+        if (parse_result.is_ok()) {
+            msg_control_id = parse_result.value().get_value("MSH.10");
         }
 
         auto now = std::chrono::system_clock::now();

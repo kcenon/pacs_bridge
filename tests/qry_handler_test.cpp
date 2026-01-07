@@ -100,8 +100,8 @@ protected:
 
     std::unique_ptr<hl7_parser> parser_;
 
-    std::expected<hl7_message, hl7_error> parse_qry(std::string_view raw) {
-        return parser_->parse(std::string(raw));
+    Result<hl7_message> parse_qry(std::string_view raw) {
+        return parser_->parse(raw);
     }
 
     // Extract query ID from QRD
@@ -132,43 +132,43 @@ protected:
 
 TEST_F(QryHandlerTest, ParseQryA19Patient) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "QRY");
-    EXPECT_EQ(msg->trigger_event(), "A19");
-    EXPECT_EQ(extract_query_id(*msg), "QUERY001");
+    EXPECT_STREQ(to_string(msg.value().type()), "QRY");
+    EXPECT_EQ(msg.value().trigger_event(), "A19");
+    EXPECT_EQ(extract_query_id(msg.value()), "QUERY001");
 }
 
 TEST_F(QryHandlerTest, ParseQryQ01Parameter) {
     auto msg = parse_qry(qry_samples::QRY_Q01_PARAMETER);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "QRY");
-    EXPECT_EQ(msg->trigger_event(), "Q01");
+    EXPECT_STREQ(to_string(msg.value().type()), "QRY");
+    EXPECT_EQ(msg.value().trigger_event(), "Q01");
 }
 
 TEST_F(QryHandlerTest, ParseQryR02Results) {
     auto msg = parse_qry(qry_samples::QRY_R02_RESULTS);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "QRY");
-    EXPECT_EQ(msg->trigger_event(), "R02");
+    EXPECT_STREQ(to_string(msg.value().type()), "QRY");
+    EXPECT_EQ(msg.value().trigger_event(), "R02");
 }
 
 TEST_F(QryHandlerTest, ParseQryPC4Problem) {
     auto msg = parse_qry(qry_samples::QRY_PC4_PROBLEM);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "QRY");
-    EXPECT_EQ(msg->trigger_event(), "PC4");
+    EXPECT_STREQ(to_string(msg.value().type()), "QRY");
+    EXPECT_EQ(msg.value().trigger_event(), "PC4");
 }
 
 TEST_F(QryHandlerTest, ParseQryT12Document) {
     auto msg = parse_qry(qry_samples::QRY_T12_DOCUMENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_STREQ(to_string(msg->type()), "QRY");
-    EXPECT_EQ(msg->trigger_event(), "T12");
+    EXPECT_STREQ(to_string(msg.value().type()), "QRY");
+    EXPECT_EQ(msg.value().trigger_event(), "T12");
 }
 
 // =============================================================================
@@ -177,9 +177,9 @@ TEST_F(QryHandlerTest, ParseQryT12Document) {
 
 TEST_F(QryHandlerTest, ExtractQueryDateTime) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrd = msg->segment("QRD");
+    auto qrd = msg.value().segment("QRD");
     ASSERT_TRUE(qrd != nullptr);
 
     // QRD-1 is Query Date/Time
@@ -188,9 +188,9 @@ TEST_F(QryHandlerTest, ExtractQueryDateTime) {
 
 TEST_F(QryHandlerTest, ExtractQueryFormatCode) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrd = msg->segment("QRD");
+    auto qrd = msg.value().segment("QRD");
     ASSERT_TRUE(qrd != nullptr);
 
     // QRD-2 is Query Format Code (R = Response)
@@ -199,9 +199,9 @@ TEST_F(QryHandlerTest, ExtractQueryFormatCode) {
 
 TEST_F(QryHandlerTest, ExtractQueryPriority) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrd = msg->segment("QRD");
+    auto qrd = msg.value().segment("QRD");
     ASSERT_TRUE(qrd != nullptr);
 
     // QRD-3 is Query Priority (I = Immediate)
@@ -210,18 +210,18 @@ TEST_F(QryHandlerTest, ExtractQueryPriority) {
 
 TEST_F(QryHandlerTest, ExtractQuantityLimit) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string limit = extract_quantity_limit(*msg);
+    std::string limit = extract_quantity_limit(msg.value());
     // QRD-7 contains quantity (25^RD means 25 records)
     EXPECT_TRUE(limit.find("25") != std::string::npos);
 }
 
 TEST_F(QryHandlerTest, ExtractSubjectFilter) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    std::string filter = extract_subject_filter(*msg);
+    std::string filter = extract_subject_filter(msg.value());
     // QRD-8 contains subject filter (patient ID and name)
     EXPECT_TRUE(filter.find("12345") != std::string::npos);
     EXPECT_TRUE(filter.find("DOE") != std::string::npos);
@@ -229,9 +229,9 @@ TEST_F(QryHandlerTest, ExtractSubjectFilter) {
 
 TEST_F(QryHandlerTest, ExtractWhatDataCodeSubject) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrd = msg->segment("QRD");
+    auto qrd = msg.value().segment("QRD");
     ASSERT_TRUE(qrd != nullptr);
 
     // QRD-9 is What Data Code Subject (DEM = Demographics)
@@ -244,9 +244,9 @@ TEST_F(QryHandlerTest, ExtractWhatDataCodeSubject) {
 
 TEST_F(QryHandlerTest, ExtractWhereSubjectFilter) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     ASSERT_TRUE(qrf != nullptr);
 
     // QRF-1 is Where Subject Filter
@@ -255,9 +255,9 @@ TEST_F(QryHandlerTest, ExtractWhereSubjectFilter) {
 
 TEST_F(QryHandlerTest, ExtractDateRange) {
     auto msg = parse_qry(qry_samples::QRY_DATE_RANGE);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     ASSERT_TRUE(qrf != nullptr);
 
     // QRF-2 is When Data Start Date/Time
@@ -268,9 +268,9 @@ TEST_F(QryHandlerTest, ExtractDateRange) {
 
 TEST_F(QryHandlerTest, ExtractWhatUserQualifier) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     ASSERT_TRUE(qrf != nullptr);
 
     // QRF-5 contains what data codes requested (PID|PV1)
@@ -280,9 +280,9 @@ TEST_F(QryHandlerTest, ExtractWhatUserQualifier) {
 
 TEST_F(QryHandlerTest, ExtractMultipleQualifiers) {
     auto msg = parse_qry(qry_samples::QRY_MULTI_CRITERIA);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     ASSERT_TRUE(qrf != nullptr);
 
     std::string qualifiers = std::string(qrf->field_value(5));
@@ -296,7 +296,7 @@ TEST_F(QryHandlerTest, ExtractMultipleQualifiers) {
 
 TEST_F(QryHandlerTest, BuildQueryResponseAdr) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // Build ADT Response message (A19 is a query response)
     auto builder = hl7_builder::create();
@@ -309,8 +309,8 @@ TEST_F(QryHandlerTest, BuildQueryResponseAdr) {
            .message_type("ADT", "A19");
 
     auto response = builder.build();
-    ASSERT_TRUE(response.has_value());
-    EXPECT_STREQ(to_string(response->type()), "ADT");
+    ASSERT_TRUE(response.is_ok());
+    EXPECT_STREQ(to_string(response.value().type()), "ADT");
 }
 
 // =============================================================================
@@ -319,9 +319,9 @@ TEST_F(QryHandlerTest, BuildQueryResponseAdr) {
 
 TEST_F(QryHandlerTest, DocumentQueryWithType) {
     auto msg = parse_qry(qry_samples::QRY_T12_DOCUMENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     ASSERT_TRUE(qrf != nullptr);
 
     // QRF-4 should contain document type filter
@@ -332,9 +332,9 @@ TEST_F(QryHandlerTest, DocumentQueryWithType) {
 
 TEST_F(QryHandlerTest, ResultsQueryWithDateRange) {
     auto msg = parse_qry(qry_samples::QRY_R02_RESULTS);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     ASSERT_TRUE(qrf != nullptr);
 
     // Should have start and end dates
@@ -351,9 +351,9 @@ TEST_F(QryHandlerTest, MissingQrdSegment) {
         "MSH|^~\\&|HIS|HOSPITAL|ADT|HOSPITAL|20240115150000||QRY^A19|MSG001|P|2.4\r";
 
     auto msg = parse_qry(invalid_qry);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto qrd = msg->segment("QRD");
+    auto qrd = msg.value().segment("QRD");
     EXPECT_TRUE(qrd == nullptr);
 }
 
@@ -363,9 +363,9 @@ TEST_F(QryHandlerTest, EmptyQueryId) {
         "QRD|20240115150000|R|I|||||DEM\r";
 
     auto msg = parse_qry(qry_no_id);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    EXPECT_TRUE(extract_query_id(*msg).empty());
+    EXPECT_TRUE(extract_query_id(msg.value()).empty());
 }
 
 TEST_F(QryHandlerTest, MissingQrfSegment) {
@@ -374,10 +374,10 @@ TEST_F(QryHandlerTest, MissingQrfSegment) {
         "QRD|20240115150000|R|I|QUERY001|||25^RD|12345|DEM\r";
 
     auto msg = parse_qry(qry_no_qrf);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
     // QRF is optional, so parsing should succeed
-    auto qrf = msg->segment("QRF");
+    auto qrf = msg.value().segment("QRF");
     EXPECT_TRUE(qrf == nullptr);
 }
 
@@ -387,9 +387,9 @@ TEST_F(QryHandlerTest, MissingQrfSegment) {
 
 TEST_F(QryHandlerTest, BuildAckForQuery) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "Query accepted");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "Query accepted");
 
     // ack is hl7_message directly, no has_value check needed
     EXPECT_STREQ(to_string(ack.type()), "ACK");
@@ -397,9 +397,9 @@ TEST_F(QryHandlerTest, BuildAckForQuery) {
 
 TEST_F(QryHandlerTest, BuildErrorAckForInvalidQuery) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AE, "Invalid query parameters");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AE, "Invalid query parameters");
 
     // ack is hl7_message directly, no has_value check needed
     auto msa = ack.segment("MSA");
@@ -409,9 +409,9 @@ TEST_F(QryHandlerTest, BuildErrorAckForInvalidQuery) {
 
 TEST_F(QryHandlerTest, BuildNoDataAck) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
-    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(msg.is_ok());
 
-    auto ack = hl7_builder::create_ack(*msg, ack_code::AA, "No matching records found");
+    auto ack = hl7_builder::create_ack(msg.value(), ack_code::AA, "No matching records found");
 
     // ack is hl7_message directly, no has_value check needed
     // Should indicate successful query but no data

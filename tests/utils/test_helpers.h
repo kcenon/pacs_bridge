@@ -349,6 +349,30 @@ bool wait_for(Predicate pred, std::chrono::milliseconds timeout = std::chrono::m
 #define EXPECT_EXPECTED_ERROR(expected) \
     EXPECT_FALSE((expected).has_value()) << "Expected error but got value"
 
+/**
+ * @brief Assert that a Result<T> has a value (for kcenon::common::Result<T>)
+ */
+#define ASSERT_RESULT_OK(result) \
+    ASSERT_TRUE((result).is_ok()) << "Expected value but got error"
+
+/**
+ * @brief Expect that a Result<T> has a value (for kcenon::common::Result<T>)
+ */
+#define EXPECT_RESULT_OK(result) \
+    EXPECT_TRUE((result).is_ok()) << "Expected value but got error"
+
+/**
+ * @brief Assert that a Result<T> has an error (for kcenon::common::Result<T>)
+ */
+#define ASSERT_RESULT_ERROR(result) \
+    ASSERT_FALSE((result).is_ok()) << "Expected error but got value"
+
+/**
+ * @brief Expect that a Result<T> has an error (for kcenon::common::Result<T>)
+ */
+#define EXPECT_RESULT_ERROR(result) \
+    EXPECT_FALSE((result).is_ok()) << "Expected error but got value"
+
 }  // namespace pacs::bridge::test
 
 #endif  // PACS_BRIDGE_TEST_HELPERS_H

@@ -20,7 +20,6 @@
 #include "hl7_message.h"
 #include "hl7_types.h"
 
-#include <expected>
 #include <functional>
 #include <memory>
 #include <span>
@@ -175,7 +174,7 @@ public:
      * @param details Optional pointer to receive parse details
      * @return Parsed message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> parse(
+    [[nodiscard]] Result<hl7_message> parse(
         std::string_view data, parse_details* details = nullptr) const;
 
     /**
@@ -185,7 +184,7 @@ public:
      * @param details Optional pointer to receive parse details
      * @return Parsed message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> parse(
+    [[nodiscard]] Result<hl7_message> parse(
         std::span<const uint8_t> data, parse_details* details = nullptr) const;
 
     /**
@@ -199,7 +198,7 @@ public:
      * @param details Optional pointer to receive parse details
      * @return Parsed message or error
      */
-    [[nodiscard]] std::expected<hl7_message, hl7_error> parse(
+    [[nodiscard]] Result<hl7_message> parse(
         std::string_view data, const hl7_encoding_characters& encoding,
         parse_details* details = nullptr) const;
 
@@ -216,7 +215,7 @@ public:
      * @param data Raw HL7 message data
      * @return Encoding characters or error
      */
-    [[nodiscard]] static std::expected<hl7_encoding_characters, hl7_error>
+    [[nodiscard]] static Result<hl7_encoding_characters>
     extract_encoding(std::string_view data);
 
     /**
@@ -228,7 +227,7 @@ public:
      * @param data Raw HL7 message data
      * @return Message header or error
      */
-    [[nodiscard]] static std::expected<hl7_message_header, hl7_error>
+    [[nodiscard]] static Result<hl7_message_header>
     extract_header(std::string_view data);
 
     /**
@@ -297,7 +296,7 @@ public:
      * @param encoding Encoding characters
      * @return Parsed segment or error
      */
-    [[nodiscard]] static std::expected<hl7_segment, hl7_error> parse_segment(
+    [[nodiscard]] static Result<hl7_segment> parse_segment(
         std::string_view segment_data, const hl7_encoding_characters& encoding);
 
     /**
@@ -352,7 +351,7 @@ public:
      * @param data Data chunk
      * @return Error if parsing failed
      */
-    [[nodiscard]] std::expected<void, hl7_error> feed(std::string_view data);
+    [[nodiscard]] VoidResult feed(std::string_view data);
 
     /**
      * @brief Set callback for parsed segments
@@ -364,7 +363,7 @@ public:
      *
      * @return Complete message if one was fully parsed
      */
-    [[nodiscard]] std::expected<std::optional<hl7_message>, hl7_error> finish();
+    [[nodiscard]] Result<std::optional<hl7_message>> finish();
 
     /**
      * @brief Reset parser state

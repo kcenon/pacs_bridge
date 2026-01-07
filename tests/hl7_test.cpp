@@ -497,12 +497,12 @@ TEST_F(HL7ParserTest, BasicParsing) {
     hl7_parser parser;
 
     auto result = parser.parse(hl7_samples::ADT_A01);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->segment_count(), 4u);
+    ASSERT_RESULT_OK(result);
+    EXPECT_EQ(result.value().segment_count(), 4u);
 
     auto result2 = parser.parse(hl7_samples::ORM_O01);
-    ASSERT_TRUE(result2.has_value());
-    EXPECT_EQ(result2->segment_count(), 5u);
+    ASSERT_RESULT_OK(result2);
+    EXPECT_EQ(result2.value().segment_count(), 5u);
 }
 
 TEST_F(HL7ParserTest, ErrorHandling) {
@@ -510,26 +510,26 @@ TEST_F(HL7ParserTest, ErrorHandling) {
 
     // Empty message
     auto result = parser.parse("");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), hl7_error::empty_message);
+    ASSERT_RESULT_ERROR(result);
+    EXPECT_EQ(result.error().code, to_error_code(hl7_error::empty_message));
 
     // Missing MSH
     auto result2 = parser.parse("PID|1||12345\r");
-    EXPECT_FALSE(result2.has_value());
-    EXPECT_EQ(result2.error(), hl7_error::missing_msh);
+    ASSERT_RESULT_ERROR(result2);
+    EXPECT_EQ(result2.error().code, to_error_code(hl7_error::missing_msh));
 
     // Invalid MSH
     auto result3 = parser.parse("MSH\r");
-    EXPECT_FALSE(result3.has_value());
+    ASSERT_RESULT_ERROR(result3);
 }
 
 TEST_F(HL7ParserTest, EncodingDetection) {
     hl7_parser parser;
 
     auto result = parser.parse(hl7_samples::ADT_A01);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_RESULT_OK(result);
 
-    auto enc = result->encoding();
+    auto enc = result.value().encoding();
     EXPECT_EQ(enc.field_separator, '|');
     EXPECT_EQ(enc.component_separator, '^');
     EXPECT_EQ(enc.repetition_separator, '~');
@@ -545,7 +545,7 @@ TEST_F(HL7ParserTest, WithOptions) {
     hl7_parser parser(opts);
 
     auto result = parser.parse(hl7_samples::ADT_A01);
-    EXPECT_TRUE(result.has_value());
+    EXPECT_RESULT_OK(result);
 }
 
 TEST_F(HL7ParserTest, WithDetails) {
@@ -553,23 +553,23 @@ TEST_F(HL7ParserTest, WithDetails) {
     parse_details details;
 
     auto result = parser.parse(hl7_samples::ADT_A01, &details);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_RESULT_OK(result);
     EXPECT_EQ(details.segment_count, 4u);
     EXPECT_GT(details.original_size, 0u);
 }
 
 TEST_F(HL7ParserTest, ExtractEncoding) {
     auto enc_result = hl7_parser::extract_encoding(hl7_samples::ADT_A01);
-    ASSERT_TRUE(enc_result.has_value());
-    EXPECT_EQ(enc_result->field_separator, '|');
-    EXPECT_EQ(enc_result->component_separator, '^');
+    ASSERT_RESULT_OK(enc_result);
+    EXPECT_EQ(enc_result.value().field_separator, '|');
+    EXPECT_EQ(enc_result.value().component_separator, '^');
 }
 
 TEST_F(HL7ParserTest, ExtractHeader) {
     auto header_result = hl7_parser::extract_header(hl7_samples::ADT_A01);
-    ASSERT_TRUE(header_result.has_value());
-    EXPECT_EQ(header_result->sending_application, "HIS");
-    EXPECT_EQ(header_result->type_string, "ADT");
+    ASSERT_RESULT_OK(header_result);
+    EXPECT_EQ(header_result.value().sending_application, "HIS");
+    EXPECT_EQ(header_result.value().type_string, "ADT");
 }
 
 TEST_F(HL7ParserTest, LooksLikeHL7) {
@@ -582,16 +582,16 @@ TEST_F(HL7ParserTest, LooksLikeHL7) {
 TEST_F(HL7ParserTest, SegmentIteration) {
     hl7_parser parser;
     auto result = parser.parse(hl7_samples::ADT_A01);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_RESULT_OK(result);
 
     // Get all segments of a type
-    auto pid_segments = result->segments("PID");
+    auto pid_segments = result.value().segments("PID");
     EXPECT_EQ(pid_segments.size(), 1u);
 
-    auto pv1_segments = result->segments("PV1");
+    auto pv1_segments = result.value().segments("PV1");
     EXPECT_EQ(pv1_segments.size(), 1u);
 
-    auto zxx_segments = result->segments("ZXX");
+    auto zxx_segments = result.value().segments("ZXX");
     EXPECT_TRUE(zxx_segments.empty());
 }
 
@@ -648,13 +648,13 @@ TEST_F(HL7ParserTest, EscapeSequences) {
 TEST_F(HL7ParserTest, ZSegment) {
     hl7_parser parser;
     auto result = parser.parse(hl7_samples::MSG_WITH_ZDS);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_RESULT_OK(result);
 
     // Check ZDS segment exists
-    EXPECT_TRUE(result->has_segment("ZDS"));
+    EXPECT_TRUE(result.value().has_segment("ZDS"));
 
     // Get ZDS segment
-    const auto* zds = result->segment("ZDS");
+    const auto* zds = result.value().segment("ZDS");
     ASSERT_NE(zds, nullptr);
 
     // Check ZDS field values
@@ -665,14 +665,14 @@ TEST_F(HL7ParserTest, ZSegment) {
 TEST_F(HL7ParserTest, NonStandardDelimiters) {
     hl7_parser parser;
     auto result = parser.parse(hl7_samples::CUSTOM_DELIM_MSG);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_RESULT_OK(result);
 
-    auto enc = result->encoding();
+    auto enc = result.value().encoding();
     EXPECT_EQ(enc.field_separator, '#');
     EXPECT_EQ(enc.component_separator, '*');
 
     // Verify field extraction works with custom delimiters
-    EXPECT_EQ(result->get_value("MSH.3"), "SENDER");
+    EXPECT_EQ(result.value().get_value("MSH.3"), "SENDER");
 }
 
 TEST_F(HL7ParserTest, Performance) {
@@ -681,7 +681,7 @@ TEST_F(HL7ParserTest, Performance) {
 
     // Parse message and capture timing
     auto result = parser.parse(hl7_samples::ADT_A01, &details);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_RESULT_OK(result);
 
     // Verify parse time < 10ms (with margin for first parse)
     EXPECT_LT(details.parse_time_us, 10000);
@@ -690,7 +690,7 @@ TEST_F(HL7ParserTest, Performance) {
     const int iterations = 100;
     int64_t avg_time = benchmark(iterations, [&parser]() {
         auto r = parser.parse(hl7_samples::ADT_A01);
-        EXPECT_TRUE(r.has_value());
+        EXPECT_RESULT_OK(r);
     });
 
     // Average should be < 1ms (1000 microseconds)
@@ -715,10 +715,10 @@ TEST_F(HL7BuilderTest, BasicBuilder) {
                       .version("2.4")
                       .build();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_TRUE(result->has_segment("MSH"));
+    ASSERT_RESULT_OK(result);
+    EXPECT_TRUE(result.value().has_segment("MSH"));
 
-    auto header = result->header();
+    auto header = result.value().header();
     EXPECT_EQ(header.sending_application, "TEST_APP");
     EXPECT_EQ(header.receiving_application, "DEST_APP");
     EXPECT_EQ(header.type_string, "ADT");
@@ -741,9 +741,9 @@ TEST_F(HL7BuilderTest, BuilderWithPatient) {
                       .patient_sex("M")
                       .build();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_TRUE(result->has_segment("MSH"));
-    EXPECT_TRUE(result->has_segment("PID"));
+    ASSERT_RESULT_OK(result);
+    EXPECT_TRUE(result.value().has_segment("MSH"));
+    EXPECT_TRUE(result.value().has_segment("PID"));
 }
 
 TEST_F(HL7BuilderTest, CreateAck) {
@@ -759,10 +759,10 @@ TEST_F(HL7BuilderTest, CreateAck) {
                                .version("2.4")
                                .build();
 
-    ASSERT_TRUE(original_result.has_value());
+    ASSERT_RESULT_OK(original_result);
 
     // Build ACK
-    auto ack = hl7_builder::create_ack(*original_result, ack_code::AA, "Message accepted");
+    auto ack = hl7_builder::create_ack(original_result.value(), ack_code::AA, "Message accepted");
 
     EXPECT_TRUE(ack.has_segment("MSH"));
     EXPECT_TRUE(ack.has_segment("MSA"));
@@ -790,9 +790,9 @@ TEST_F(HL7BuilderTest, SetField) {
                       .set_field("PID.5.1", "SMITH")
                       .build();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->get_value("PID.3"), "67890");
-    EXPECT_EQ(result->get_value("PID.5.1"), "SMITH");
+    ASSERT_RESULT_OK(result);
+    EXPECT_EQ(result.value().get_value("PID.3"), "67890");
+    EXPECT_EQ(result.value().get_value("PID.5.1"), "SMITH");
 }
 
 TEST_F(HL7BuilderTest, ADTBuilder) {
@@ -808,10 +808,10 @@ TEST_F(HL7BuilderTest, ADTBuilder) {
                       .patient_sex("F")
                       .build();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_TRUE(result->has_segment("MSH"));
+    ASSERT_RESULT_OK(result);
+    EXPECT_TRUE(result.value().has_segment("MSH"));
 
-    auto header = result->header();
+    auto header = result.value().header();
     EXPECT_EQ(header.type_string, "ADT");
     EXPECT_EQ(header.trigger_event, "A01");
 }
@@ -831,10 +831,10 @@ TEST_F(HL7BuilderTest, ORMBuilder) {
                       .procedure_code("71020", "CHEST XRAY", "CPT")
                       .build();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_TRUE(result->has_segment("MSH"));
+    ASSERT_RESULT_OK(result);
+    EXPECT_TRUE(result.value().has_segment("MSH"));
 
-    auto header = result->header();
+    auto header = result.value().header();
     EXPECT_EQ(header.type_string, "ORM");
     EXPECT_EQ(header.trigger_event, "O01");
 }
@@ -852,10 +852,10 @@ TEST_F(HL7BuilderTest, ORUBuilder) {
                       .result_status("F")
                       .build();
 
-    ASSERT_TRUE(result.has_value());
-    EXPECT_TRUE(result->has_segment("MSH"));
+    ASSERT_RESULT_OK(result);
+    EXPECT_TRUE(result.value().has_segment("MSH"));
 
-    auto header = result->header();
+    auto header = result.value().header();
     EXPECT_EQ(header.type_string, "ORU");
     EXPECT_EQ(header.trigger_event, "R01");
 }

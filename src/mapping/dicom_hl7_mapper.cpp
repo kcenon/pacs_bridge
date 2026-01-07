@@ -94,13 +94,13 @@ public:
 
         // Build the message
         auto build_result = builder.build();
-        if (!build_result) {
+        if (!build_result.is_ok()) {
             return std::unexpected(dicom_hl7_error::message_build_failed);
         }
 
         // Prepare result
         mpps_mapping_result result;
-        result.message = std::move(*build_result);
+        result.message = std::move(build_result.value());
         result.control_id = result.message.get_value("MSH.10");
         result.accession_number = mpps.accession_number;
         result.mpps_status = event;

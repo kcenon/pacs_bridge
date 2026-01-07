@@ -248,14 +248,14 @@ TEST_F(SiuHandlerTest, ExtractAppointmentInfoS12) {
     ASSERT_TRUE(parse_result.has_value());
 
     auto appt_result = handler.extract_appointment_info(*parse_result);
-    ASSERT_TRUE(appt_result.has_value());
+    ASSERT_TRUE(appt_result.is_ok());
 
-    EXPECT_EQ(appt_result->trigger, siu_trigger_event::s12_new_appointment);
-    EXPECT_EQ(appt_result->placer_appointment_id, "APPT001");
-    EXPECT_EQ(appt_result->patient_id, "12345");
-    EXPECT_EQ(appt_result->patient_name, "DOE^JOHN");
-    EXPECT_EQ(appt_result->procedure_code, "CT_SCAN");
-    EXPECT_EQ(appt_result->procedure_description, "CT Scan");
+    EXPECT_EQ(appt_result.value().trigger, siu_trigger_event::s12_new_appointment);
+    EXPECT_EQ(appt_result.value().placer_appointment_id, "APPT001");
+    EXPECT_EQ(appt_result.value().patient_id, "12345");
+    EXPECT_EQ(appt_result.value().patient_name, "DOE^JOHN");
+    EXPECT_EQ(appt_result.value().procedure_code, "CT_SCAN");
+    EXPECT_EQ(appt_result.value().procedure_description, "CT Scan");
 }
 
 TEST_F(SiuHandlerTest, ExtractAppointmentInfoS15) {
@@ -265,10 +265,10 @@ TEST_F(SiuHandlerTest, ExtractAppointmentInfoS15) {
     ASSERT_TRUE(parse_result.has_value());
 
     auto appt_result = handler.extract_appointment_info(*parse_result);
-    ASSERT_TRUE(appt_result.has_value());
+    ASSERT_TRUE(appt_result.is_ok());
 
     // Verify trigger event is S15 (cancellation)
-    EXPECT_EQ(appt_result->trigger, siu_trigger_event::s15_cancellation);
+    EXPECT_EQ(appt_result.value().trigger, siu_trigger_event::s15_cancellation);
     // Note: SCH-25 parsing depends on message format; for S15, the trigger event
     // itself indicates cancellation, so status may be unknown if field is not populated
     // in the standard position. The handler will treat S15 as cancellation regardless.
@@ -289,8 +289,8 @@ TEST_F(SiuHandlerTest, HandleNonSiuMessage) {
     ASSERT_TRUE(parse_result.has_value());
 
     auto handle_result = handler.handle(*parse_result);
-    EXPECT_FALSE(handle_result.has_value());
-    EXPECT_EQ(handle_result.error(), siu_error::not_siu_message);
+    EXPECT_FALSE(handle_result.is_ok());
+    EXPECT_EQ(handle_result.error().code, to_error_code(siu_error::not_siu_message));
 }
 
 TEST_F(SiuHandlerTest, HandleUnsupportedTriggerEvent) {
@@ -306,8 +306,8 @@ TEST_F(SiuHandlerTest, HandleUnsupportedTriggerEvent) {
     ASSERT_TRUE(parse_result.has_value());
 
     auto handle_result = handler.handle(*parse_result);
-    EXPECT_FALSE(handle_result.has_value());
-    EXPECT_EQ(handle_result.error(), siu_error::unsupported_trigger_event);
+    EXPECT_FALSE(handle_result.is_ok());
+    EXPECT_EQ(handle_result.error().code, to_error_code(siu_error::unsupported_trigger_event));
 }
 
 TEST_F(SiuHandlerTest, HandleMissingSCHSegment) {

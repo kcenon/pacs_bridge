@@ -280,19 +280,19 @@ public:
 
                 hl7::hl7_parser parser;
                 auto parse_result = parser.parse(raw);
-                if (!parse_result) {
+                if (!parse_result.is_ok()) {
                     return kcenon::common::ok();
                 }
 
                 const auto& sub_info = it->second;
 
                 // Apply filter
-                if (sub_info.filter && !sub_info.filter(*parse_result)) {
+                if (sub_info.filter && !sub_info.filter(parse_result.value())) {
                     return kcenon::common::ok();
                 }
 
                 // Invoke callback
-                auto cb_result = sub_info.callback(*parse_result);
+                auto cb_result = sub_info.callback(parse_result.value());
 
                 if (config_.enable_statistics) {
                     std::unique_lock stats_lock(stats_mutex_);

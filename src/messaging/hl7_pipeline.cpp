@@ -227,11 +227,11 @@ public:
         hl7::hl7_parser parser;
         auto parse_result = parser.parse(raw_data);
 
-        if (!parse_result) {
+        if (!parse_result.is_ok()) {
             return std::unexpected(pipeline_error::stage_failed);
         }
 
-        return process(*parse_result);
+        return process(parse_result.value());
     }
 
     std::expected<void, pipeline_error> start(

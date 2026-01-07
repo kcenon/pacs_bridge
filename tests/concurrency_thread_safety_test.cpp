@@ -82,7 +82,7 @@ TEST_F(ConcurrencyThreadSafetyTest, IndependentParsersInThreads) {
             int msg_id = thread_id * 1000 + i;
             std::string msg = create_test_message(msg_id);
             auto result = parser.parse(msg);
-            if (result.has_value()) {
+            if (result.is_ok()) {
                 ++success_count;
             } else {
                 ++failure_count;
@@ -122,13 +122,14 @@ TEST_F(ConcurrencyThreadSafetyTest, SharedParserConcurrentAccess) {
             int msg_id = thread_id * 1000 + i;
             std::string msg = create_test_message(msg_id);
 
-            std::expected<hl7_message, hl7_error> result;
+            bool success = false;
             {
                 std::lock_guard<std::mutex> lock(parser_mutex);
-                result = shared_parser.parse(msg);
+                auto result = shared_parser.parse(msg);
+                success = result.is_ok();
             }
 
-            if (result.has_value()) {
+            if (success) {
                 ++success_count;
             }
         }
@@ -166,7 +167,7 @@ TEST_F(ConcurrencyThreadSafetyTest, ConcurrentMessageBuilding) {
                 .control_id("MSG" + std::to_string(thread_id * 1000 + i))
                 .build();
 
-            if (msg.has_value()) {
+            if (msg.is_ok()) {
                 ++success_count;
             }
         }
@@ -205,7 +206,7 @@ TEST_F(ConcurrencyThreadSafetyTest, MixedParseAndBuildWorkload) {
                 // Parse operation
                 std::string msg = create_test_message(thread_id * 1000 + i);
                 auto result = parser.parse(msg);
-                if (result.has_value()) {
+                if (result.is_ok()) {
                     ++parse_success;
                 }
             } else {
@@ -219,7 +220,7 @@ TEST_F(ConcurrencyThreadSafetyTest, MixedParseAndBuildWorkload) {
                     .control_id("MSG" + std::to_string(thread_id * 1000 + i))
                     .build();
 
-                if (msg.has_value()) {
+                if (msg.is_ok()) {
                     ++build_success;
                 }
             }
@@ -247,14 +248,14 @@ TEST_F(ConcurrencyThreadSafetyTest, MessageObjectCopySafety) {
     const int thread_count = 4;
     hl7_parser parser;
     auto original = parser.parse(create_test_message(1));
-    ASSERT_TRUE(original.has_value());
+    ASSERT_TRUE(original.is_ok());
 
     std::atomic<int> success_count{0};
 
     auto thread_func = [&]() {
         for (int i = 0; i < 100; ++i) {
             // Copy the message
-            hl7_message copy = *original;
+            hl7_message copy = original.value();
 
             // Read from the copy
             auto msh = copy.segment("MSH");
@@ -282,7 +283,7 @@ TEST_F(ConcurrencyThreadSafetyTest, MessageObjectCopySafety) {
 
 TEST_F(ConcurrencyThreadSafetyTest, AsyncParseOperations) {
     const int async_count = 20;
-    std::vector<std::future<std::expected<hl7_message, hl7_error>>> futures;
+    std::vector<std::future<Result<hl7_message>>> futures;
     futures.reserve(async_count);
 
     for (int i = 0; i < async_count; ++i) {
@@ -295,7 +296,7 @@ TEST_F(ConcurrencyThreadSafetyTest, AsyncParseOperations) {
     int success = 0;
     for (auto& f : futures) {
         auto result = f.get();
-        if (result.has_value()) {
+        if (result.is_ok()) {
             ++success;
         }
     }
@@ -332,7 +333,7 @@ TEST_F(ConcurrencyThreadSafetyTest, HighContentionParsing) {
 
             --in_progress;
 
-            if (result.has_value()) {
+            if (result.is_ok()) {
                 ++success_count;
             }
         }
@@ -366,8 +367,8 @@ TEST_F(ConcurrencyThreadSafetyTest, ConcurrentLargeMessages) {
         for (int i = 0; i < messages_per_thread; ++i) {
             std::string msg = create_large_message(thread_id * 1000 + i, 50);
             auto result = parser.parse(msg);
-            if (result.has_value()) {
-                auto obx_segments = result->segments("OBX");
+            if (result.is_ok()) {
+                auto obx_segments = result.value().segments("OBX");
                 if (obx_segments.size() == 50) {
                     ++success_count;
                 }
@@ -438,7 +439,7 @@ TEST_F(ConcurrencyThreadSafetyTest, ProducerConsumerPattern) {
             }
 
             auto result = parser.parse(msg);
-            if (result.has_value()) {
+            if (result.is_ok()) {
                 ++consumed_count;
             }
         }
@@ -472,17 +473,17 @@ TEST_F(ConcurrencyThreadSafetyTest, ConcurrentRoundTrip) {
             // Parse original
             std::string original = create_test_message(thread_id * 1000 + i);
             auto parsed = parser.parse(original);
-            if (!parsed.has_value()) continue;
+            if (!parsed.is_ok()) continue;
 
             // Convert to string
-            std::string rebuilt = parsed->serialize();
+            std::string rebuilt = parsed.value().serialize();
 
             // Parse rebuilt
             auto reparsed = parser.parse(rebuilt);
-            if (!reparsed.has_value()) continue;
+            if (!reparsed.is_ok()) continue;
 
             // Verify
-            if (parsed->type() == reparsed->type()) {
+            if (parsed.value().type() == reparsed.value().type()) {
                 ++success_count;
             }
         }
@@ -514,21 +515,21 @@ TEST_F(ConcurrencyThreadSafetyTest, MemorySafetyUnderLoad) {
             hl7_parser parser;
             for (int i = 0; i < iterations; ++i) {
                 auto msg = parser.parse(create_test_message(thread_id * 1000 + i));
-                if (msg.has_value()) {
+                if (msg.is_ok()) {
                     // Access various parts of the message
-                    auto msh = msg->segment("MSH");
-                    auto pid = msg->segment("PID");
-                    auto pv1 = msg->segment("PV1");
+                    auto msh = msg.value().segment("MSH");
+                    auto pid = msg.value().segment("PID");
+                    auto pv1 = msg.value().segment("PV1");
 
                     if (msh) { volatile auto _ = msh->field_value(9); }
                     if (pid) { volatile auto _ = pid->field_value(3); }
                     if (pv1) { volatile auto _ = pv1->field_value(3); }
 
                     // Check segment count and iterate known segments
-                    volatile auto seg_count = msg->segment_count();
+                    volatile auto seg_count = msg.value().segment_count();
                     // Access a few standard segments
                     for (const auto& seg_id : {"MSH", "PID", "PV1"}) {
-                        if (auto seg = msg->segment(seg_id)) {
+                        if (auto seg = msg.value().segment(seg_id)) {
                             volatile auto _ = seg->segment_id();
                         }
                     }
