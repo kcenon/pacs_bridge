@@ -19,6 +19,11 @@
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
+// IExecutor interface for task execution (when available)
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include <kcenon/common/interfaces/executor_interface.h>
+#endif
+
 #include <chrono>
 #include <expected>
 #include <functional>
@@ -281,6 +286,11 @@ struct hl7_message_bus_config {
 
     /** Enable statistics collection */
     bool enable_statistics = true;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    /** Optional executor for task execution (nullptr = use internal thread pool) */
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
+#endif
 
     /**
      * @brief Create default configuration

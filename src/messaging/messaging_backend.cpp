@@ -17,6 +17,9 @@ namespace pacs::bridge::messaging {
 namespace {
     std::mutex g_executor_mutex;
     std::function<void(std::function<void()>)> g_external_executor;
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> g_iexecutor;
+#endif
 }
 
 // =============================================================================
@@ -38,16 +41,37 @@ messaging_backend_factory::create_message_bus(const backend_config& config) {
         actual_type = recommended_backend();
     }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Check if integration is requested but no executor available
+    if (actual_type == backend_type::integration) {
+        bool has_any_executor = has_executor() || has_external_executor() ||
+                                 config.executor != nullptr;
+        if (!has_any_executor) {
+            // Fall back to standalone
+            actual_type = backend_type::standalone;
+        }
+    }
+#else
     // Check if integration is requested but executor not available
     if (actual_type == backend_type::integration && !has_external_executor()) {
         // Fall back to standalone
         actual_type = backend_type::standalone;
     }
+#endif
 
     try {
         hl7_message_bus_config bus_config;
         bus_config.worker_threads = config.worker_threads;
         bus_config.queue_capacity = config.queue_capacity;
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        // Use executor from config, or global executor if not specified
+        if (config.executor) {
+            bus_config.executor = config.executor;
+        } else if (has_executor()) {
+            bus_config.executor = get_executor();
+        }
+#endif
 
         auto bus = std::make_shared<hl7_message_bus>(bus_config);
         return bus;
@@ -72,8 +96,34 @@ bool messaging_backend_factory::has_external_executor() noexcept {
     return g_external_executor != nullptr;
 }
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+void messaging_backend_factory::set_executor(
+    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor) {
+    std::lock_guard lock(g_executor_mutex);
+    g_iexecutor = std::move(executor);
+}
+
+std::shared_ptr<kcenon::common::interfaces::IExecutor>
+messaging_backend_factory::get_executor() noexcept {
+    std::lock_guard lock(g_executor_mutex);
+    return g_iexecutor;
+}
+
+bool messaging_backend_factory::has_executor() noexcept {
+    std::lock_guard lock(g_executor_mutex);
+    return g_iexecutor != nullptr;
+}
+#endif
+
 backend_type messaging_backend_factory::recommended_backend() noexcept {
-    // Prefer integration if external executor is available
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Prefer integration if IExecutor is available
+    if (has_executor()) {
+        return backend_type::integration;
+    }
+#endif
+
+    // Prefer integration if external executor function is available
     if (has_external_executor()) {
         return backend_type::integration;
     }
