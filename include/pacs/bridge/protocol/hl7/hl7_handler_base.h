@@ -329,19 +329,19 @@ public:
     [[nodiscard]] Result<handler_result> process(
         const hl7_message& message) override {
         auto result = handler_.handle(message);
-        if (!result) {
-            return kcenon::common::make_error<handler_result>(
+        if (!result.is_ok()) {
+            return Result<handler_result>::err(
                 to_error_info(handler_error::processing_failed,
                               result.error().message));
         }
 
         // Convert handler-specific result to generic result
         handler_result generic_result;
-        generic_result.success = result->success;
+        generic_result.success = result.value().success;
         generic_result.handler_type = std::string(Handler::type_name);
-        generic_result.description = result->description;
-        generic_result.ack_message = result->ack_message;
-        generic_result.warnings = result->warnings;
+        generic_result.description = result.value().description;
+        generic_result.ack_message = result.value().ack_message;
+        generic_result.warnings = result.value().warnings;
 
         return generic_result;
     }
