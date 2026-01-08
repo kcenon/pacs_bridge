@@ -607,8 +607,8 @@ if(BRIDGE_BUILD_MODULES)
             # Primary module interface
             src/modules/pacs_bridge.cppm
             # Protocol partitions (Phase 2)
-            # src/modules/pacs_bridge-hl7.cppm
-            # src/modules/pacs_bridge-mllp.cppm
+            src/modules/pacs_bridge-hl7.cppm
+            src/modules/pacs_bridge-mllp.cppm
             # FHIR partition (Phase 3)
             # src/modules/pacs_bridge-fhir.cppm
             # Integration partitions (Phase 4)
