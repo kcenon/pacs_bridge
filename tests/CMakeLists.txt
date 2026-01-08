@@ -223,6 +223,9 @@ if(BRIDGE_BUILD_HL7)
     # SIU Message Handler Tests (Issue #26) - GTest framework
     add_gtest_test(siu_handler_test "unit;hl7;siu;phase2")
 
+    # CRTP Handler Infrastructure Tests (Issue #262) - GTest framework
+    add_gtest_test(crtp_handler_test "unit;hl7;crtp;phase2")
+
     # MDM Message Handler Tests (Issue #145) - Medical Document Management
     add_gtest_test(mdm_handler_test "unit;hl7;mdm;phase2")
 
