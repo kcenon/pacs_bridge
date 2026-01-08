@@ -615,8 +615,8 @@ if(BRIDGE_BUILD_MODULES)
             src/modules/pacs_bridge-emr.cppm
             src/modules/pacs_bridge-mapping.cppm
             # Server partitions (Phase 5)
-            # src/modules/pacs_bridge-router.cppm
-            # src/modules/pacs_bridge-server.cppm
+            src/modules/pacs_bridge-router.cppm
+            src/modules/pacs_bridge-server.cppm
         )
 
         target_sources(pacs_bridge_modules
