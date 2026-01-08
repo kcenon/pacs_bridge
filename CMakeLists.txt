@@ -609,8 +609,8 @@ if(BRIDGE_BUILD_MODULES)
             # Protocol partitions (Phase 2)
             src/modules/pacs_bridge-hl7.cppm
             src/modules/pacs_bridge-mllp.cppm
-            # FHIR partition (Phase 3)
-            # src/modules/pacs_bridge-fhir.cppm
+            # FHIR partition (Phase 3) - conditional compilation
+            src/modules/pacs_bridge-fhir.cppm
             # Integration partitions (Phase 4)
             # src/modules/pacs_bridge-emr.cppm
             # src/modules/pacs_bridge-mapping.cppm
