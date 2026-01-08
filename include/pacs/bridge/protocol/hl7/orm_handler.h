@@ -24,6 +24,7 @@
 
 #include "pacs/bridge/mapping/hl7_dicom_mapper.h"
 #include "pacs/bridge/pacs_adapter/mwl_client.h"
+#include "pacs/bridge/protocol/hl7/hl7_handler_base.h"
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
@@ -436,8 +437,17 @@ struct order_info {
  * });
  * ```
  */
-class orm_handler {
+class orm_handler : public HL7HandlerBase<orm_handler> {
+    friend class HL7HandlerBase<orm_handler>;
+
 public:
+    // =========================================================================
+    // CRTP Static Members
+    // =========================================================================
+
+    /** Handler type identifier for CRTP */
+    static constexpr std::string_view type_name = "ORM";
+
     // =========================================================================
     // Callback Types
     // =========================================================================
@@ -531,13 +541,7 @@ public:
     [[nodiscard]] Result<orm_result> handle(
         const hl7_message& message);
 
-    /**
-     * @brief Check if message can be handled
-     *
-     * @param message HL7 message
-     * @return true if this handler can process the message
-     */
-    [[nodiscard]] bool can_handle(const hl7_message& message) const noexcept;
+    // Note: can_handle() is provided by HL7HandlerBase via CRTP
 
     /**
      * @brief Get supported order control codes
@@ -746,6 +750,21 @@ public:
     void reset_statistics();
 
 private:
+    // =========================================================================
+    // CRTP Implementation
+    // =========================================================================
+
+    /**
+     * @brief CRTP implementation for can_handle
+     *
+     * Called by HL7HandlerBase::can_handle() via static dispatch.
+     *
+     * @param message HL7 message to check
+     * @return true if this handler can process the message
+     */
+    [[nodiscard]] bool can_handle_impl(
+        const hl7_message& message) const noexcept;
+
     class impl;
     std::unique_ptr<impl> pimpl_;
 };

@@ -133,6 +133,7 @@ if(BRIDGE_BUILD_HL7)
         src/protocol/hl7/orm_handler.cpp
         src/protocol/hl7/oru_generator.cpp
         src/protocol/hl7/siu_handler.cpp
+        src/protocol/hl7/hl7_handler_registry.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/protocol/hl7/hl7_types.h
@@ -140,6 +141,8 @@ if(BRIDGE_BUILD_HL7)
         include/pacs/bridge/protocol/hl7/hl7_parser.h
         include/pacs/bridge/protocol/hl7/hl7_builder.h
         include/pacs/bridge/protocol/hl7/hl7_validator.h
+        include/pacs/bridge/protocol/hl7/hl7_handler_base.h
+        include/pacs/bridge/protocol/hl7/hl7_handler_registry.h
         include/pacs/bridge/protocol/hl7/adt_handler.h
         include/pacs/bridge/protocol/hl7/orm_handler.h
         include/pacs/bridge/protocol/hl7/oru_generator.h

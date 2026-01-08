@@ -467,7 +467,7 @@ Result<adt_result> adt_handler::handle(
     return pimpl_->handle(message);
 }
 
-bool adt_handler::can_handle(const hl7_message& message) const noexcept {
+bool adt_handler::can_handle_impl(const hl7_message& message) const noexcept {
     return pimpl_->can_handle(message);
 }
 

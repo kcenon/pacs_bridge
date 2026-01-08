@@ -285,7 +285,7 @@ Result<siu_result> siu_handler::handle(const hl7_message& message) {
     return result;
 }
 
-bool siu_handler::can_handle(const hl7_message& message) const noexcept {
+bool siu_handler::can_handle_impl(const hl7_message& message) const noexcept {
     auto header = message.header();
     if (header.type != message_type::SIU) {
         return false;
