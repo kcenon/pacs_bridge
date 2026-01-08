@@ -60,6 +60,22 @@ option(BRIDGE_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(BRIDGE_ENABLE_TLS "Enable TLS support with OpenSSL" ON)
 
 # =============================================================================
+# C++20 Module Support (Experimental)
+#
+# Enable C++20 modules with CMake 3.28+ when building with module-capable compilers.
+# This creates a separate module library target (pacs_bridge_modules) that can be
+# used instead of the header-based library.
+#
+# Usage:
+#   cmake -DBRIDGE_BUILD_MODULES=ON ..
+#
+# Requirements:
+#   - CMake 3.28+
+#   - Clang 16+ or GCC 14+ or MSVC 17.4+
+# =============================================================================
+option(BRIDGE_BUILD_MODULES "Build C++20 module version of pacs_bridge" OFF)
+
+# =============================================================================
 # Compiler Settings
 # =============================================================================
 
@@ -564,6 +580,89 @@ else()
 endif()
 
 # =============================================================================
+# C++20 Module Library Target
+# =============================================================================
+
+if(BRIDGE_BUILD_MODULES)
+    if(CMAKE_VERSION VERSION_LESS "3.28")
+        message(WARNING "C++20 modules require CMake 3.28+. Disabling module build.")
+        set(BRIDGE_BUILD_MODULES OFF)
+    else()
+        message(STATUS "C++20 module build enabled")
+
+        # Create module library target
+        add_library(pacs_bridge_modules)
+        add_library(pacs::bridge_modules ALIAS pacs_bridge_modules)
+
+        # Set C++20 standard for module target
+        target_compile_features(pacs_bridge_modules PUBLIC cxx_std_20)
+
+        # Enable module scanning
+        set_target_properties(pacs_bridge_modules PROPERTIES
+            CXX_SCAN_FOR_MODULES ON
+        )
+
+        # Module source files - partitions will be added as they are implemented
+        set(PACS_BRIDGE_MODULE_FILES
+            # Primary module interface
+            src/modules/pacs_bridge.cppm
+            # Protocol partitions (Phase 2)
+            # src/modules/pacs_bridge-hl7.cppm
+            # src/modules/pacs_bridge-mllp.cppm
+            # FHIR partition (Phase 3)
+            # src/modules/pacs_bridge-fhir.cppm
+            # Integration partitions (Phase 4)
+            # src/modules/pacs_bridge-emr.cppm
+            # src/modules/pacs_bridge-mapping.cppm
+            # Server partitions (Phase 5)
+            # src/modules/pacs_bridge-router.cppm
+            # src/modules/pacs_bridge-server.cppm
+        )
+
+        target_sources(pacs_bridge_modules
+            PUBLIC FILE_SET CXX_MODULES
+            FILES ${PACS_BRIDGE_MODULE_FILES}
+        )
+
+        # Include directories for module target
+        target_include_directories(pacs_bridge_modules PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+        )
+
+        # Link dependencies - module targets from dependent systems
+        if(TARGET kcenon::common_modules)
+            target_link_libraries(pacs_bridge_modules PUBLIC kcenon::common_modules)
+        endif()
+        if(TARGET kcenon::network_modules)
+            target_link_libraries(pacs_bridge_modules PUBLIC kcenon::network_modules)
+        endif()
+        if(TARGET kcenon::messaging_modules)
+            target_link_libraries(pacs_bridge_modules PUBLIC kcenon::messaging_modules)
+        endif()
+        if(TARGET kcenon::pacs_modules)
+            target_link_libraries(pacs_bridge_modules PUBLIC kcenon::pacs_modules)
+        endif()
+
+        # Also link header-based library for implementation
+        target_link_libraries(pacs_bridge_modules PRIVATE pacs_bridge)
+
+        # Define compile-time flags
+        target_compile_definitions(pacs_bridge_modules PUBLIC
+            PACS_BRIDGE_MODULES=1
+            KCENON_USE_MODULES=1
+        )
+
+        # Conditional FHIR module
+        if(BRIDGE_BUILD_FHIR)
+            target_compile_definitions(pacs_bridge_modules PUBLIC PACS_BRIDGE_BUILD_FHIR)
+        endif()
+
+        message(STATUS "C++20 module target: pacs_bridge_modules")
+    endif()
+endif()
+
+# =============================================================================
 # Build Summary
 # =============================================================================
 
@@ -585,6 +684,7 @@ message(STATUS "Features:")
 message(STATUS "  TLS Support:      ${PACS_BRIDGE_HAS_OPENSSL}")
 message(STATUS "  PACS System:      ${PACS_BRIDGE_HAS_PACS_SYSTEM}")
 message(STATUS "  Monitoring:       ${PACS_BRIDGE_HAS_MONITORING_SYSTEM}")
+message(STATUS "  C++20 Modules:    ${BRIDGE_BUILD_MODULES}")
 message(STATUS "")
 message(STATUS "Install Prefix:     ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "========================================")
