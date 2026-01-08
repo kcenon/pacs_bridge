@@ -21,6 +21,7 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 - **Flexible Routing** - Multi-gateway support with failover
 - **IHE SWF Compliant** - Follows IHE Scheduled Workflow integration profile
 - **C++20 Concepts** - Type-safe templates with clear compile-time constraints
+- **C++20 Modules** - Experimental module support for improved compilation (CMake 3.28+)
 - **Prometheus Metrics** - Built-in metrics export for monitoring and alerting
 
 ## Architecture
@@ -55,7 +56,9 @@ pacs_bridge/
 │   ├── integration/      # System adapters
 │   ├── concepts/         # C++20 Concepts for type constraints
 │   └── internal/         # Internal utilities (logging stubs)
-├── src/                  # Implementation files
+├── src/
+│   ├── modules/          # C++20 module files (.cppm)
+│   └── ...               # Implementation files (.cpp)
 ├── tests/
 │   ├── unit/             # Unit tests
 │   └── integration/      # Integration tests
@@ -175,6 +178,40 @@ cmake --build build
 | `BRIDGE_BUILD_BENCHMARKS` | `OFF` | Build performance benchmarks |
 | `BRIDGE_ENABLE_TLS` | `ON` | Enable TLS support with OpenSSL |
 | `BRIDGE_ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation (GCC/Clang only) |
+| `BRIDGE_BUILD_MODULES` | `OFF` | Build C++20 module version (experimental, requires CMake 3.28+) |
+
+### C++20 Modules (Experimental)
+
+PACS Bridge supports C++20 modules for improved compilation times and better encapsulation.
+This feature requires CMake 3.28+ and a module-capable compiler (Clang 16+, GCC 14+, or MSVC 17.4+).
+
+```bash
+# Build with C++20 modules enabled
+cmake -B build -DBRIDGE_BUILD_MODULES=ON
+cmake --build build
+```
+
+When modules are enabled, a separate `pacs_bridge_modules` target is created that can be
+used instead of the header-based library:
+
+```cpp
+// Using C++20 modules
+import kcenon.pacs_bridge;
+
+using namespace pacs::bridge::hl7;
+
+hl7_parser parser;
+auto result = parser.parse(raw_message);
+```
+
+Module partitions:
+- `kcenon.pacs_bridge:hl7` - HL7 v2.x message handling
+- `kcenon.pacs_bridge:mllp` - MLLP transport protocol
+- `kcenon.pacs_bridge:fhir` - FHIR R4 resources (conditional)
+- `kcenon.pacs_bridge:emr` - EMR integration client
+- `kcenon.pacs_bridge:mapping` - Data transformation mappers
+- `kcenon.pacs_bridge:router` - Message routing
+- `kcenon.pacs_bridge:server` - Bridge server core
 
 ### vcpkg Integration
 
