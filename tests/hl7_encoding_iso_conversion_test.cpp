@@ -450,8 +450,9 @@ TEST_F(Hl7EncodingTest, ParseThreeByteUtf8) {
     ASSERT_TRUE(msg.is_ok());
 
     std::string name = extract_patient_name(msg.value());
-    // Each Korean character should be 3 bytes
-    EXPECT_GT(name.size(), 3);
+    // Each Korean character should be 3 bytes (e.g., "김" = 3 bytes)
+    // field_value(5) returns the family name component which is one Korean character
+    EXPECT_GE(name.size(), 3);
 }
 
 TEST_F(Hl7EncodingTest, ParseTwoByteUtf8) {

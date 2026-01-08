@@ -500,12 +500,18 @@ bool test_handler_on_n_set_completed() {
 
     (void)handler->start();
 
-    // Create completed dataset
-    mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001", mpps_event::completed);
+    // First create the MPPS
+    mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
+    (void)handler->on_n_create(dataset);
+
+    // Now update to completed
+    dataset.status = mpps_event::completed;
+    dataset.end_date = "20241201";
+    dataset.end_time = "100000";
     auto result = handler->on_n_set(dataset);
 
     TEST_ASSERT(result.has_value(), "N-SET should succeed");
-    TEST_ASSERT(callback_count == 1, "Callback should be called once");
+    TEST_ASSERT(callback_count == 2, "Callback should be called twice (create + set)");
     TEST_ASSERT(last_event == mpps_event::completed, "Event should be completed");
 
     handler->stop();
@@ -528,13 +534,17 @@ bool test_handler_on_n_set_discontinued() {
 
     (void)handler->start();
 
-    // Create discontinued dataset
-    mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001", mpps_event::discontinued);
+    // First create the MPPS
+    mpps_dataset dataset = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
+    (void)handler->on_n_create(dataset);
+
+    // Now update to discontinued
+    dataset.status = mpps_event::discontinued;
     dataset.discontinuation_reason = "Patient refused";
     auto result = handler->on_n_set(dataset);
 
     TEST_ASSERT(result.has_value(), "N-SET should succeed");
-    TEST_ASSERT(callback_count == 1, "Callback should be called once");
+    TEST_ASSERT(callback_count == 2, "Callback should be called twice (create + set)");
     TEST_ASSERT(last_event == mpps_event::discontinued, "Event should be discontinued");
     TEST_ASSERT(discontinuation_reason == "Patient refused", "Reason should match");
 
@@ -604,7 +614,7 @@ bool test_handler_statistics() {
     TEST_ASSERT(stats1.n_set_count == 0, "Initial n_set_count should be 0");
     TEST_ASSERT(stats1.connect_successes >= 1, "Should have at least one connect success");
 
-    // Send N-CREATE
+    // Send N-CREATE for first MPPS
     mpps_dataset dataset1 = create_test_mpps_dataset("1.2.3.4.5", "ACC001");
     (void)handler->on_n_create(dataset1);
 
@@ -612,16 +622,23 @@ bool test_handler_statistics() {
     TEST_ASSERT(stats2.n_create_count == 1, "n_create_count should be 1");
     TEST_ASSERT(stats2.in_progress_count == 1, "in_progress_count should be 1");
 
-    // Send N-SET completed
-    mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.4.6", "ACC002", mpps_event::completed);
+    // Send N-CREATE for second MPPS, then N-SET completed
+    mpps_dataset dataset2 = create_test_mpps_dataset("1.2.3.4.6", "ACC002");
+    (void)handler->on_n_create(dataset2);
+    dataset2.status = mpps_event::completed;
+    dataset2.end_date = "20241201";
+    dataset2.end_time = "100000";
     (void)handler->on_n_set(dataset2);
 
     auto stats3 = handler->get_statistics();
     TEST_ASSERT(stats3.n_set_count == 1, "n_set_count should be 1");
     TEST_ASSERT(stats3.completed_count == 1, "completed_count should be 1");
 
-    // Send N-SET discontinued
-    mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.4.7", "ACC003", mpps_event::discontinued);
+    // Send N-CREATE for third MPPS, then N-SET discontinued
+    mpps_dataset dataset3 = create_test_mpps_dataset("1.2.3.4.7", "ACC003");
+    (void)handler->on_n_create(dataset3);
+    dataset3.status = mpps_event::discontinued;
+    dataset3.discontinuation_reason = "Patient refused";
     (void)handler->on_n_set(dataset3);
 
     auto stats4 = handler->get_statistics();

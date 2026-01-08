@@ -98,10 +98,12 @@ TEST_F(Hl7ValidationEdgeCaseTest, MshMissingVersion) {
 
 TEST_F(Hl7ValidationEdgeCaseTest, MshWithNonStandardDelimiters) {
     // Using # as field separator instead of |
+    // HL7 allows custom field separators as the character immediately after "MSH"
+    // The parser now correctly handles non-standard delimiters
     std::string msg_alt_delim = "MSH#^~\\&#HIS#HOSPITAL#PACS#RADIOLOGY#20240115103000##ADT^A01#MSG001#P#2.4\r";
     auto msg = parse(msg_alt_delim);
-    // Non-standard delimiters should be rejected or handled
-    EXPECT_FALSE(msg.is_ok());
+    // Parser accepts custom delimiters per HL7 specification
+    EXPECT_TRUE(msg.is_ok());
 }
 
 TEST_F(Hl7ValidationEdgeCaseTest, MshWithEmptyFields) {
