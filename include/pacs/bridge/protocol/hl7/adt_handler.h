@@ -26,6 +26,7 @@
 #include "pacs/bridge/cache/patient_cache.h"
 #include "pacs/bridge/concepts/bridge_concepts.h"
 #include "pacs/bridge/mapping/hl7_dicom_mapper.h"
+#include "pacs/bridge/protocol/hl7/hl7_handler_base.h"
 #include "pacs/bridge/protocol/hl7/hl7_message.h"
 #include "pacs/bridge/protocol/hl7/hl7_types.h"
 
@@ -321,8 +322,17 @@ struct merge_info {
  * });
  * ```
  */
-class adt_handler {
+class adt_handler : public HL7HandlerBase<adt_handler> {
+    friend class HL7HandlerBase<adt_handler>;
+
 public:
+    // =========================================================================
+    // CRTP Static Members
+    // =========================================================================
+
+    /** Handler type identifier for CRTP */
+    static constexpr std::string_view type_name = "ADT";
+
     // =========================================================================
     // Callback Types
     // =========================================================================
@@ -387,13 +397,7 @@ public:
     [[nodiscard]] Result<adt_result> handle(
         const hl7_message& message);
 
-    /**
-     * @brief Check if message can be handled
-     *
-     * @param message HL7 message
-     * @return true if this handler can process the message
-     */
-    [[nodiscard]] bool can_handle(const hl7_message& message) const noexcept;
+    // Note: can_handle() is provided by HL7HandlerBase via CRTP
 
     /**
      * @brief Get supported trigger events
@@ -556,6 +560,21 @@ public:
     void reset_statistics();
 
 private:
+    // =========================================================================
+    // CRTP Implementation
+    // =========================================================================
+
+    /**
+     * @brief CRTP implementation for can_handle
+     *
+     * Called by HL7HandlerBase::can_handle() via static dispatch.
+     *
+     * @param message HL7 message to check
+     * @return true if this handler can process the message
+     */
+    [[nodiscard]] bool can_handle_impl(
+        const hl7_message& message) const noexcept;
+
     class impl;
     std::unique_ptr<impl> pimpl_;
 };

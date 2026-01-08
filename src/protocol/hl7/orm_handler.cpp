@@ -227,7 +227,7 @@ Result<orm_result> orm_handler::handle(
     return result;
 }
 
-bool orm_handler::can_handle(const hl7_message& message) const noexcept {
+bool orm_handler::can_handle_impl(const hl7_message& message) const noexcept {
     auto header = message.header();
     if (header.type != message_type::ORM) {
         return false;

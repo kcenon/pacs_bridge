@@ -27,7 +27,6 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <type_traits>
 
 namespace pacs::bridge::hl7 {
 
