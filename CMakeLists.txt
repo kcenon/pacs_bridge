@@ -612,8 +612,8 @@ if(BRIDGE_BUILD_MODULES)
             # FHIR partition (Phase 3) - conditional compilation
             src/modules/pacs_bridge-fhir.cppm
             # Integration partitions (Phase 4)
-            # src/modules/pacs_bridge-emr.cppm
-            # src/modules/pacs_bridge-mapping.cppm
+            src/modules/pacs_bridge-emr.cppm
+            src/modules/pacs_bridge-mapping.cppm
             # Server partitions (Phase 5)
             # src/modules/pacs_bridge-router.cppm
             # src/modules/pacs_bridge-server.cppm
