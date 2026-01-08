@@ -37,10 +37,10 @@ constexpr std::string_view BAR_P01_ADD_ACCOUNT =
     "MSH|^~\\&|BILLING|HOSPITAL|HIS|HOSPITAL|20240115160000||BAR^P01|MSG001|P|2.4\r"
     "EVN|P01|20240115160000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M|||123 MAIN ST^^CITY^ST^12345\r"
-    "PV1|1|I|WARD^101^A^HOSPITAL||||SMITH^ROBERT^MD|||MED||||||||V123456|BCBS|||||||||||||||||||||||||20240115\r"
+    "PV1|1|I|WARD^101^A^HOSPITAL||||SMITH^ROBERT^MD|||MED|||||||||V123456|BCBS|||||||||||||||||||||||||20240115\r"
     "DG1|1||J18.9^Pneumonia, unspecified organism^ICD10|||A\r"
     "GT1|1||DOE^JOHN||123 MAIN ST^^CITY^ST^12345||555-123-4567||||SELF\r"
-    "IN1|1|BCBS|12345|BLUE CROSS BLUE SHIELD||||GROUP123|||||||DOE^JOHN|SELF|19800515|123 MAIN ST^^CITY^ST^12345||||||||||||||||POL123456\r";
+    "IN1|1|BCBS|12345|BLUE CROSS BLUE SHIELD||||GROUP123||||||||DOE^JOHN|SELF|19800515|123 MAIN ST^^CITY^ST^12345||||||||||||||||POL123456\r";
 
 /**
  * @brief Sample BAR^P02 (Purge Patient Account) message
@@ -49,7 +49,7 @@ constexpr std::string_view BAR_P02_PURGE_ACCOUNT =
     "MSH|^~\\&|BILLING|HOSPITAL|HIS|HOSPITAL|20240115170000||BAR^P02|MSG002|P|2.4\r"
     "EVN|P02|20240115170000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "PV1|1|I|||||||||||||||||V123456\r";
+    "PV1|1|I||||||||||||||||||V123456\r";
 
 /**
  * @brief Sample BAR^P05 (Update Account) message
@@ -58,7 +58,7 @@ constexpr std::string_view BAR_P05_UPDATE_ACCOUNT =
     "MSH|^~\\&|BILLING|HOSPITAL|HIS|HOSPITAL|20240115180000||BAR^P05|MSG003|P|2.4\r"
     "EVN|P05|20240115180000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "PV1|1|I|WARD^102^B^HOSPITAL||||SMITH^ROBERT^MD|||MED||||||||V123456\r"
+    "PV1|1|I|WARD^102^B^HOSPITAL||||SMITH^ROBERT^MD|||MED|||||||||V123456\r"
     "DG1|1||J18.9^Pneumonia, unspecified organism^ICD10|||A\r"
     "DG1|2||I10^Essential hypertension^ICD10|||S\r";
 
@@ -69,7 +69,7 @@ constexpr std::string_view BAR_P06_END_ACCOUNT =
     "MSH|^~\\&|BILLING|HOSPITAL|HIS|HOSPITAL|20240115190000||BAR^P06|MSG004|P|2.4\r"
     "EVN|P06|20240115190000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "PV1|1|I|||||||||||||||||V123456||||||||||||||||||||||||20240115|20240120\r";
+    "PV1|1|I||||||||||||||||||V123456|||||||||||||||||||||||||20240115|20240120\r";
 
 /**
  * @brief Sample BAR^P10 (Transmit Ambulatory Payment Classification) message
@@ -78,7 +78,7 @@ constexpr std::string_view BAR_P10_APC =
     "MSH|^~\\&|BILLING|HOSPITAL|HIS|HOSPITAL|20240115200000||BAR^P10|MSG005|P|2.4\r"
     "EVN|P10|20240115200000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "PV1|1|O|RAD^XRAY^1||||||||||||||||V123456\r"
+    "PV1|1|O|RAD^XRAY^1|||||||||||||||||V123456\r"
     "DG1|1||Z12.31^Encounter for screening mammogram^ICD10\r"
     "PR1|1||77067^Screening mammography, bilateral^CPT|20240115\r"
     "GP1|A|0.85\r"
@@ -91,10 +91,10 @@ constexpr std::string_view BAR_MULTIPLE_INSURANCE =
     "MSH|^~\\&|BILLING|HOSPITAL|HIS|HOSPITAL|20240115210000||BAR^P01|MSG006|P|2.4\r"
     "EVN|P01|20240115210000\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
-    "PV1|1|I|WARD^101^A||||||||||||||||V123456\r"
-    "IN1|1|BCBS|12345|BLUE CROSS BLUE SHIELD||||||||||DOE^JOHN|SELF||||||||||||||||||POL123\r"
+    "PV1|1|I|WARD^101^A|||||||||||||||||V123456\r"
+    "IN1|1|BCBS|12345|BLUE CROSS BLUE SHIELD|||||||||||DOE^JOHN|SELF||||||||||||||||||POL123\r"
     "IN2|1|||||||||DOE^JOHN|SELF\r"
-    "IN1|2|AETNA|67890|AETNA INSURANCE||||||||||DOE^JANE|SPOUSE||||||||||||||||||POL456\r"
+    "IN1|2|AETNA|67890|AETNA INSURANCE|||||||||||DOE^JANE|SPOUSE||||||||||||||||||POL456\r"
     "IN2|2|||||||||DOE^JANE|SPOUSE\r";
 
 }  // namespace bar_samples
