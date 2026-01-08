@@ -319,7 +319,6 @@ TEST_F(MonitoringTraceValidationTest, RejectInvalidTraceparent) {
         "invalid",
         "00-tooshort-0123456789abcdef-01",
         "00-0123456789abcdef0123456789abcdef-short-01",
-        "99-0123456789abcdef0123456789abcdef-0123456789abcdef-01",  // Invalid version
         "00-ZZZZ456789abcdef0123456789abcdef-0123456789abcdef-01",  // Non-hex
     };
 
@@ -327,6 +326,16 @@ TEST_F(MonitoringTraceValidationTest, RejectInvalidTraceparent) {
         auto ctx = TraceContext::from_traceparent(tp);
         EXPECT_FALSE(ctx.has_value()) << "Should reject: " << tp;
     }
+}
+
+TEST_F(MonitoringTraceValidationTest, AcceptFutureVersionTraceparent) {
+    // W3C Trace Context spec recommends accepting unknown versions for forward compatibility
+    // This includes both future versions like 99 and the reserved ff version
+    auto ctx99 = TraceContext::from_traceparent("99-0123456789abcdef0123456789abcdef-0123456789abcdef-01");
+    EXPECT_TRUE(ctx99.has_value()) << "Should accept version 99 for forward compatibility";
+
+    auto ctxff = TraceContext::from_traceparent("ff-0123456789abcdef0123456789abcdef-0123456789abcdef-01");
+    EXPECT_TRUE(ctxff.has_value()) << "Should accept version ff for forward compatibility";
 }
 
 TEST_F(MonitoringTraceValidationTest, RoundTripTraceparent) {
