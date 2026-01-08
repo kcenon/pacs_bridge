@@ -142,7 +142,7 @@ protected:
     std::string extract_causality(const hl7_message& msg) {
         auto pcr = msg.segment("PCR");
         if (!pcr) return "";
-        return std::string(pcr->field_value(10));
+        return std::string(pcr->field_value(9));  // PCR-9 is Causality Assessment
     }
 };
 
@@ -285,8 +285,16 @@ TEST_F(PexHandlerTest, ExtractProductCode) {
     auto msg = parse_pex(pex_samples::PEX_P07_INITIAL);
     ASSERT_TRUE(msg.is_ok());
 
-    std::string product = extract_product_code(msg.value());
-    EXPECT_TRUE(product.find("AMOXICILLIN") != std::string::npos);
+    auto pcr = msg.value().segment("PCR");
+    ASSERT_TRUE(pcr != nullptr);
+
+    // PCR-2 is product code (compound field: NDC^Name^Coding System)
+    // Component 1 is NDC code, component 2 is product name
+    std::string ndc_code = std::string(pcr->field_value(2));  // First component only
+    EXPECT_TRUE(ndc_code.find("00069015001") != std::string::npos);
+
+    auto product_name = pcr->field(2).component(2).value();
+    EXPECT_TRUE(product_name.find("AMOXICILLIN") != std::string::npos);
 }
 
 TEST_F(PexHandlerTest, ExtractProductDosage) {

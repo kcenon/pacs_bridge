@@ -221,10 +221,16 @@ TEST_F(QryHandlerTest, ExtractSubjectFilter) {
     auto msg = parse_qry(qry_samples::QRY_A19_PATIENT);
     ASSERT_TRUE(msg.is_ok());
 
-    std::string filter = extract_subject_filter(msg.value());
-    // QRD-8 contains subject filter (patient ID and name)
-    EXPECT_TRUE(filter.find("12345") != std::string::npos);
-    EXPECT_TRUE(filter.find("DOE") != std::string::npos);
+    auto qrd = msg.value().segment("QRD");
+    ASSERT_TRUE(qrd != nullptr);
+
+    // QRD-8 contains subject filter (patient ID and name as compound field)
+    // Component 1 is patient ID, component 2 is patient name
+    std::string patient_id = std::string(qrd->field_value(8));  // First component only
+    EXPECT_TRUE(patient_id.find("12345") != std::string::npos);
+
+    auto patient_name = qrd->field(8).component(2).value();
+    EXPECT_TRUE(patient_name.find("DOE") != std::string::npos);
 }
 
 TEST_F(QryHandlerTest, ExtractWhatDataCodeSubject) {
