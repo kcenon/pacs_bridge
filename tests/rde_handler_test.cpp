@@ -38,7 +38,7 @@ constexpr std::string_view RDE_O11_NEW_ORDER =
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M|||123 MAIN ST^^CITY^ST^12345\r"
     "PV1|1|I|WARD^101^A||||SMITH^ROBERT^MD\r"
     "ORC|NW|ORD001^HIS|RX001^PHARMACY||E|||^^^20240115170000^^R||20240115170000|NURSE^MARY^RN|||WARD\r"
-    "RXE|1^^^20240115170000^^E|00069015001^AMOXICILLIN 500MG^NDC|500|MG|CAP^Capsule||ORAL^Oral|30|CAP|3|1||||||||||SMITH^ROBERT^MD\r"
+    "RXE|1^^^20240115170000^^E|00069015001^AMOXICILLIN 500MG^NDC|500|MG|CAP^Capsule|ORAL^Oral||||30|CAP|3|1|SMITH^ROBERT^MD\r"
     "RXR|PO^Oral^HL70162\r"
     "RXC|B|00069015001^AMOXICILLIN^NDC|500|MG\r";
 
@@ -50,7 +50,7 @@ constexpr std::string_view RDE_O11_IV_ORDER =
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
     "PV1|1|I|ICU^201^A\r"
     "ORC|NW|ORD002^HIS|RX002^PHARMACY||E\r"
-    "RXE|1^^^20240115180000^^E|00409490101^VANCOMYCIN 1GM^NDC|1|GM|VIAL^Vial||IV^Intravenous|1|DOSE|Q12H|1||||||||||JONES^MARY^MD\r"
+    "RXE|1^^^20240115180000^^E|00409490101^VANCOMYCIN 1GM^NDC|1|GM|VIAL^Vial|IV^Intravenous||||1|DOSE|Q12H|1|JONES^MARY^MD\r"
     "RXR|IV^Intravenous^HL70162\r"
     "TQ1|1||Q12H^Every 12 hours^HL70335|20240115180000|20240120180000\r";
 
@@ -61,10 +61,10 @@ constexpr std::string_view RDE_O11_MULTIPLE_MEDS =
     "MSH|^~\\&|HIS|HOSPITAL|PHARMACY|HOSPITAL|20240115190000||RDE^O11^RDE_O11|MSG003|P|2.5.1\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
     "ORC|NW|ORD003^HIS|RX003^PHARMACY||E\r"
-    "RXE|1^^^20240115190000^^E|00071015525^LISINOPRIL 10MG^NDC|10|MG|TAB^Tablet||PO^Oral|30|TAB|1|1\r"
+    "RXE|1^^^20240115190000^^E|00071015525^LISINOPRIL 10MG^NDC|10|MG|TAB^Tablet|PO^Oral||||30|TAB|1|1\r"
     "RXR|PO^Oral^HL70162\r"
     "ORC|NW|ORD004^HIS|RX004^PHARMACY||E\r"
-    "RXE|2^^^20240115190000^^E|00378180110^METFORMIN 500MG^NDC|500|MG|TAB^Tablet||PO^Oral|60|TAB|2|1\r"
+    "RXE|2^^^20240115190000^^E|00378180110^METFORMIN 500MG^NDC|500|MG|TAB^Tablet|PO^Oral||||60|TAB|2|1\r"
     "RXR|PO^Oral^HL70162\r";
 
 /**
@@ -74,7 +74,7 @@ constexpr std::string_view RDE_O25_REFILL =
     "MSH|^~\\&|HIS|HOSPITAL|PHARMACY|HOSPITAL|20240115200000||RDE^O25|MSG004|P|2.5.1\r"
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
     "ORC|RF|ORD001^HIS|RX001^PHARMACY||E\r"
-    "RXE|1^^^20240115200000^^E|00069015001^AMOXICILLIN 500MG^NDC|500|MG|CAP^Capsule||ORAL^Oral|30|CAP|3|1|||||2|1\r"
+    "RXE|1^^^20240115200000^^E|00069015001^AMOXICILLIN 500MG^NDC|500|MG|CAP^Capsule|ORAL^Oral||||30|CAP|3|1|||2|1\r"
     "RXR|PO^Oral^HL70162\r";
 
 /**
@@ -85,7 +85,7 @@ constexpr std::string_view RDE_WITH_ALLERGY =
     "PID|1||12345^^^HOSPITAL^MR||DOE^JOHN||19800515|M\r"
     "AL1|1|DA|00006074321^PENICILLIN^NDC|SV^Severe|ANAPHYLAXIS\r"
     "ORC|NW|ORD005^HIS|RX005^PHARMACY||E\r"
-    "RXE|1^^^20240115210000^^E|00093311756^AZITHROMYCIN 250MG^NDC|250|MG|TAB^Tablet||PO^Oral|6|TAB|1|1\r"
+    "RXE|1^^^20240115210000^^E|00093311756^AZITHROMYCIN 250MG^NDC|250|MG|TAB^Tablet|PO^Oral||||6|TAB|1|1\r"
     "RXR|PO^Oral^HL70162\r";
 
 /**
@@ -189,8 +189,11 @@ TEST_F(RdeHandlerTest, ExtractMedicationCode) {
     auto msg = parse_rde(rde_samples::RDE_O11_NEW_ORDER);
     ASSERT_TRUE(msg.is_ok());
 
-    std::string med_code = extract_medication_code(msg.value());
-    EXPECT_TRUE(med_code.find("AMOXICILLIN") != std::string::npos);
+    auto rxe = msg.value().segment("RXE");
+    ASSERT_TRUE(rxe != nullptr);
+    // RXE-2 component 2 contains medication name
+    auto med_name = rxe->field(2).component(2).value();
+    EXPECT_TRUE(med_name.find("AMOXICILLIN") != std::string::npos);
 }
 
 TEST_F(RdeHandlerTest, ExtractDosageInfo) {
@@ -270,9 +273,10 @@ TEST_F(RdeHandlerTest, ExtractAllergyInfo) {
 
     // AL1-2 is Allergen Type (DA = Drug Allergy)
     EXPECT_EQ(al1->field_value(2), "DA");
-    // AL1-3 is Allergen Code
-    EXPECT_TRUE(al1->field_value(3).find("PENICILLIN") != std::string::npos);
-    // AL1-4 is Allergy Severity
+    // AL1-3 component 2 contains allergen name
+    auto allergen = al1->field(3).component(2).value();
+    EXPECT_TRUE(allergen.find("PENICILLIN") != std::string::npos);
+    // AL1-4 is Allergy Severity (first component is code)
     EXPECT_TRUE(al1->field_value(4).find("SV") != std::string::npos);
 }
 
@@ -289,8 +293,9 @@ TEST_F(RdeHandlerTest, ExtractComponentInfo) {
 
     // RXC-1 is Component Type (B = Base)
     EXPECT_EQ(rxc->field_value(1), "B");
-    // RXC-2 is Component Code
-    EXPECT_TRUE(rxc->field_value(2).find("AMOXICILLIN") != std::string::npos);
+    // RXC-2 component 2 contains component name
+    auto component = rxc->field(2).component(2).value();
+    EXPECT_TRUE(component.find("AMOXICILLIN") != std::string::npos);
 }
 
 // =============================================================================
