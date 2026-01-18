@@ -16,6 +16,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <type_traits>
 
 namespace pacs::bridge::integration {
 
@@ -101,6 +102,36 @@ protected:
  * @return Thread adapter implementation
  */
 [[nodiscard]] std::unique_ptr<thread_adapter> create_thread_adapter();
+
+// =============================================================================
+// Template Implementation
+// =============================================================================
+
+template <typename F>
+auto thread_adapter::submit(F&& task, task_priority priority)
+    -> std::future<decltype(task())> {
+    using result_type = decltype(task());
+
+    auto promise = std::make_shared<std::promise<result_type>>();
+    auto future = promise->get_future();
+
+    submit_internal(
+        [promise, task = std::forward<F>(task)]() mutable {
+            try {
+                if constexpr (std::is_void_v<result_type>) {
+                    task();
+                    promise->set_value();
+                } else {
+                    promise->set_value(task());
+                }
+            } catch (...) {
+                promise->set_exception(std::current_exception());
+            }
+        },
+        priority);
+
+    return future;
+}
 
 } // namespace pacs::bridge::integration
 

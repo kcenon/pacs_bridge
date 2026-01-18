@@ -160,6 +160,7 @@ if(NOT BRIDGE_STANDALONE_BUILD)
         src/integration/executor_adapter.cpp
         src/integration/logger_adapter.cpp
         src/integration/network_adapter.cpp
+        src/integration/thread_adapter.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/integration/executor_adapter.h

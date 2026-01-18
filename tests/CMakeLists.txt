@@ -703,6 +703,54 @@ else()
     message(STATUS "Skipping executor_integration_test: requires common_system IExecutor (BRIDGE_STANDALONE_BUILD=OFF)")
 endif()
 
+# Thread Adapter Tests (Issue #266)
+# Tests thread_adapter implementation and factory functions
+# Only available when building with kcenon ecosystem dependencies (requires thread_system)
+if(NOT BRIDGE_STANDALONE_BUILD)
+    add_executable(thread_adapter_test thread_adapter_test.cpp)
+    target_link_libraries(thread_adapter_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(thread_adapter_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(thread_adapter_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+    target_include_directories(thread_adapter_test
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+    target_compile_definitions(thread_adapter_test
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        include(GoogleTest)
+        gtest_discover_tests(thread_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 120
+                LABELS "unit;integration;thread;phase4"
+        )
+    else()
+        add_test(
+            NAME thread_adapter_test
+            COMMAND thread_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        set_tests_properties(thread_adapter_test PROPERTIES
+            TIMEOUT 120
+            LABELS "unit;integration;thread;phase4"
+        )
+    endif()
+else()
+    message(STATUS "Skipping thread_adapter_test: requires thread_system (BRIDGE_STANDALONE_BUILD=OFF)")
+endif()
+
 # =============================================================================
 # Messaging Pattern Tests (Issue #146, #142)
 # =============================================================================
@@ -936,10 +984,11 @@ message(STATUS "  - mpps_persistence_test (Issue #193)")
 message(STATUS "  - pacs_system_e2e_test (Issue #194)")
 message(STATUS "")
 if(NOT BRIDGE_STANDALONE_BUILD)
-    message(STATUS "Integration Module Tests (Issue #198, #267, #270):")
+    message(STATUS "Integration Module Tests (Issue #198, #266, #267, #270):")
     message(STATUS "  - logger_adapter_test (Issue #267)")
     message(STATUS "  - network_adapter_test (Issue #270)")
     message(STATUS "  - executor_adapter_test (Issue #210)")
+    message(STATUS "  - thread_adapter_test (Issue #266)")
     message(STATUS "")
 endif()
 message(STATUS "Phase 4 Integration Tests:")
