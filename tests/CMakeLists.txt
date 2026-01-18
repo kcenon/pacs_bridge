@@ -560,6 +560,54 @@ else()
     message(STATUS "Skipping logger_adapter_test: requires common_system ILogger (BRIDGE_STANDALONE_BUILD=OFF)")
 endif()
 
+# Network Adapter Tests (Issue #270)
+# Tests network_adapter implementations for TCP/TLS connections
+# Only available when building with kcenon ecosystem dependencies (requires network_system)
+if(NOT BRIDGE_STANDALONE_BUILD)
+    add_executable(network_adapter_test network_adapter_test.cpp)
+    target_link_libraries(network_adapter_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(network_adapter_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(network_adapter_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+    target_include_directories(network_adapter_test
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+    target_compile_definitions(network_adapter_test
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        include(GoogleTest)
+        gtest_discover_tests(network_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 60
+                LABELS "unit;integration;network;phase4"
+        )
+    else()
+        add_test(
+            NAME network_adapter_test
+            COMMAND network_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        set_tests_properties(network_adapter_test PROPERTIES
+            TIMEOUT 60
+            LABELS "unit;integration;network;phase4"
+        )
+    endif()
+else()
+    message(STATUS "Skipping network_adapter_test: requires network_system (BRIDGE_STANDALONE_BUILD=OFF)")
+endif()
+
 # Executor Adapter Tests (Issue #210)
 # Tests IExecutor adapter implementations for bridge server
 # Only available when building with kcenon ecosystem dependencies (requires common_system)
@@ -888,8 +936,9 @@ message(STATUS "  - mpps_persistence_test (Issue #193)")
 message(STATUS "  - pacs_system_e2e_test (Issue #194)")
 message(STATUS "")
 if(NOT BRIDGE_STANDALONE_BUILD)
-    message(STATUS "Integration Module Tests (Issue #198, #267):")
+    message(STATUS "Integration Module Tests (Issue #198, #267, #270):")
     message(STATUS "  - logger_adapter_test (Issue #267)")
+    message(STATUS "  - network_adapter_test (Issue #270)")
     message(STATUS "  - executor_adapter_test (Issue #210)")
     message(STATUS "")
 endif()
