@@ -117,9 +117,18 @@ public:
 
 /**
  * @brief Create a network adapter instance
- * @return Network adapter implementation
+ * @return Network adapter implementation (plain TCP)
  */
 [[nodiscard]] std::unique_ptr<network_adapter> create_network_adapter();
+
+/**
+ * @brief Create a network adapter instance with TLS option
+ * @param use_tls If true, creates a TLS-enabled adapter
+ * @param verify_cert If true, verifies server certificate (only for TLS)
+ * @return Network adapter implementation
+ */
+[[nodiscard]] std::unique_ptr<network_adapter> create_network_adapter(
+    bool use_tls, bool verify_cert = true);
 
 } // namespace pacs::bridge::integration
 
