@@ -509,8 +509,56 @@ add_integration_test(mpps_persistence_test "integration;pacs_system;mpps;persist
 add_integration_test(pacs_system_e2e_test "integration;pacs_system;e2e;workflow;phase2" 600)
 
 # =============================================================================
-# Integration Module Tests (Issue #198, #210)
+# Integration Module Tests (Issue #198, #210, #267)
 # =============================================================================
+
+# Logger Adapter Tests (Issue #267)
+# Tests logger_adapter implementations for bridge logging
+# Only available when building with kcenon ecosystem dependencies (requires common_system)
+if(NOT BRIDGE_STANDALONE_BUILD)
+    add_executable(logger_adapter_test logger_adapter_test.cpp)
+    target_link_libraries(logger_adapter_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(logger_adapter_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(logger_adapter_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+    target_include_directories(logger_adapter_test
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+    target_compile_definitions(logger_adapter_test
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        include(GoogleTest)
+        gtest_discover_tests(logger_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 60
+                LABELS "unit;integration;logger;phase4"
+        )
+    else()
+        add_test(
+            NAME logger_adapter_test
+            COMMAND logger_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        set_tests_properties(logger_adapter_test PROPERTIES
+            TIMEOUT 60
+            LABELS "unit;integration;logger;phase4"
+        )
+    endif()
+else()
+    message(STATUS "Skipping logger_adapter_test: requires common_system ILogger (BRIDGE_STANDALONE_BUILD=OFF)")
+endif()
 
 # Executor Adapter Tests (Issue #210)
 # Tests IExecutor adapter implementations for bridge server
@@ -840,7 +888,8 @@ message(STATUS "  - mpps_persistence_test (Issue #193)")
 message(STATUS "  - pacs_system_e2e_test (Issue #194)")
 message(STATUS "")
 if(NOT BRIDGE_STANDALONE_BUILD)
-    message(STATUS "Integration Module Tests (Issue #198):")
+    message(STATUS "Integration Module Tests (Issue #198, #267):")
+    message(STATUS "  - logger_adapter_test (Issue #267)")
     message(STATUS "  - executor_adapter_test (Issue #210)")
     message(STATUS "")
 endif()

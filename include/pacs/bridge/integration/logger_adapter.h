@@ -108,6 +108,31 @@ public:
 [[nodiscard]] std::unique_ptr<logger_adapter> create_logger(
     std::string_view name);
 
+// Forward declaration for ILogger integration
+namespace kcenon::common::interfaces {
+class ILogger;
+}
+
+/**
+ * @brief Create a logger instance wrapping ILogger
+ * @param logger The ILogger instance to wrap
+ * @return Logger adapter instance
+ */
+[[nodiscard]] std::unique_ptr<logger_adapter> create_logger(
+    std::shared_ptr<kcenon::common::interfaces::ILogger> logger);
+
+/**
+ * @brief Set the global default logger to use an ILogger
+ * @param logger The ILogger instance to use globally
+ */
+void set_default_logger(
+    std::shared_ptr<kcenon::common::interfaces::ILogger> logger);
+
+/**
+ * @brief Reset the global default logger to console fallback
+ */
+void reset_default_logger();
+
 } // namespace pacs::bridge::integration
 
 #endif // PACS_BRIDGE_INTEGRATION_LOGGER_ADAPTER_H
