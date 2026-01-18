@@ -150,12 +150,14 @@ if(BRIDGE_BUILD_HL7)
     )
 endif()
 
-# Integration Module - IExecutor adapter
+# Integration Module - IExecutor and Logger adapters
 # See: https://github.com/kcenon/pacs_bridge/issues/198
+# See: https://github.com/kcenon/pacs_bridge/issues/267
 # Only available in non-standalone build (requires common_system)
 if(NOT BRIDGE_STANDALONE_BUILD)
     list(APPEND PACS_BRIDGE_SOURCES
         src/integration/executor_adapter.cpp
+        src/integration/logger_adapter.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/integration/executor_adapter.h
