@@ -40,6 +40,8 @@
 #pragma comment(lib, "ws2_32.lib")
 using socket_t = SOCKET;
 constexpr socket_t INVALID_SOCKET_VALUE = INVALID_SOCKET;
+// ssize_t is POSIX-specific, define for Windows
+using ssize_t = std::ptrdiff_t;
 #else
 #include <arpa/inet.h>
 #include <fcntl.h>
