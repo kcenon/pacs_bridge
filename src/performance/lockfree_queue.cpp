@@ -18,6 +18,11 @@
 #include <thread>
 #include <vector>
 
+// Platform-specific pause intrinsic
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+
 namespace pacs::bridge::performance {
 
 // =============================================================================
@@ -47,7 +52,9 @@ public:
     void backoff() {
         for (size_t i = 0; i < spins_; ++i) {
             // Pause instruction (reduces power consumption during spin)
-#if defined(__x86_64__) || defined(_M_X64)
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+            _mm_pause();
+#elif defined(__x86_64__) || defined(__i386__)
             __builtin_ia32_pause();
 #elif defined(__aarch64__)
             asm volatile("yield");
