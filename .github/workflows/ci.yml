@@ -217,6 +217,7 @@ jobs:
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
         # Note: BRIDGE_STANDALONE_BUILD=ON (default) - see Issue #142
+        # Use cl.exe (MSVC) explicitly to ensure compatibility with vcpkg packages
         cmake -B build `
           -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `
@@ -225,6 +226,8 @@ jobs:
           -DBRIDGE_BUILD_EXAMPLES=OFF `
           -DBRIDGE_BUILD_HL7=ON `
           -DBRIDGE_BUILD_FHIR=OFF `
+          -DCMAKE_C_COMPILER=cl `
+          -DCMAKE_CXX_COMPILER=cl `
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_MANIFEST_MODE=OFF
 

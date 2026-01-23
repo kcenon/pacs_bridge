@@ -175,11 +175,13 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/integration/database_adapter.h
 )
 
-# Database adapter - always available (uses SQLite)
+# Database adapter - requires SQLite
 # See: https://github.com/kcenon/pacs_bridge/issues/274
-list(APPEND PACS_BRIDGE_SOURCES
-    src/integration/database_adapter.cpp
-)
+if(PACS_BRIDGE_HAS_SQLITE)
+    list(APPEND PACS_BRIDGE_SOURCES
+        src/integration/database_adapter.cpp
+    )
+endif()
 
 # MLLP Transport
 list(APPEND PACS_BRIDGE_SOURCES
