@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -31,6 +32,8 @@
 using socket_t = SOCKET;
 constexpr socket_t INVALID_SOCKET_VALUE = INVALID_SOCKET;
 #define CLOSE_SOCKET closesocket
+// ssize_t is POSIX-specific, define for Windows
+using ssize_t = std::ptrdiff_t;
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
