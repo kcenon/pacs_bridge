@@ -10,8 +10,11 @@
 
 #include "pacs/bridge/security/tls_socket.h"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstring>
+#include <span>
 
 // OpenSSL headers
 #ifdef PACS_BRIDGE_HAS_OPENSSL
