@@ -3,12 +3,12 @@
 
 /**
  * @file mwl_client.h
- * @brief Modality Worklist client for pacs_system integration
+ * @brief Modality Worklist client using mwl_adapter
  *
  * Provides a client implementation for managing Modality Worklist (MWL)
- * entries in pacs_system. Supports DICOM-based communication with the
- * worklist_scp service for creating, updating, querying, and canceling
- * scheduled procedure steps.
+ * entries using the mwl_adapter interface. Supports DICOM-based
+ * communication with the worklist_scp service for creating, updating,
+ * querying, and canceling scheduled procedure steps.
  *
  * Features:
  *   - Add new worklist entries from HL7 orders
@@ -17,11 +17,14 @@
  *   - Query entries with flexible criteria
  *   - Connection pooling for performance
  *   - Automatic reconnection on failure
+ *   - Adapter pattern for storage abstraction
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/17
+ * @see https://github.com/kcenon/pacs_bridge/issues/285
  * @see docs/reference_materials/05_mwl_mapping.md
  */
 
+#include "pacs/bridge/integration/mwl_adapter.h"
 #include "pacs/bridge/mapping/hl7_dicom_mapper.h"
 
 #include <chrono>
@@ -33,6 +36,9 @@
 #include <vector>
 
 namespace pacs::bridge::pacs_adapter {
+
+// Use integration::mwl_query_filter for consistency
+using integration::mwl_query_filter;
 
 // =============================================================================
 // Error Codes (-980 to -989)
@@ -119,10 +125,11 @@ enum class mwl_error : int {
 /**
  * @brief MWL client configuration
  *
- * Configuration for connecting to pacs_system's worklist_scp service.
+ * Configuration for MWL client using mwl_adapter abstraction.
  *
- * When PACS_BRIDGE_HAS_PACS_SYSTEM is defined, uses pacs_system's index_database
- * for persistent MWL storage. Otherwise, uses in-memory stub storage.
+ * Uses mwl_adapter interface which automatically selects:
+ * - memory_mwl_adapter: In-memory storage (standalone builds)
+ * - pacs_mwl_adapter: pacs_system index_database (full integration)
  */
 struct mwl_client_config {
     /** pacs_system host address */
@@ -155,60 +162,15 @@ struct mwl_client_config {
     /** Keep-alive ping interval */
     std::chrono::seconds keep_alive_interval{30};
 
-#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
     /**
      * @brief pacs_system database path
      *
      * Path to the SQLite database file used by pacs_system's index_database.
-     * Required when building with pacs_system integration (BRIDGE_STANDALONE_BUILD=OFF).
-     * Use ":memory:" for in-memory database (useful for testing).
+     * - Used by pacs_mwl_adapter when PACS_BRIDGE_HAS_PACS_SYSTEM is defined
+     * - Ignored by memory_mwl_adapter in standalone builds
+     * - Use ":memory:" for in-memory database (useful for testing)
      */
     std::string pacs_database_path = "pacs_bridge.db";
-#endif
-};
-
-// =============================================================================
-// Query Filter
-// =============================================================================
-
-/**
- * @brief MWL query filter criteria
- *
- * Used to filter MWL query results. Empty fields are not used in filtering.
- */
-struct mwl_query_filter {
-    /** Filter by patient ID */
-    std::optional<std::string> patient_id;
-
-    /** Filter by accession number */
-    std::optional<std::string> accession_number;
-
-    /** Filter by scheduled date (YYYYMMDD) */
-    std::optional<std::string> scheduled_date;
-
-    /** Filter by scheduled date range start (YYYYMMDD) */
-    std::optional<std::string> scheduled_date_from;
-
-    /** Filter by scheduled date range end (YYYYMMDD) */
-    std::optional<std::string> scheduled_date_to;
-
-    /** Filter by modality (CT, MR, US, etc.) */
-    std::optional<std::string> modality;
-
-    /** Filter by scheduled station AE title */
-    std::optional<std::string> scheduled_station_ae;
-
-    /** Filter by referring physician name */
-    std::optional<std::string> referring_physician;
-
-    /** Filter by patient name (supports wildcards) */
-    std::optional<std::string> patient_name;
-
-    /** Filter by scheduled procedure step status */
-    std::optional<std::string> sps_status;
-
-    /** Maximum number of results to return (0 = unlimited) */
-    size_t max_results = 0;
 };
 
 // =============================================================================

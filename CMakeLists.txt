@@ -183,6 +183,15 @@ if(PACS_BRIDGE_HAS_SQLITE)
     )
 endif()
 
+# MWL adapter - abstraction for MWL storage
+# See: https://github.com/kcenon/pacs_bridge/issues/285
+list(APPEND PACS_BRIDGE_SOURCES
+    src/integration/mwl_adapter.cpp
+)
+list(APPEND PACS_BRIDGE_HEADERS
+    include/pacs/bridge/integration/mwl_adapter.h
+)
+
 # MLLP Transport
 list(APPEND PACS_BRIDGE_SOURCES
     src/mllp/mllp_server.cpp
