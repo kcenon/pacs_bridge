@@ -868,8 +868,170 @@ const database_connection& connection_scope::connection() const noexcept {
 
 #ifdef PACS_BRIDGE_HAS_DATABASE_SYSTEM
 #include <kcenon/database/database_pool.hpp>
+#include <kcenon/database/connection.hpp>
 
 namespace pacs::bridge::integration {
+
+// Forward declarations for wrapper classes
+// These will be implemented in Phase 1c-3 (issue #298)
+class pool_statement_wrapper : public database_statement {
+public:
+    explicit pool_statement_wrapper(kcenon::database::statement /* stmt */) {
+        // Placeholder - will be implemented in #298
+    }
+
+    [[nodiscard]] std::expected<void, database_error>
+    bind_string(std::size_t /* index */, std::string_view /* value */) override {
+        return std::unexpected(database_error::bind_failed);
+    }
+
+    [[nodiscard]] std::expected<void, database_error>
+    bind_int64(std::size_t /* index */, int64_t /* value */) override {
+        return std::unexpected(database_error::bind_failed);
+    }
+
+    [[nodiscard]] std::expected<void, database_error>
+    bind_double(std::size_t /* index */, double /* value */) override {
+        return std::unexpected(database_error::bind_failed);
+    }
+
+    [[nodiscard]] std::expected<void, database_error>
+    bind_blob(std::size_t /* index */, const std::vector<uint8_t>& /* value */) override {
+        return std::unexpected(database_error::bind_failed);
+    }
+
+    [[nodiscard]] std::expected<void, database_error>
+    bind_null(std::size_t /* index */) override {
+        return std::unexpected(database_error::bind_failed);
+    }
+
+    [[nodiscard]] std::expected<void, database_error> clear_bindings() override {
+        return std::unexpected(database_error::bind_failed);
+    }
+
+    [[nodiscard]] std::expected<void, database_error> reset() override {
+        return std::unexpected(database_error::prepare_failed);
+    }
+
+    [[nodiscard]] std::expected<std::unique_ptr<database_result>, database_error>
+    execute() override {
+        return std::unexpected(database_error::query_failed);
+    }
+
+    [[nodiscard]] std::size_t parameter_count() const override {
+        return 0;
+    }
+};
+
+class pool_result_wrapper : public database_result {
+public:
+    explicit pool_result_wrapper(kcenon::database::result /* result */) {
+        // Placeholder - will be implemented in #298
+    }
+
+    [[nodiscard]] bool next() override {
+        return false;
+    }
+
+    [[nodiscard]] const database_row& current_row() const override {
+        static sqlite_row dummy{nullptr};
+        return dummy;
+    }
+
+    [[nodiscard]] std::size_t affected_rows() const override {
+        return 0;
+    }
+
+    [[nodiscard]] int64_t last_insert_id() const override {
+        return 0;
+    }
+
+    [[nodiscard]] bool empty() const override {
+        return true;
+    }
+};
+
+/**
+ * @brief Wrapper adapting database_system's pooled connection to database_connection interface
+ *
+ * Wraps database_system's pooled connection to implement pacs_bridge's
+ * database_connection interface, enabling transparent use of connection pools
+ * with RAII semantics for automatic connection return.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/297
+ */
+class pool_connection_wrapper : public database_connection {
+public:
+    explicit pool_connection_wrapper(
+        kcenon::database::pooled_connection conn)
+        : conn_(std::move(conn)) {}
+
+    ~pool_connection_wrapper() override = default;
+
+    // Non-copyable, non-movable
+    pool_connection_wrapper(const pool_connection_wrapper&) = delete;
+    pool_connection_wrapper& operator=(const pool_connection_wrapper&) = delete;
+    pool_connection_wrapper(pool_connection_wrapper&&) = delete;
+    pool_connection_wrapper& operator=(pool_connection_wrapper&&) = delete;
+
+    [[nodiscard]] std::expected<std::unique_ptr<database_statement>, database_error>
+    prepare(std::string_view sql) override {
+        auto stmt = conn_->prepare(sql);
+        if (!stmt) {
+            return std::unexpected(database_error::prepare_failed);
+        }
+        return std::make_unique<pool_statement_wrapper>(std::move(*stmt));
+    }
+
+    [[nodiscard]] std::expected<std::unique_ptr<database_result>, database_error>
+    execute(std::string_view sql) override {
+        auto result = conn_->execute(sql);
+        if (!result) {
+            return std::unexpected(database_error::query_failed);
+        }
+        return std::make_unique<pool_result_wrapper>(std::move(*result));
+    }
+
+    [[nodiscard]] std::expected<void, database_error> begin_transaction() override {
+        if (!conn_->begin_transaction()) {
+            return std::unexpected(database_error::transaction_failed);
+        }
+        return {};
+    }
+
+    [[nodiscard]] std::expected<void, database_error> commit() override {
+        if (!conn_->commit()) {
+            return std::unexpected(database_error::transaction_failed);
+        }
+        return {};
+    }
+
+    [[nodiscard]] std::expected<void, database_error> rollback() override {
+        if (!conn_->rollback()) {
+            return std::unexpected(database_error::transaction_failed);
+        }
+        return {};
+    }
+
+    [[nodiscard]] bool is_valid() const override {
+        return conn_->is_valid();
+    }
+
+    [[nodiscard]] std::string last_error() const override {
+        return conn_->last_error();
+    }
+
+    [[nodiscard]] int64_t changes() const override {
+        return conn_->changes();
+    }
+
+    [[nodiscard]] int64_t last_insert_rowid() const override {
+        return conn_->last_insert_rowid();
+    }
+
+private:
+    kcenon::database::pooled_connection conn_;
+};
 
 /**
  * @brief Database adapter using database_system's connection pool
@@ -899,9 +1061,11 @@ public:
 
     [[nodiscard]] std::expected<std::shared_ptr<database_connection>, database_error>
     acquire_connection() override {
-        // TODO: Implement in Phase 1c-2 (issue #297)
-        // Will return pool_connection_wrapper wrapping pooled connection
-        return std::unexpected(database_error::connection_failed);
+        auto conn = pool_->acquire();
+        if (!conn) {
+            return std::unexpected(database_error::pool_exhausted);
+        }
+        return std::make_shared<pool_connection_wrapper>(std::move(conn));
     }
 
     void release_connection(std::shared_ptr<database_connection> conn) override {
