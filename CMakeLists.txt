@@ -192,6 +192,15 @@ list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/integration/mwl_adapter.h
 )
 
+# PACS adapter - standardized PACS integration interface
+# See: https://github.com/kcenon/pacs_bridge/issues/283
+list(APPEND PACS_BRIDGE_SOURCES
+    src/integration/pacs_adapter.cpp
+)
+list(APPEND PACS_BRIDGE_HEADERS
+    include/pacs/bridge/integration/pacs_adapter.h
+)
+
 # MLLP Transport
 list(APPEND PACS_BRIDGE_SOURCES
     src/mllp/mllp_server.cpp

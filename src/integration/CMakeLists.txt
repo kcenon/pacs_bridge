@@ -12,3 +12,5 @@
 #   - network_adapter.cpp   (Issue #270)
 #   - thread_adapter.cpp    (Issue #266)
 #   - database_adapter.cpp  (Issue #274)
+#   - mwl_adapter.cpp       (Issue #285)
+#   - pacs_adapter.cpp      (Issue #283)
