@@ -863,6 +863,98 @@ const database_connection& connection_scope::connection() const noexcept {
 }
 
 // =============================================================================
+// Database Pool Adapter (database_system Integration)
+// =============================================================================
+
+#ifdef PACS_BRIDGE_HAS_DATABASE_SYSTEM
+#include <kcenon/database/database_pool.hpp>
+
+namespace pacs::bridge::integration {
+
+/**
+ * @brief Database adapter using database_system's connection pool
+ *
+ * Wraps database_system to provide advanced connection pooling,
+ * query optimization, and support for multiple database backends.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/296
+ */
+class database_pool_adapter : public database_adapter {
+public:
+    explicit database_pool_adapter(
+        std::shared_ptr<kcenon::database::database_pool> pool)
+        : pool_(std::move(pool)) {
+        if (!pool_) {
+            throw std::invalid_argument("Cannot create adapter: pool is null");
+        }
+    }
+
+    ~database_pool_adapter() override = default;
+
+    // Non-copyable, non-movable
+    database_pool_adapter(const database_pool_adapter&) = delete;
+    database_pool_adapter& operator=(const database_pool_adapter&) = delete;
+    database_pool_adapter(database_pool_adapter&&) = delete;
+    database_pool_adapter& operator=(database_pool_adapter&&) = delete;
+
+    [[nodiscard]] std::expected<std::shared_ptr<database_connection>, database_error>
+    acquire_connection() override {
+        // TODO: Implement in Phase 1c-2 (issue #297)
+        // Will return pool_connection_wrapper wrapping pooled connection
+        return std::unexpected(database_error::connection_failed);
+    }
+
+    void release_connection(std::shared_ptr<database_connection> conn) override {
+        // Connection returned to pool automatically via RAII
+        // No explicit action needed - pooled_connection destructor handles return
+        (void)conn;  // Suppress unused parameter warning
+    }
+
+    [[nodiscard]] std::size_t available_connections() const override {
+        return pool_->available();
+    }
+
+    [[nodiscard]] std::size_t active_connections() const override {
+        return pool_->active();
+    }
+
+    [[nodiscard]] bool is_healthy() const override {
+        return pool_->is_healthy();
+    }
+
+    [[nodiscard]] std::expected<void, database_error>
+    execute_schema(std::string_view ddl) override {
+        auto conn_result = acquire_connection();
+        if (!conn_result) {
+            return std::unexpected(conn_result.error());
+        }
+
+        auto result = (*conn_result)->execute(ddl);
+        if (!result) {
+            return std::unexpected(result.error());
+        }
+
+        // Consume result to ensure DDL is executed
+        while ((*result)->next()) {
+            // DDL doesn't return rows, but we need to step through
+        }
+
+        return {};
+    }
+
+    [[nodiscard]] const database_config& config() const override {
+        return config_;
+    }
+
+private:
+    std::shared_ptr<kcenon::database::database_pool> pool_;
+    database_config config_;
+};
+
+}  // namespace pacs::bridge::integration
+#endif  // PACS_BRIDGE_HAS_DATABASE_SYSTEM
+
+// =============================================================================
 // Factory Functions
 // =============================================================================
 
