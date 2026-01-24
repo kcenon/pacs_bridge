@@ -262,11 +262,28 @@ private:
 };
 
 // =============================================================================
-// Factory Function
+// Factory Function with Fallback
 // =============================================================================
 
+/**
+ * @brief Create thread adapter with automatic fallback
+ *
+ * Attempts to create thread_pool_adapter (wraps thread_system).
+ * Falls back to simple_thread_adapter if thread_system is unavailable.
+ *
+ * @return Unique pointer to thread_adapter implementation
+ */
 std::unique_ptr<thread_adapter> create_thread_adapter() {
-    return std::make_unique<thread_pool_adapter>();
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+    // Try thread_pool_adapter first for full ecosystem integration
+    try {
+        return std::make_unique<thread_pool_adapter>();
+    } catch (const std::exception&) {
+        // Fall through to simple_thread_adapter
+    }
+#endif
+    // Fallback to standalone implementation
+    return std::make_unique<simple_thread_adapter>();
 }
 
 }  // namespace pacs::bridge::integration
