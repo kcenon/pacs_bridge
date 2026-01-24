@@ -484,31 +484,50 @@ public:
             return 0;  // No TTL configured
         }
 
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return 0;
+        if (!db_adapter_) return 0;
 
         auto cutoff = std::chrono::system_clock::now() - config_.message_ttl;
         std::string cutoff_str = to_sqlite_timestamp(cutoff);
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return 0;
+        }
+        auto& conn_scope = *conn_result;
 
         // Move expired messages to dead letter
         const char* select_sql =
             "SELECT id FROM message_queue WHERE created_at < ? AND state != ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, select_sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return 0;
+        auto stmt_result = conn_scope.connection().prepare(select_sql);
+        if (!stmt_result) {
+            return 0;
+        }
+        auto& stmt = *stmt_result.value();
 
-        sqlite3_bind_text(stmt, 1, cutoff_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(stmt, 2, static_cast<int>(message_state::delivered));
+        auto bind_result = stmt.bind_string(1, cutoff_str);
+        if (!bind_result) {
+            return 0;
+        }
+        bind_result = stmt.bind_int64(2, static_cast<int>(message_state::delivered));
+        if (!bind_result) {
+            return 0;
+        }
+
+        auto result = stmt.execute();
+        if (!result) {
+            return 0;
+        }
 
         std::vector<std::string> expired_ids;
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char* id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (id) {
-                expired_ids.emplace_back(id);
+        while (result.value()->next()) {
+            const auto& row = result.value()->current_row();
+            std::string id = row.get_string(0);
+            if (!id.empty()) {
+                expired_ids.emplace_back(std::move(id));
             }
         }
-        sqlite3_finalize(stmt);
 
         size_t count = 0;
         for (const auto& id : expired_ids) {
@@ -625,11 +644,17 @@ public:
     }
 
     std::optional<queued_message> dequeue_internal(std::string_view destination) {
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return std::nullopt;
+        if (!db_adapter_) return std::nullopt;
 
         auto now = std::chrono::system_clock::now();
         std::string now_str = to_sqlite_timestamp(now);
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::nullopt;
+        }
+        auto& conn_scope = *conn_result;
 
         // Select highest priority message that is ready
         std::string sql =
@@ -644,62 +669,67 @@ public:
 
         sql += " ORDER BY priority ASC, scheduled_at ASC LIMIT 1";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return std::nullopt;
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return std::nullopt;
+        auto& stmt = *stmt_result.value();
 
         int param = 1;
-        sqlite3_bind_int(stmt, param++, static_cast<int>(message_state::pending));
-        sqlite3_bind_int(stmt, param++, static_cast<int>(message_state::retry_scheduled));
-        sqlite3_bind_text(stmt, param++, now_str.c_str(), -1, SQLITE_STATIC);
+        if (!stmt.bind_int64(param++, static_cast<int>(message_state::pending))) {
+            return std::nullopt;
+        }
+        if (!stmt.bind_int64(param++, static_cast<int>(message_state::retry_scheduled))) {
+            return std::nullopt;
+        }
+        if (!stmt.bind_string(param++, now_str)) {
+            return std::nullopt;
+        }
         if (!destination.empty()) {
-            sqlite3_bind_text(stmt, param++, std::string(destination).c_str(), -1,
-                              SQLITE_TRANSIENT);
+            if (!stmt.bind_string(param++, destination)) {
+                return std::nullopt;
+            }
         }
 
-        std::optional<queued_message> result;
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
+        auto result = stmt.execute();
+        if (!result) {
+            return std::nullopt;
+        }
+
+        std::optional<queued_message> msg_result;
+        if (result.value()->next()) {
+            const auto& row = result.value()->current_row();
             queued_message msg;
-            msg.id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            msg.destination = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            msg.payload = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-            msg.priority = sqlite3_column_int(stmt, 3);
-            msg.state = static_cast<message_state>(sqlite3_column_int(stmt, 4));
-            msg.created_at =
-                from_sqlite_timestamp(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
-            msg.scheduled_at =
-                from_sqlite_timestamp(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
-            msg.attempt_count = sqlite3_column_int(stmt, 7);
+            msg.id = row.get_string(0);
+            msg.destination = row.get_string(1);
+            msg.payload = row.get_string(2);
+            msg.priority = static_cast<int>(row.get_int64(3));
+            msg.state = static_cast<message_state>(row.get_int64(4));
+            msg.created_at = from_sqlite_timestamp(row.get_string(5));
+            msg.scheduled_at = from_sqlite_timestamp(row.get_string(6));
+            msg.attempt_count = static_cast<int>(row.get_int64(7));
 
-            const char* last_error =
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
-            if (last_error) msg.last_error = last_error;
+            if (!row.is_null(8)) msg.last_error = row.get_string(8);
+            if (!row.is_null(9)) msg.correlation_id = row.get_string(9);
+            if (!row.is_null(10)) msg.message_type = row.get_string(10);
 
-            const char* corr_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
-            if (corr_id) msg.correlation_id = corr_id;
-
-            const char* msg_type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 10));
-            if (msg_type) msg.message_type = msg_type;
-
-            result = msg;
+            msg_result = msg;
         }
-        sqlite3_finalize(stmt);
 
-        if (result) {
+        if (msg_result) {
             // Update state to processing
             const char* update_sql =
                 "UPDATE message_queue SET state = ?, attempt_count = attempt_count + 1 "
                 "WHERE id = ?";
 
-            rc = sqlite3_prepare_v2(db_, update_sql, -1, &stmt, nullptr);
-            if (rc == SQLITE_OK) {
-                sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::processing));
-                sqlite3_bind_text(stmt, 2, result->id.c_str(), -1, SQLITE_STATIC);
-                sqlite3_step(stmt);
-                sqlite3_finalize(stmt);
+            auto update_stmt_result = conn_scope.connection().prepare(update_sql);
+            if (update_stmt_result) {
+                auto& update_stmt = *update_stmt_result.value();
+                if (update_stmt.bind_int64(1, static_cast<int>(message_state::processing)) &&
+                    update_stmt.bind_string(2, msg_result->id)) {
+                    (void)update_stmt.execute();
 
-                result->state = message_state::processing;
-                result->attempt_count++;
+                    msg_result->state = message_state::processing;
+                    msg_result->attempt_count++;
+                }
             }
 
             // Update statistics
@@ -710,7 +740,7 @@ public:
             }
         }
 
-        return result;
+        return msg_result;
     }
 
     std::expected<void, queue_error> ack_internal(std::string_view message_id) {
@@ -926,54 +956,64 @@ public:
     }
 
     std::optional<queued_message> get_message_internal(const std::string& message_id) const {
-        std::shared_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return std::nullopt;
+        if (!db_adapter_) return std::nullopt;
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::nullopt;
+        }
+        auto& conn_scope = *conn_result;
 
         const char* sql =
             "SELECT id, destination, payload, priority, state, created_at, "
             "scheduled_at, attempt_count, last_error, correlation_id, message_type "
             "FROM message_queue WHERE id = ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return std::nullopt;
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return std::nullopt;
+        auto& stmt = *stmt_result.value();
 
-        sqlite3_bind_text(stmt, 1, message_id.c_str(), -1, SQLITE_STATIC);
-
-        std::optional<queued_message> result;
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            queued_message msg;
-            msg.id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            msg.destination = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            msg.payload = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-            msg.priority = sqlite3_column_int(stmt, 3);
-            msg.state = static_cast<message_state>(sqlite3_column_int(stmt, 4));
-            msg.created_at =
-                from_sqlite_timestamp(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
-            msg.scheduled_at =
-                from_sqlite_timestamp(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
-            msg.attempt_count = sqlite3_column_int(stmt, 7);
-
-            const char* last_error =
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
-            if (last_error) msg.last_error = last_error;
-
-            const char* corr_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
-            if (corr_id) msg.correlation_id = corr_id;
-
-            const char* msg_type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 10));
-            if (msg_type) msg.message_type = msg_type;
-
-            result = msg;
+        if (!stmt.bind_string(1, message_id)) {
+            return std::nullopt;
         }
-        sqlite3_finalize(stmt);
 
-        return result;
+        auto result = stmt.execute();
+        if (!result) {
+            return std::nullopt;
+        }
+
+        if (result.value()->next()) {
+            const auto& row = result.value()->current_row();
+            queued_message msg;
+            msg.id = row.get_string(0);
+            msg.destination = row.get_string(1);
+            msg.payload = row.get_string(2);
+            msg.priority = static_cast<int>(row.get_int64(3));
+            msg.state = static_cast<message_state>(row.get_int64(4));
+            msg.created_at = from_sqlite_timestamp(row.get_string(5));
+            msg.scheduled_at = from_sqlite_timestamp(row.get_string(6));
+            msg.attempt_count = static_cast<int>(row.get_int64(7));
+
+            if (!row.is_null(8)) msg.last_error = row.get_string(8);
+            if (!row.is_null(9)) msg.correlation_id = row.get_string(9);
+            if (!row.is_null(10)) msg.message_type = row.get_string(10);
+
+            return msg;
+        }
+
+        return std::nullopt;
     }
 
     size_t queue_depth_internal(std::string_view destination) const {
-        std::shared_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return 0;
+        if (!db_adapter_) return 0;
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return 0;
+        }
+        auto& conn_scope = *conn_result;
 
         // Count only pending and retry_scheduled messages (not processing or delivered)
         std::string sql = "SELECT COUNT(*) FROM message_queue WHERE state IN (?, ?)";
@@ -981,23 +1021,32 @@ public:
             sql += " AND destination = ?";
         }
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql.c_str(), -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return 0;
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return 0;
+        auto& stmt = *stmt_result.value();
 
-        sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::pending));
-        sqlite3_bind_int(stmt, 2, static_cast<int>(message_state::retry_scheduled));
+        if (!stmt.bind_int64(1, static_cast<int>(message_state::pending))) {
+            return 0;
+        }
+        if (!stmt.bind_int64(2, static_cast<int>(message_state::retry_scheduled))) {
+            return 0;
+        }
         if (!destination.empty()) {
-            sqlite3_bind_text(stmt, 3, std::string(destination).c_str(), -1, SQLITE_TRANSIENT);
+            if (!stmt.bind_string(3, destination)) {
+                return 0;
+            }
         }
 
-        size_t count = 0;
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            count = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
+        auto result = stmt.execute();
+        if (!result) {
+            return 0;
         }
-        sqlite3_finalize(stmt);
 
-        return count;
+        if (result.value()->next()) {
+            return static_cast<size_t>(result.value()->current_row().get_int64(0));
+        }
+
+        return 0;
     }
 
     void worker_loop() {
@@ -1076,95 +1125,122 @@ public:
     }
 
     std::vector<dead_letter_entry> get_dead_letters_internal(size_t limit, size_t offset) const {
-        std::shared_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return {};
+        if (!db_adapter_) return {};
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return {};
+        }
+        auto& conn_scope = *conn_result;
 
         const char* sql =
             "SELECT id, destination, payload, priority, created_at, attempt_count, "
             "reason, dead_lettered_at, error_history, correlation_id, message_type "
             "FROM dead_letter_queue ORDER BY dead_lettered_at DESC LIMIT ? OFFSET ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return {};
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return {};
+        auto& stmt = *stmt_result.value();
 
-        sqlite3_bind_int64(stmt, 1, static_cast<int64_t>(limit));
-        sqlite3_bind_int64(stmt, 2, static_cast<int64_t>(offset));
+        if (!stmt.bind_int64(1, static_cast<int64_t>(limit))) {
+            return {};
+        }
+        if (!stmt.bind_int64(2, static_cast<int64_t>(offset))) {
+            return {};
+        }
+
+        auto result = stmt.execute();
+        if (!result) {
+            return {};
+        }
 
         std::vector<dead_letter_entry> results;
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
+        while (result.value()->next()) {
+            const auto& row = result.value()->current_row();
             dead_letter_entry entry;
-            entry.message.id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            entry.message.destination =
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-            entry.message.payload = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-            entry.message.priority = sqlite3_column_int(stmt, 3);
-            entry.message.created_at = from_sqlite_timestamp(
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)));
-            entry.message.attempt_count = sqlite3_column_int(stmt, 5);
-            entry.reason = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
-            entry.dead_lettered_at = from_sqlite_timestamp(
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7)));
+            entry.message.id = row.get_string(0);
+            entry.message.destination = row.get_string(1);
+            entry.message.payload = row.get_string(2);
+            entry.message.priority = static_cast<int>(row.get_int64(3));
+            entry.message.created_at = from_sqlite_timestamp(row.get_string(4));
+            entry.message.attempt_count = static_cast<int>(row.get_int64(5));
+            entry.reason = row.get_string(6);
+            entry.dead_lettered_at = from_sqlite_timestamp(row.get_string(7));
 
-            const char* error_history =
-                reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
-            if (error_history) {
-                entry.error_history.push_back(error_history);
+            if (!row.is_null(8)) {
+                entry.error_history.push_back(row.get_string(8));
             }
 
-            const char* corr_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
-            if (corr_id) entry.message.correlation_id = corr_id;
-
-            const char* msg_type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 10));
-            if (msg_type) entry.message.message_type = msg_type;
+            if (!row.is_null(9)) entry.message.correlation_id = row.get_string(9);
+            if (!row.is_null(10)) entry.message.message_type = row.get_string(10);
 
             entry.message.state = message_state::dead_letter;
             results.push_back(std::move(entry));
         }
-        sqlite3_finalize(stmt);
 
         return results;
     }
 
     size_t dead_letter_count_internal() const {
-        std::shared_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return 0;
+        if (!db_adapter_) return 0;
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return 0;
+        }
+        auto& conn_scope = *conn_result;
 
         const char* sql = "SELECT COUNT(*) FROM dead_letter_queue";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return 0;
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return 0;
 
-        size_t count = 0;
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            count = static_cast<size_t>(sqlite3_column_int64(stmt, 0));
+        auto result = stmt_result.value()->execute();
+        if (!result) {
+            return 0;
         }
-        sqlite3_finalize(stmt);
 
-        return count;
+        if (result.value()->next()) {
+            return static_cast<size_t>(result.value()->current_row().get_int64(0));
+        }
+
+        return 0;
     }
 
     std::vector<std::string> destinations_internal() const {
-        std::shared_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return {};
+        if (!db_adapter_) return {};
+
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return {};
+        }
+        auto& conn_scope = *conn_result;
 
         const char* sql = "SELECT DISTINCT destination FROM message_queue WHERE state != ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return {};
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return {};
+        auto& stmt = *stmt_result.value();
 
-        sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::delivered));
+        if (!stmt.bind_int64(1, static_cast<int>(message_state::delivered))) {
+            return {};
+        }
+
+        auto result = stmt.execute();
+        if (!result) {
+            return {};
+        }
 
         std::vector<std::string> results;
-        while (sqlite3_step(stmt) == SQLITE_ROW) {
-            const char* dest = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-            if (dest) {
-                results.emplace_back(dest);
+        while (result.value()->next()) {
+            std::string dest = result.value()->current_row().get_string(0);
+            if (!dest.empty()) {
+                results.emplace_back(std::move(dest));
             }
         }
-        sqlite3_finalize(stmt);
 
         return results;
     }
@@ -1603,8 +1679,14 @@ std::vector<queued_message> queue_manager::get_pending(std::string_view destinat
         return {};
     }
 
-    std::shared_lock<std::shared_mutex> lock(pimpl_->db_mutex_);
-    if (!pimpl_->db_) return {};
+    if (!pimpl_->db_adapter_) return {};
+
+    // Acquire connection from pool
+    auto conn_result = integration::connection_scope::acquire(*pimpl_->db_adapter_);
+    if (!conn_result) {
+        return {};
+    }
+    auto& conn_scope = *conn_result;
 
     std::string sql =
         "SELECT id, destination, payload, priority, state, created_at, "
@@ -1617,44 +1699,50 @@ std::vector<queued_message> queue_manager::get_pending(std::string_view destinat
 
     sql += " ORDER BY priority ASC, scheduled_at ASC LIMIT ?";
 
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(pimpl_->db_, sql.c_str(), -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) return {};
+    auto stmt_result = conn_scope.connection().prepare(sql);
+    if (!stmt_result) return {};
+    auto& stmt = *stmt_result.value();
 
     int param = 1;
-    sqlite3_bind_int(stmt, param++, static_cast<int>(message_state::pending));
-    sqlite3_bind_int(stmt, param++, static_cast<int>(message_state::retry_scheduled));
-    if (!destination.empty()) {
-        sqlite3_bind_text(stmt, param++, std::string(destination).c_str(), -1, SQLITE_TRANSIENT);
+    if (!stmt.bind_int64(param++, static_cast<int>(message_state::pending))) {
+        return {};
     }
-    sqlite3_bind_int64(stmt, param++, static_cast<int64_t>(limit));
+    if (!stmt.bind_int64(param++, static_cast<int>(message_state::retry_scheduled))) {
+        return {};
+    }
+    if (!destination.empty()) {
+        if (!stmt.bind_string(param++, destination)) {
+            return {};
+        }
+    }
+    if (!stmt.bind_int64(param++, static_cast<int64_t>(limit))) {
+        return {};
+    }
+
+    auto result = stmt.execute();
+    if (!result) {
+        return {};
+    }
 
     std::vector<queued_message> results;
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    while (result.value()->next()) {
+        const auto& row = result.value()->current_row();
         queued_message msg;
-        msg.id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        msg.destination = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        msg.payload = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-        msg.priority = sqlite3_column_int(stmt, 3);
-        msg.state = static_cast<message_state>(sqlite3_column_int(stmt, 4));
-        msg.created_at =
-            from_sqlite_timestamp(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
-        msg.scheduled_at =
-            from_sqlite_timestamp(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
-        msg.attempt_count = sqlite3_column_int(stmt, 7);
+        msg.id = row.get_string(0);
+        msg.destination = row.get_string(1);
+        msg.payload = row.get_string(2);
+        msg.priority = static_cast<int>(row.get_int64(3));
+        msg.state = static_cast<message_state>(row.get_int64(4));
+        msg.created_at = from_sqlite_timestamp(row.get_string(5));
+        msg.scheduled_at = from_sqlite_timestamp(row.get_string(6));
+        msg.attempt_count = static_cast<int>(row.get_int64(7));
 
-        const char* last_error = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 8));
-        if (last_error) msg.last_error = last_error;
-
-        const char* corr_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 9));
-        if (corr_id) msg.correlation_id = corr_id;
-
-        const char* msg_type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 10));
-        if (msg_type) msg.message_type = msg_type;
+        if (!row.is_null(8)) msg.last_error = row.get_string(8);
+        if (!row.is_null(9)) msg.correlation_id = row.get_string(9);
+        if (!row.is_null(10)) msg.message_type = row.get_string(10);
 
         results.push_back(std::move(msg));
     }
-    sqlite3_finalize(stmt);
 
     return results;
 }
@@ -1681,50 +1769,64 @@ queue_statistics queue_manager::get_statistics() const {
     stats.retry_scheduled_count = 0;
 
     // Query actual counts from database
-    std::shared_lock<std::shared_mutex> db_lock(pimpl_->db_mutex_);
-    if (pimpl_->db_) {
-        const char* sql =
-            "SELECT state, COUNT(*) FROM message_queue GROUP BY state";
+    if (pimpl_->db_adapter_) {
+        // Acquire connection from pool
+        auto conn_result = integration::connection_scope::acquire(*pimpl_->db_adapter_);
+        if (conn_result) {
+            auto& conn_scope = *conn_result;
 
-        sqlite3_stmt* stmt = nullptr;
-        if (sqlite3_prepare_v2(pimpl_->db_, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                auto state = static_cast<message_state>(sqlite3_column_int(stmt, 0));
-                size_t count = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
+            const char* sql =
+                "SELECT state, COUNT(*) FROM message_queue GROUP BY state";
 
-                switch (state) {
-                    case message_state::pending:
-                        stats.pending_count = count;
-                        break;
-                    case message_state::processing:
-                        stats.processing_count = count;
-                        break;
-                    case message_state::retry_scheduled:
-                        stats.retry_scheduled_count = count;
-                        break;
-                    default:
-                        break;
+            auto stmt_result = conn_scope.connection().prepare(sql);
+            if (stmt_result) {
+                auto result = stmt_result.value()->execute();
+                if (result) {
+                    while (result.value()->next()) {
+                        const auto& row = result.value()->current_row();
+                        auto state = static_cast<message_state>(row.get_int64(0));
+                        size_t count = static_cast<size_t>(row.get_int64(1));
+
+                        switch (state) {
+                            case message_state::pending:
+                                stats.pending_count = count;
+                                break;
+                            case message_state::processing:
+                                stats.processing_count = count;
+                                break;
+                            case message_state::retry_scheduled:
+                                stats.retry_scheduled_count = count;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
                 }
             }
-            sqlite3_finalize(stmt);
-        }
 
-        // Get depth by destination
-        const char* dest_sql =
-            "SELECT destination, COUNT(*) FROM message_queue WHERE state != ? "
-            "GROUP BY destination";
+            // Get depth by destination
+            const char* dest_sql =
+                "SELECT destination, COUNT(*) FROM message_queue WHERE state != ? "
+                "GROUP BY destination";
 
-        if (sqlite3_prepare_v2(pimpl_->db_, dest_sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::delivered));
-            stats.depth_by_destination.clear();
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char* dest = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                size_t count = static_cast<size_t>(sqlite3_column_int64(stmt, 1));
-                if (dest) {
-                    stats.depth_by_destination.emplace_back(dest, count);
+            auto dest_stmt_result = conn_scope.connection().prepare(dest_sql);
+            if (dest_stmt_result) {
+                auto& dest_stmt = *dest_stmt_result.value();
+                if (dest_stmt.bind_int64(1, static_cast<int>(message_state::delivered))) {
+                    auto dest_result = dest_stmt.execute();
+                    if (dest_result) {
+                        stats.depth_by_destination.clear();
+                        while (dest_result.value()->next()) {
+                            const auto& row = dest_result.value()->current_row();
+                            std::string dest = row.get_string(0);
+                            size_t count = static_cast<size_t>(row.get_int64(1));
+                            if (!dest.empty()) {
+                                stats.depth_by_destination.emplace_back(std::move(dest), count);
+                            }
+                        }
+                    }
                 }
             }
-            sqlite3_finalize(stmt);
         }
     }
 
