@@ -24,6 +24,9 @@
 // SQLite header - using sqlite3 from vcpkg
 #include <sqlite3.h>
 
+// Database adapter for standardized database access (Phase 1b migration)
+#include "pacs/bridge/integration/database_adapter.h"
+
 namespace pacs::bridge::router {
 
 // =============================================================================
@@ -185,9 +188,12 @@ public:
     std::atomic<bool> running_{false};
     std::atomic<bool> workers_running_{false};
 
-    // SQLite database
+    // SQLite database (legacy - to be migrated in Phase 1b parts 2-3)
     sqlite3* db_ = nullptr;
     mutable std::shared_mutex db_mutex_;
+
+    // Database adapter (Phase 1b Part 1: DDL operations only)
+    std::shared_ptr<integration::database_adapter> db_adapter_;
 
     // Worker threads
     std::vector<std::thread> worker_threads_;
@@ -311,6 +317,21 @@ public:
     std::expected<void, queue_error> open_database() {
         std::unique_lock<std::shared_mutex> lock(db_mutex_);
 
+        // Phase 1b Part 1: Initialize database_adapter for DDL operations
+        integration::database_config db_config;
+        db_config.database_path = config_.database_path;
+        db_config.pool_size = 5;
+        db_config.connection_timeout = std::chrono::seconds{30};
+        db_config.query_timeout = std::chrono::seconds{60};
+        db_config.enable_wal = config_.enable_wal_mode;
+        db_config.busy_timeout_ms = 5000;
+
+        db_adapter_ = integration::create_database_adapter(db_config);
+        if (!db_adapter_) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        // Legacy SQLite initialization (to be removed in Parts 2-3)
         int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
         int rc = sqlite3_open_v2(config_.database_path.c_str(), &db_, flags, nullptr);
         if (rc != SQLITE_OK) {
@@ -318,6 +339,7 @@ public:
                 sqlite3_close(db_);
                 db_ = nullptr;
             }
+            db_adapter_.reset();
             return std::unexpected(queue_error::database_error);
         }
 
@@ -330,11 +352,12 @@ public:
         // Set busy timeout
         sqlite3_busy_timeout(db_, 5000);
 
-        // Create tables
+        // Create tables using database_adapter (Phase 1b Part 1)
         auto create_result = create_tables();
         if (!create_result) {
             sqlite3_close(db_);
             db_ = nullptr;
+            db_adapter_.reset();
             return create_result;
         }
 
@@ -384,22 +407,28 @@ public:
             "CREATE INDEX IF NOT EXISTS idx_queue_priority ON message_queue(priority)",
             "CREATE INDEX IF NOT EXISTS idx_dlq_destination ON dead_letter_queue(destination)"};
 
-        if (!execute_sql(queue_table)) {
+        // Create main queue table
+        auto result = db_adapter_->execute_schema(queue_table);
+        if (!result) {
             return std::unexpected(queue_error::database_error);
         }
 
-        if (!execute_sql(dead_letter_table)) {
+        // Create dead letter table
+        result = db_adapter_->execute_schema(dead_letter_table);
+        if (!result) {
             return std::unexpected(queue_error::database_error);
         }
 
+        // Create indexes (optional, don't fail on error)
         for (const auto* idx : indexes) {
-            execute_sql(idx);  // Indexes are optional, don't fail on error
+            (void)db_adapter_->execute_schema(idx);  // Intentionally ignore result
         }
 
         return {};
     }
 
     bool execute_sql(const char* sql) {
+        // Legacy helper for PRAGMA statements (Phase 1b Part 1: kept for compatibility)
         char* error_msg = nullptr;
         int rc = sqlite3_exec(db_, sql, nullptr, nullptr, &error_msg);
         if (rc != SQLITE_OK) {
