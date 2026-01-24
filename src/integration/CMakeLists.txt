@@ -1,5 +1,5 @@
 # Integration Module
-# Provides adapters for common_system libraries (network, thread, logger).
+# Provides adapters for common_system libraries (network, thread, logger, database).
 #
 # See: docs/SDS_COMPONENTS.md - Section 8: Integration Module
 #
@@ -11,3 +11,4 @@
 #   - logger_adapter.cpp    (Issue #267)
 #   - network_adapter.cpp   (Issue #270)
 #   - thread_adapter.cpp    (Issue #266)
+#   - database_adapter.cpp  (Issue #274)

@@ -213,10 +213,9 @@ jobs:
       working-directory: pacs_bridge
       shell: pwsh
       run: |
-        # Refresh PATH to include Ninja from chocolatey
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-
         # Note: BRIDGE_STANDALONE_BUILD=ON (default) - see Issue #142
+        # Do NOT refresh PATH - it would overwrite MSVC environment set by ilammy/msvc-dev-cmd
+        # cl.exe is already in PATH from the Setup MSVC step
         cmake -B build `
           -G Ninja `
           -DCMAKE_BUILD_TYPE=Release `

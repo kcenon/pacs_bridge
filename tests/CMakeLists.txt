@@ -751,6 +751,54 @@ else()
     message(STATUS "Skipping thread_adapter_test: requires thread_system (BRIDGE_STANDALONE_BUILD=OFF)")
 endif()
 
+# Database Adapter Tests (Issue #274)
+# Tests database_adapter implementations for SQLite database access
+# Requires SQLite to be available
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_executable(database_adapter_test database_adapter_test.cpp)
+    target_link_libraries(database_adapter_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(database_adapter_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(database_adapter_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+    target_include_directories(database_adapter_test
+        PRIVATE
+            ${PACS_BRIDGE_TEST_UTILS_DIR}
+    )
+    target_compile_definitions(database_adapter_test
+        PRIVATE
+            PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+    )
+    if(PACS_BRIDGE_HAS_GTEST)
+        include(GoogleTest)
+        gtest_discover_tests(database_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            PROPERTIES
+                TIMEOUT 60
+                LABELS "unit;integration;database;phase4"
+        )
+    else()
+        add_test(
+            NAME database_adapter_test
+            COMMAND database_adapter_test
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        set_tests_properties(database_adapter_test PROPERTIES
+            TIMEOUT 60
+            LABELS "unit;integration;database;phase4"
+        )
+    endif()
+else()
+    message(STATUS "Skipping database_adapter_test: requires SQLite (PACS_BRIDGE_HAS_SQLITE)")
+endif()
+
 # =============================================================================
 # Messaging Pattern Tests (Issue #146, #142)
 # =============================================================================
@@ -991,6 +1039,9 @@ if(NOT BRIDGE_STANDALONE_BUILD)
     message(STATUS "  - thread_adapter_test (Issue #266)")
     message(STATUS "")
 endif()
+message(STATUS "Database Adapter Tests (Issue #274):")
+message(STATUS "  - database_adapter_test (Issue #274)")
+message(STATUS "")
 message(STATUS "Phase 4 Integration Tests:")
 message(STATUS "  - monitoring_integration_test")
 if(BRIDGE_BUILD_FHIR)
