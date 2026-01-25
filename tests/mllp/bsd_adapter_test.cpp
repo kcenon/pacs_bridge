@@ -157,13 +157,17 @@ TEST_F(BSDAdapterTest, ServerStartOnInvalidPort) {
     auto result = server_->start();
 
     EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(network_error::bind_failed, result.error());
+    // Port 0 is rejected as invalid configuration
+    EXPECT_EQ(network_error::invalid_config, result.error());
 }
 
 TEST_F(BSDAdapterTest, ServerPortAlreadyInUse) {
     // Start first server
     server_ = create_server(test_port_);
     EXPECT_TRUE(server_->is_running());
+
+    // Allow time for first server to fully bind the port
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // Try to start second server on same port
     server_config config;
@@ -173,6 +177,11 @@ TEST_F(BSDAdapterTest, ServerPortAlreadyInUse) {
     server2->on_connection([](std::unique_ptr<mllp_session>) {});
 
     auto result = server2->start();
+
+    // Stop second server if it somehow started
+    if (server2) {
+        server2->stop(false);
+    }
 
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(network_error::bind_failed, result.error());
