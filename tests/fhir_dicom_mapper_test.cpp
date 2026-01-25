@@ -44,59 +44,59 @@ protected:
 
 TEST_F(FhirDicomMapperTest, FhirDateTimeToDicom_BasicFormat) {
     auto result = fhir_dicom_mapper::fhir_datetime_to_dicom("2024-01-15T10:30:00Z");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->first, "20240115");
-    EXPECT_EQ(result->second, "103000");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().first, "20240115");
+    EXPECT_EQ(result.value().second, "103000");
 }
 
 TEST_F(FhirDicomMapperTest, FhirDateTimeToDicom_WithMilliseconds) {
     auto result = fhir_dicom_mapper::fhir_datetime_to_dicom("2024-01-15T10:30:45.123Z");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->first, "20240115");
-    EXPECT_EQ(result->second, "103045.123");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().first, "20240115");
+    EXPECT_EQ(result.value().second, "103045.123");
 }
 
 TEST_F(FhirDicomMapperTest, FhirDateTimeToDicom_WithTimezone) {
     auto result = fhir_dicom_mapper::fhir_datetime_to_dicom("2024-01-15T10:30:00+09:00");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->first, "20240115");
-    EXPECT_EQ(result->second, "103000");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().first, "20240115");
+    EXPECT_EQ(result.value().second, "103000");
 }
 
 TEST_F(FhirDicomMapperTest, FhirDateTimeToDicom_DateOnly) {
     auto result = fhir_dicom_mapper::fhir_datetime_to_dicom("2024-01-15");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->first, "20240115");
-    EXPECT_EQ(result->second, "");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().first, "20240115");
+    EXPECT_EQ(result.value().second, "");
 }
 
 TEST_F(FhirDicomMapperTest, FhirDateTimeToDicom_InvalidFormat) {
     auto result = fhir_dicom_mapper::fhir_datetime_to_dicom("invalid");
-    ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), fhir_dicom_error::datetime_conversion_failed);
+    ASSERT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, static_cast<int>(fhir_dicom_error::datetime_conversion_failed));
 }
 
 TEST_F(FhirDicomMapperTest, DicomDateTimeToFhir_BasicFormat) {
     auto result = fhir_dicom_mapper::dicom_datetime_to_fhir("20240115", "103000");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, "2024-01-15T10:30:00");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value(), "2024-01-15T10:30:00");
 }
 
 TEST_F(FhirDicomMapperTest, DicomDateTimeToFhir_WithFractionalSeconds) {
     auto result = fhir_dicom_mapper::dicom_datetime_to_fhir("20240115", "103045.123456");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, "2024-01-15T10:30:45.123");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value(), "2024-01-15T10:30:45.123");
 }
 
 TEST_F(FhirDicomMapperTest, DicomDateTimeToFhir_DateOnly) {
     auto result = fhir_dicom_mapper::dicom_datetime_to_fhir("20240115", "");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, "2024-01-15");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value(), "2024-01-15");
 }
 
 TEST_F(FhirDicomMapperTest, DicomDateTimeToFhir_InvalidDate) {
     auto result = fhir_dicom_mapper::dicom_datetime_to_fhir("2024011", "103000");
-    ASSERT_FALSE(result.has_value());
+    ASSERT_FALSE(result.is_ok());
 }
 
 // =============================================================================
@@ -242,24 +242,24 @@ TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_Basic) {
     patient.patient_sex = "M";
 
     auto result = mapper_->service_request_to_mwl(request, patient);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // Verify patient data
-    EXPECT_EQ(result->patient.patient_id, "patient-123");
-    EXPECT_EQ(result->patient.patient_name, "Doe^John");
+    EXPECT_EQ(result.value().patient.patient_id, "patient-123");
+    EXPECT_EQ(result.value().patient.patient_name, "Doe^John");
 
     // Verify scheduled procedure step
-    ASSERT_FALSE(result->scheduled_steps.empty());
-    const auto& sps = result->scheduled_steps[0];
+    ASSERT_FALSE(result.value().scheduled_steps.empty());
+    const auto& sps = result.value().scheduled_steps[0];
     EXPECT_EQ(sps.scheduled_start_date, "20240115");
     EXPECT_EQ(sps.scheduled_start_time, "100000");
     EXPECT_EQ(sps.modality, "CT");  // Mapped from LOINC
     EXPECT_EQ(sps.scheduled_step_description, "CT Chest");
 
     // Verify requested procedure
-    EXPECT_FALSE(result->requested_procedure.study_instance_uid.empty());
-    EXPECT_EQ(result->requested_procedure.procedure_code_value, "24558-9");
-    EXPECT_EQ(result->requested_procedure.requested_procedure_priority, "MEDIUM");
+    EXPECT_FALSE(result.value().requested_procedure.study_instance_uid.empty());
+    EXPECT_EQ(result.value().requested_procedure.procedure_code_value, "24558-9");
+    EXPECT_EQ(result.value().requested_procedure.requested_procedure_priority, "MEDIUM");
 }
 
 TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_WithIdentifiers) {
@@ -280,10 +280,10 @@ TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_WithIdentifiers) {
     patient.patient_id = "patient-456";
 
     auto result = mapper_->service_request_to_mwl(request, patient);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->imaging_service_request.accession_number, "ACSN-001");
-    EXPECT_EQ(result->imaging_service_request.placer_order_number, "PLACER-001");
+    EXPECT_EQ(result.value().imaging_service_request.accession_number, "ACSN-001");
+    EXPECT_EQ(result.value().imaging_service_request.placer_order_number, "PLACER-001");
 }
 
 TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_ValidationFails) {
@@ -295,7 +295,7 @@ TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_ValidationFails) {
 
     // With validation enabled (default), this should fail
     auto result = mapper_->service_request_to_mwl(request, patient);
-    EXPECT_FALSE(result.has_value());
+    EXPECT_FALSE(result.is_ok());
 }
 
 TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_WithPerformer) {
@@ -320,11 +320,11 @@ TEST_F(FhirDicomMapperTest, ServiceRequestToMwl_WithPerformer) {
     patient.patient_id = "patient-789";
 
     auto result = mapper_->service_request_to_mwl(request, patient);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    ASSERT_FALSE(result->scheduled_steps.empty());
-    EXPECT_EQ(result->scheduled_steps[0].scheduled_station_ae_title, "AE_TITLE_1");
-    EXPECT_EQ(result->scheduled_steps[0].scheduled_performing_physician, "Dr. Smith");
+    ASSERT_FALSE(result.value().scheduled_steps.empty());
+    EXPECT_EQ(result.value().scheduled_steps[0].scheduled_station_ae_title, "AE_TITLE_1");
+    EXPECT_EQ(result.value().scheduled_steps[0].scheduled_performing_physician, "Dr. Smith");
 }
 
 // =============================================================================
@@ -346,25 +346,25 @@ TEST_F(FhirDicomMapperTest, StudyToImagingStudy_Basic) {
     study.status = "available";
 
     auto result = mapper_->study_to_imaging_study(study);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
-    EXPECT_EQ(result->status, "available");
-    EXPECT_EQ(result->study_instance_uid, "1.2.3.4.5.6.7.8.9");
-    EXPECT_EQ(result->number_of_series, 3u);
-    EXPECT_EQ(result->number_of_instances, 150u);
-    EXPECT_EQ(*result->description, "CT Chest with contrast");
+    EXPECT_EQ(result.value().status, "available");
+    EXPECT_EQ(result.value().study_instance_uid, "1.2.3.4.5.6.7.8.9");
+    EXPECT_EQ(result.value().number_of_series, 3u);
+    EXPECT_EQ(result.value().number_of_instances, 150u);
+    EXPECT_EQ(*result.value().description, "CT Chest with contrast");
 
     // Check identifiers
-    EXPECT_FALSE(result->identifiers.empty());
-    EXPECT_EQ(result->identifiers[0].second, "1.2.3.4.5.6.7.8.9");
+    EXPECT_FALSE(result.value().identifiers.empty());
+    EXPECT_EQ(result.value().identifiers[0].second, "1.2.3.4.5.6.7.8.9");
 
     // Check started
-    ASSERT_TRUE(result->started.has_value());
-    EXPECT_EQ(*result->started, "2024-01-15T10:30:00");
+    ASSERT_TRUE(result.value().started.has_value());
+    EXPECT_EQ(*result.value().started, "2024-01-15T10:30:00");
 
     // Check subject
-    ASSERT_TRUE(result->subject.reference.has_value());
-    EXPECT_EQ(*result->subject.reference, "Patient/patient-123");
+    ASSERT_TRUE(result.value().subject.reference.has_value());
+    EXPECT_EQ(*result.value().subject.reference, "Patient/patient-123");
 }
 
 TEST_F(FhirDicomMapperTest, StudyToImagingStudy_WithSeries) {
@@ -389,16 +389,16 @@ TEST_F(FhirDicomMapperTest, StudyToImagingStudy_WithSeries) {
     study.series.push_back(series2);
 
     auto result = mapper_->study_to_imaging_study(study);
-    ASSERT_TRUE(result.has_value());
-    ASSERT_EQ(result->series.size(), 2u);
+    ASSERT_TRUE(result.is_ok());
+    ASSERT_EQ(result.value().series.size(), 2u);
 
-    EXPECT_EQ(result->series[0].uid, "1.2.3.4.5.1");
-    EXPECT_EQ(result->series[0].modality.code, "CT");
-    EXPECT_EQ(*result->series[0].description, "Axial images");
-    EXPECT_EQ(*result->series[0].number_of_instances, 50u);
+    EXPECT_EQ(result.value().series[0].uid, "1.2.3.4.5.1");
+    EXPECT_EQ(result.value().series[0].modality.code, "CT");
+    EXPECT_EQ(*result.value().series[0].description, "Axial images");
+    EXPECT_EQ(*result.value().series[0].number_of_instances, 50u);
 
-    EXPECT_EQ(result->series[1].uid, "1.2.3.4.5.2");
-    EXPECT_EQ(*result->series[1].number, 2u);
+    EXPECT_EQ(result.value().series[1].uid, "1.2.3.4.5.2");
+    EXPECT_EQ(*result.value().series[1].number, 2u);
 }
 
 TEST_F(FhirDicomMapperTest, StudyToImagingStudy_CustomPatientReference) {
@@ -408,10 +408,10 @@ TEST_F(FhirDicomMapperTest, StudyToImagingStudy_CustomPatientReference) {
     study.patient_id = "original-id";
 
     auto result = mapper_->study_to_imaging_study(study, "Patient/custom-ref-123");
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 
     // Custom reference should be used
-    EXPECT_EQ(*result->subject.reference, "Patient/custom-ref-123");
+    EXPECT_EQ(*result.value().subject.reference, "Patient/custom-ref-123");
 }
 
 // =============================================================================
@@ -610,21 +610,21 @@ TEST_F(FhirDicomMapperTest, PatientLookup_NotConfigured) {
 
     // Without patient lookup configured
     auto result = mapper_->service_request_to_mwl(request);
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), fhir_dicom_error::patient_not_found);
+    EXPECT_FALSE(result.is_ok());
+    EXPECT_EQ(result.error().code, static_cast<int>(fhir_dicom_error::patient_not_found));
 }
 
 TEST_F(FhirDicomMapperTest, PatientLookup_Configured) {
     // Configure patient lookup
     mapper_->set_patient_lookup([](const std::string& ref)
-        -> std::expected<dicom_patient, fhir_dicom_error> {
+        -> Result<dicom_patient> {
         if (ref == "Patient/123") {
             dicom_patient patient;
             patient.patient_id = "123";
             patient.patient_name = "Test^Patient";
-            return patient;
+            return Result<dicom_patient>::ok(patient);
         }
-        return std::unexpected(fhir_dicom_error::patient_not_found);
+        return Result<dicom_patient>::err(error_info(static_cast<int>(fhir_dicom_error::patient_not_found), "Patient not found", "fhir_dicom_mapper"));
     });
 
     fhir_service_request request;
@@ -635,8 +635,8 @@ TEST_F(FhirDicomMapperTest, PatientLookup_Configured) {
     request.code.coding.push_back(coding);
 
     auto result = mapper_->service_request_to_mwl(request);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->patient.patient_id, "123");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().patient.patient_id, "123");
 }
 
 // =============================================================================
@@ -662,7 +662,7 @@ TEST_F(FhirDicomMapperTest, EmptyStrings) {
 
     // Should handle empty strings gracefully
     auto result = mapper_->service_request_to_mwl(request, patient);
-    ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result.is_ok());
 }
 
 TEST_F(FhirDicomMapperTest, SpecialCharactersInNames) {
@@ -680,8 +680,8 @@ TEST_F(FhirDicomMapperTest, SpecialCharactersInNames) {
     patient.patient_name = "O'Brien^Mary^Jane";  // Special char in name
 
     auto result = mapper_->service_request_to_mwl(request, patient);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result->patient.patient_name, "O'Brien^Mary^Jane");
+    ASSERT_TRUE(result.is_ok());
+    EXPECT_EQ(result.value().patient.patient_name, "O'Brien^Mary^Jane");
 }
 
 }  // namespace
