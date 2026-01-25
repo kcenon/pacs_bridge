@@ -288,7 +288,7 @@ public:
                 static_cast<int>(fhir_error::server_error),
                 "Server already running"});
         }
-        return VoidResult::ok();
+        return kcenon::common::ok();
     }
 
     void stop(bool wait_for_requests) {
