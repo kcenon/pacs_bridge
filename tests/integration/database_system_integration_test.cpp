@@ -12,7 +12,7 @@
 #include <gmock/gmock.h>
 
 #include "pacs/bridge/integration/database_adapter.h"
-#include "utils/test_helpers.h"
+#include "test_helpers.h"
 
 #include <chrono>
 #include <filesystem>

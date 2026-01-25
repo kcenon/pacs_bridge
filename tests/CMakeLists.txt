@@ -948,6 +948,19 @@ add_integration_test(emr_e2e_test "integration;emr;e2e;phase5" 300)
 add_integration_test(hapi_fhir_test "integration;emr;hapi;phase5" 300)
 
 # =============================================================================
+# Database System Integration Tests (Issue #300)
+# =============================================================================
+
+# Database System Integration Tests (Phase 1c-5 - Issue #300)
+# Tests database_pool_adapter and wrapper classes for database_system integration
+# Requires SQLite for standalone mode fallback
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_integration_test(database_system_integration_test "integration;database;phase1c" 120)
+else()
+    message(STATUS "Skipping database_system_integration_test: requires SQLite (PACS_BRIDGE_HAS_SQLITE)")
+endif()
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
