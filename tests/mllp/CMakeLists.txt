@@ -46,6 +46,11 @@ endif()
 # Test: BSD Socket Adapter
 add_executable(bsd_adapter_test bsd_adapter_test.cpp)
 
+target_include_directories(bsd_adapter_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}
+)
+
 target_link_libraries(bsd_adapter_test
     PRIVATE
         pacs_bridge
