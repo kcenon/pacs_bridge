@@ -28,8 +28,8 @@ thread_pool_executor_adapter::thread_pool_executor_adapter(
 thread_pool_executor_adapter::thread_pool_executor_adapter(std::size_t worker_count)
     : pool_(std::make_shared<kcenon::thread::thread_pool>("executor_pool"))
     , worker_count_(worker_count) {
-    // Note: thread_pool manages its own workers internally via start()
-    // The worker_count is stored for reporting purposes
+    // Start the thread pool with the specified worker count
+    pool_->start(worker_count);
     start_delay_thread();
 }
 
@@ -415,7 +415,15 @@ void simple_executor::shutdown(bool wait_for_completion) {
 
 std::shared_ptr<kcenon::common::interfaces::IExecutor>
 make_executor(std::size_t worker_count) {
-    return std::make_shared<simple_executor>(worker_count);
+    // Prefer thread_system integration when available
+    try {
+        return std::make_shared<thread_pool_executor_adapter>(worker_count);
+    } catch (const std::exception& e) {
+        // Fallback to simple_executor if thread_pool initialization fails
+        // This can happen if thread_system is not properly initialized or
+        // if system resources are exhausted
+        return std::make_shared<simple_executor>(worker_count);
+    }
 }
 
 std::shared_ptr<kcenon::common::interfaces::IExecutor>
