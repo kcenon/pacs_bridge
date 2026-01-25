@@ -1080,3 +1080,10 @@ message(STATUS "  - emr_e2e_test")
 message(STATUS "  - hapi_fhir_test")
 message(STATUS "==========================")
 message(STATUS "")
+
+# =============================================================================
+# MLLP Network Adapter Tests (Issue #315)
+# =============================================================================
+
+# Add MLLP test subdirectory
+add_subdirectory(mllp)
