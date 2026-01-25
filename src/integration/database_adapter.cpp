@@ -1123,7 +1123,36 @@ private:
 // =============================================================================
 
 std::shared_ptr<database_adapter> create_database_adapter(const database_config& config) {
+#ifdef PACS_BRIDGE_HAS_DATABASE_SYSTEM
+    // Prefer database_system when available
+    kcenon::database::pool_config pool_cfg;
+    pool_cfg.connection_string = config.connection_string.empty()
+        ? ("sqlite://" + config.database_path)
+        : config.connection_string;
+    pool_cfg.pool_size = config.pool_size;
+    pool_cfg.timeout = config.connection_timeout;
+
+    auto pool = kcenon::database::database_pool::create(pool_cfg);
+    if (pool) {
+        return std::make_shared<database_pool_adapter>(std::move(pool));
+    }
+
+    // Log warning: database_system initialization failed, falling back to SQLite
+    // TODO: Add logging when logger integration is available
+#endif
+
+    // Fallback to SQLite adapter
     return std::make_shared<sqlite_database_adapter>(config);
 }
+
+#ifdef PACS_BRIDGE_HAS_DATABASE_SYSTEM
+std::shared_ptr<database_adapter>
+create_database_adapter(std::shared_ptr<kcenon::database::database_pool> pool) {
+    if (!pool) {
+        throw std::invalid_argument("Cannot create adapter: pool is null");
+    }
+    return std::make_shared<database_pool_adapter>(std::move(pool));
+}
+#endif
 
 }  // namespace pacs::bridge::integration
