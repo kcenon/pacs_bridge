@@ -872,83 +872,185 @@ const database_connection& connection_scope::connection() const noexcept {
 
 namespace pacs::bridge::integration {
 
-// Forward declarations for wrapper classes
-// These will be implemented in Phase 1c-3 (issue #298)
+/**
+ * @brief Wrapper adapting database_system's row to database_row interface
+ *
+ * Provides access to row data from database_system's result sets,
+ * implementing the pacs_bridge database_row interface.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/298
+ */
+class pool_row_wrapper : public database_row {
+public:
+    explicit pool_row_wrapper(const kcenon::database::row& row)
+        : row_(row) {}
+
+    [[nodiscard]] std::string get_string(std::size_t index) const override {
+        return row_.get_string(index);
+    }
+
+    [[nodiscard]] int64_t get_int64(std::size_t index) const override {
+        return row_.get_int64(index);
+    }
+
+    [[nodiscard]] double get_double(std::size_t index) const override {
+        return row_.get_double(index);
+    }
+
+    [[nodiscard]] std::vector<uint8_t> get_blob(std::size_t index) const override {
+        return row_.get_blob(index);
+    }
+
+    [[nodiscard]] bool is_null(std::size_t index) const override {
+        return row_.is_null(index);
+    }
+
+    [[nodiscard]] std::size_t column_count() const override {
+        return row_.column_count();
+    }
+
+    [[nodiscard]] std::string column_name(std::size_t index) const override {
+        return row_.column_name(index);
+    }
+
+    [[nodiscard]] database_value get_value(std::size_t index) const override {
+        return row_.get_value(index);
+    }
+
+private:
+    const kcenon::database::row& row_;
+};
+
+/**
+ * @brief Wrapper adapting database_system's result to database_result interface
+ *
+ * Provides iteration over query results from database_system,
+ * implementing the pacs_bridge database_result interface with RAII semantics.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/298
+ */
+class pool_result_wrapper : public database_result {
+public:
+    explicit pool_result_wrapper(kcenon::database::result result)
+        : result_(std::move(result)), row_(nullptr) {}
+
+    [[nodiscard]] bool next() override {
+        if (!result_.next()) {
+            row_ = nullptr;
+            return false;
+        }
+        row_ = std::make_unique<pool_row_wrapper>(result_.current_row());
+        return true;
+    }
+
+    [[nodiscard]] const database_row& current_row() const override {
+        if (!row_) {
+            static pool_row_wrapper empty_row{result_.current_row()};
+            return empty_row;
+        }
+        return *row_;
+    }
+
+    [[nodiscard]] std::size_t affected_rows() const override {
+        return result_.affected_rows();
+    }
+
+    [[nodiscard]] int64_t last_insert_id() const override {
+        return result_.last_insert_id();
+    }
+
+    [[nodiscard]] bool empty() const override {
+        return result_.empty();
+    }
+
+private:
+    kcenon::database::result result_;
+    std::unique_ptr<pool_row_wrapper> row_;
+};
+
+/**
+ * @brief Wrapper adapting database_system's statement to database_statement interface
+ *
+ * Provides prepared statement functionality from database_system,
+ * implementing the pacs_bridge database_statement interface with proper
+ * parameter binding and result iteration support.
+ *
+ * @see https://github.com/kcenon/pacs_bridge/issues/298
+ */
 class pool_statement_wrapper : public database_statement {
 public:
-    explicit pool_statement_wrapper(kcenon::database::statement /* stmt */) {
-        // Placeholder - will be implemented in #298
+    explicit pool_statement_wrapper(kcenon::database::statement stmt)
+        : stmt_(std::move(stmt)) {}
+
+    [[nodiscard]] std::expected<void, database_error>
+    bind_string(std::size_t index, std::string_view value) override {
+        if (!stmt_.bind_string(index, value)) {
+            return std::unexpected(database_error::bind_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<void, database_error>
-    bind_string(std::size_t /* index */, std::string_view /* value */) override {
-        return std::unexpected(database_error::bind_failed);
+    bind_int64(std::size_t index, int64_t value) override {
+        if (!stmt_.bind_int64(index, value)) {
+            return std::unexpected(database_error::bind_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<void, database_error>
-    bind_int64(std::size_t /* index */, int64_t /* value */) override {
-        return std::unexpected(database_error::bind_failed);
+    bind_double(std::size_t index, double value) override {
+        if (!stmt_.bind_double(index, value)) {
+            return std::unexpected(database_error::bind_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<void, database_error>
-    bind_double(std::size_t /* index */, double /* value */) override {
-        return std::unexpected(database_error::bind_failed);
+    bind_blob(std::size_t index, const std::vector<uint8_t>& value) override {
+        if (!stmt_.bind_blob(index, value)) {
+            return std::unexpected(database_error::bind_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<void, database_error>
-    bind_blob(std::size_t /* index */, const std::vector<uint8_t>& /* value */) override {
-        return std::unexpected(database_error::bind_failed);
-    }
-
-    [[nodiscard]] std::expected<void, database_error>
-    bind_null(std::size_t /* index */) override {
-        return std::unexpected(database_error::bind_failed);
+    bind_null(std::size_t index) override {
+        if (!stmt_.bind_null(index)) {
+            return std::unexpected(database_error::bind_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<void, database_error> clear_bindings() override {
-        return std::unexpected(database_error::bind_failed);
+        if (!stmt_.clear_bindings()) {
+            return std::unexpected(database_error::bind_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<void, database_error> reset() override {
-        return std::unexpected(database_error::prepare_failed);
+        if (!stmt_.reset()) {
+            return std::unexpected(database_error::prepare_failed);
+        }
+        return {};
     }
 
     [[nodiscard]] std::expected<std::unique_ptr<database_result>, database_error>
     execute() override {
-        return std::unexpected(database_error::query_failed);
+        auto result = stmt_.execute();
+        if (!result) {
+            return std::unexpected(database_error::query_failed);
+        }
+        return std::make_unique<pool_result_wrapper>(std::move(*result));
     }
 
     [[nodiscard]] std::size_t parameter_count() const override {
-        return 0;
-    }
-};
-
-class pool_result_wrapper : public database_result {
-public:
-    explicit pool_result_wrapper(kcenon::database::result /* result */) {
-        // Placeholder - will be implemented in #298
+        return stmt_.parameter_count();
     }
 
-    [[nodiscard]] bool next() override {
-        return false;
-    }
-
-    [[nodiscard]] const database_row& current_row() const override {
-        static sqlite_row dummy{nullptr};
-        return dummy;
-    }
-
-    [[nodiscard]] std::size_t affected_rows() const override {
-        return 0;
-    }
-
-    [[nodiscard]] int64_t last_insert_id() const override {
-        return 0;
-    }
-
-    [[nodiscard]] bool empty() const override {
-        return true;
-    }
+private:
+    kcenon::database::statement stmt_;
 };
 
 /**
