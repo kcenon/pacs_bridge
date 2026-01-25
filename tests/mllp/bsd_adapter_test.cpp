@@ -30,6 +30,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
+// ssize_t is POSIX-specific, define for Windows
+using ssize_t = std::ptrdiff_t;
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
