@@ -205,6 +205,7 @@ list(APPEND PACS_BRIDGE_HEADERS
 list(APPEND PACS_BRIDGE_SOURCES
     src/mllp/mllp_network_adapter.cpp
     src/mllp/bsd_mllp_server.cpp
+    src/mllp/tls_mllp_server.cpp
     src/mllp/mllp_server.cpp
     src/mllp/mllp_client.cpp
 )
