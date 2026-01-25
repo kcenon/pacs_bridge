@@ -203,11 +203,14 @@ list(APPEND PACS_BRIDGE_HEADERS
 
 # MLLP Transport
 list(APPEND PACS_BRIDGE_SOURCES
+    src/mllp/mllp_network_adapter.cpp
+    src/mllp/bsd_mllp_server.cpp
     src/mllp/mllp_server.cpp
     src/mllp/mllp_client.cpp
 )
 list(APPEND PACS_BRIDGE_HEADERS
     include/pacs/bridge/mllp/mllp_types.h
+    include/pacs/bridge/mllp/mllp_network_adapter.h
     include/pacs/bridge/mllp/mllp_server.h
     include/pacs/bridge/mllp/mllp_client.h
 )
