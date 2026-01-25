@@ -79,9 +79,11 @@ protected:
 
     void TearDown() override {
         if (server_) {
-            server_->stop(false);  // Don't wait
+            server_->stop(true);  // Wait for proper cleanup
             server_.reset();
         }
+        // Give time for socket cleanup to complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     /**
@@ -178,9 +180,9 @@ TEST_F(BSDAdapterTest, ServerPortAlreadyInUse) {
 
     auto result = server2->start();
 
-    // Stop second server if it somehow started
+    // Stop second server if it somehow started (wait for proper cleanup)
     if (server2) {
-        server2->stop(false);
+        server2->stop(true);  // Wait for complete shutdown
     }
 
     EXPECT_FALSE(result.has_value());
@@ -242,6 +244,7 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
     std::vector<uint8_t> server_received_data;
     std::mutex data_mutex;
     std::condition_variable data_cv;
+    std::atomic<bool> thread_completed{false};
 
     // Custom connection handler
     server_ = create_server(test_port_);
@@ -258,6 +261,7 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
                 // Echo back
                 s->send(server_received_data);
             }
+            thread_completed.store(true);
         }).detach();
     });
 
@@ -304,6 +308,9 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
 #else
     close(client_sock);
 #endif
+
+    // Wait for background thread to complete
+    EXPECT_TRUE(wait_for([&] { return thread_completed.load(); }, std::chrono::seconds(2)));
 }
 
 // =============================================================================
@@ -410,6 +417,7 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
     std::vector<uint8_t> server_received_data;
     std::mutex data_mutex;
     std::condition_variable data_cv;
+    std::atomic<bool> thread_completed{false};
 
     server_ = create_server(test_port_);
 
@@ -421,6 +429,7 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
                 server_received_data = std::move(result.value());
                 data_cv.notify_all();
             }
+            thread_completed.store(true);
         }).detach();
     });
 
@@ -466,6 +475,9 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
 #else
     close(client_sock);
 #endif
+
+    // Wait for background thread to complete
+    EXPECT_TRUE(wait_for([&] { return thread_completed.load(); }, std::chrono::seconds(5)));
 }
 
 // =============================================================================
