@@ -417,7 +417,7 @@ bool test_fhir_server_lifecycle() {
     fhir_server server(config);
 
     TEST_ASSERT(!server.is_running(), "server not running initially");
-    TEST_ASSERT(server.start(), "server starts successfully");
+    TEST_ASSERT(server.start().is_ok(), "server starts successfully");
     TEST_ASSERT(server.is_running(), "server is running");
     server.stop();
     TEST_ASSERT(!server.is_running(), "server stopped");
