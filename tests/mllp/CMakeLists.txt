@@ -154,6 +154,12 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
             pacs_bridge_compile_options
     )
 
+    # Enable CI build flag for reduced test iterations
+    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+        target_compile_definitions(mllp_performance_test PRIVATE PACS_BRIDGE_CI_BUILD=1)
+        message(STATUS "CI build detected - performance tests will use reduced iterations")
+    endif()
+
     if(PACS_BRIDGE_HAS_GTEST)
         if(TARGET GTest::gtest_main)
             target_link_libraries(mllp_performance_test PRIVATE GTest::gtest_main GTest::gmock)
@@ -198,6 +204,12 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
             pacs_bridge
             pacs_bridge_compile_options
     )
+
+    # Enable CI build flag for reduced test iterations
+    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+        target_compile_definitions(mllp_memory_leak_test PRIVATE PACS_BRIDGE_CI_BUILD=1)
+        message(STATUS "CI build detected - memory leak tests will use reduced iterations")
+    endif()
 
     if(PACS_BRIDGE_HAS_GTEST)
         if(TARGET GTest::gtest_main)

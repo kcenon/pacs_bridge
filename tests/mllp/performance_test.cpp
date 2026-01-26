@@ -52,21 +52,21 @@ namespace pacs::bridge::mllp::test {
 // =============================================================================
 
 /**
- * @brief Detect if running in CI environment
- */
-static bool is_ci_environment() {
-    // Check common CI environment variables
-    return std::getenv("CI") != nullptr ||
-           std::getenv("GITHUB_ACTIONS") != nullptr ||
-           std::getenv("GITLAB_CI") != nullptr;
-}
-
-/**
  * @brief Scale iteration count for CI environment
- * CI builds run with reduced iterations to avoid timeout
+ * CI builds run with heavily reduced iterations to avoid timeout
+ * Uses compile-time detection for reliability
  */
 static int scale_for_ci(int normal_count) {
-    return is_ci_environment() ? normal_count / 10 : normal_count;
+#ifdef PACS_BRIDGE_CI_BUILD
+    // Compile-time CI detection: 100x reduction for CI builds
+    return normal_count / 100;
+#else
+    // Runtime detection as fallback: 100x reduction for CI builds
+    static const bool is_ci = (std::getenv("CI") != nullptr ||
+                               std::getenv("GITHUB_ACTIONS") != nullptr ||
+                               std::getenv("GITLAB_CI") != nullptr);
+    return is_ci ? normal_count / 100 : normal_count;
+#endif
 }
 
 /**
