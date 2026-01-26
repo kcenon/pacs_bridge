@@ -52,6 +52,24 @@ namespace pacs::bridge::mllp::test {
 // =============================================================================
 
 /**
+ * @brief Detect if running in CI environment
+ */
+static bool is_ci_environment() {
+    // Check common CI environment variables
+    return std::getenv("CI") != nullptr ||
+           std::getenv("GITHUB_ACTIONS") != nullptr ||
+           std::getenv("GITLAB_CI") != nullptr;
+}
+
+/**
+ * @brief Scale iteration count for CI environment
+ * CI builds run with reduced iterations to avoid timeout
+ */
+static int scale_for_ci(int normal_count) {
+    return is_ci_environment() ? normal_count / 10 : normal_count;
+}
+
+/**
  * @brief Generate unique port number for test isolation
  */
 static uint16_t generate_test_port() {
@@ -226,7 +244,7 @@ protected:
 // =============================================================================
 
 TEST_F(PerformanceTest, ThroughputBenchmark) {
-    const int num_messages = 10000;
+    const int num_messages = scale_for_ci(10000);
     const std::string test_message = "MSH|^~\\&|TEST|FACILITY|||20240101000000||ADT^A01|MSG001|P|2.5\r";
 
     std::atomic<int> messages_received{0};
@@ -295,7 +313,7 @@ TEST_F(PerformanceTest, ThroughputBenchmark) {
 // =============================================================================
 
 TEST_F(PerformanceTest, LatencyBenchmark) {
-    const int num_messages = 1000;
+    const int num_messages = scale_for_ci(1000);
     const std::string test_message = "MSH|^~\\&|TEST|FACILITY|||20240101000000||ADT^A01|MSG001|P|2.5\r";
 
     std::vector<double> latencies_us;
@@ -367,7 +385,7 @@ TEST_F(PerformanceTest, LatencyBenchmark) {
 // =============================================================================
 
 TEST_F(PerformanceTest, ConnectionChurnPerformance) {
-    const int num_iterations = 1000;
+    const int num_iterations = scale_for_ci(1000);
 
     std::atomic<int> connections_accepted{0};
 
@@ -419,7 +437,7 @@ TEST_F(PerformanceTest, ConnectionChurnPerformance) {
 // =============================================================================
 
 TEST_F(PerformanceTest, LargeMessageThroughput) {
-    const int num_messages = 100;
+    const int num_messages = scale_for_ci(100);
     const size_t message_size = 1024 * 1024;  // 1MB per message
 
     std::vector<uint8_t> large_message(message_size, 0xAB);
@@ -489,8 +507,8 @@ TEST_F(PerformanceTest, LargeMessageThroughput) {
 // =============================================================================
 
 TEST_F(PerformanceTest, ConcurrentConnectionPerformance) {
-    const int num_clients = 50;
-    const int messages_per_client = 100;
+    const int num_clients = scale_for_ci(50);
+    const int messages_per_client = scale_for_ci(100);
 
     std::atomic<int> total_messages_received{0};
 

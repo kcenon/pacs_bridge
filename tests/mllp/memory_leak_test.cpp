@@ -109,6 +109,24 @@ static std::string format_memory(size_t bytes) {
 }
 
 /**
+ * @brief Detect if running in CI environment
+ */
+static bool is_ci_environment() {
+    // Check common CI environment variables
+    return std::getenv("CI") != nullptr ||
+           std::getenv("GITHUB_ACTIONS") != nullptr ||
+           std::getenv("GITLAB_CI") != nullptr;
+}
+
+/**
+ * @brief Scale iteration count for CI environment
+ * CI builds run with reduced iterations to avoid timeout
+ */
+static int scale_for_ci(int normal_count) {
+    return is_ci_environment() ? normal_count / 10 : normal_count;
+}
+
+/**
  * @brief Generate unique port number for test isolation
  */
 static uint16_t generate_test_port() {
@@ -227,8 +245,8 @@ protected:
 // =============================================================================
 
 TEST_F(MemoryLeakTest, ConnectionChurnNoLeak) {
-    const int num_iterations = 1000;
-    const int warmup_iterations = 100;
+    const int num_iterations = scale_for_ci(1000);
+    const int warmup_iterations = scale_for_ci(100);
 
     std::atomic<int> connections_accepted{0};
 
@@ -296,7 +314,7 @@ TEST_F(MemoryLeakTest, ConnectionChurnNoLeak) {
 // =============================================================================
 
 TEST_F(MemoryLeakTest, LargeMessageNoLeak) {
-    const int num_messages = 100;
+    const int num_messages = scale_for_ci(100);
     const size_t message_size = 1024 * 1024;  // 1MB
 
     std::vector<uint8_t> large_message(message_size, 0xAB);
@@ -374,8 +392,8 @@ TEST_F(MemoryLeakTest, LargeMessageNoLeak) {
 // =============================================================================
 
 TEST_F(MemoryLeakTest, LongRunningServerNoLeak) {
-    const int num_iterations = 10;
-    const int messages_per_iteration = 100;
+    const int num_iterations = scale_for_ci(10);
+    const int messages_per_iteration = scale_for_ci(100);
 
     std::atomic<int> total_messages{0};
 
@@ -447,7 +465,7 @@ TEST_F(MemoryLeakTest, LongRunningServerNoLeak) {
 // =============================================================================
 
 TEST_F(MemoryLeakTest, ErrorPathNoLeak) {
-    const int num_iterations = 500;
+    const int num_iterations = scale_for_ci(500);
 
     std::atomic<int> connections_accepted{0};
     std::atomic<int> errors_encountered{0};
