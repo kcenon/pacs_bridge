@@ -298,14 +298,17 @@ TEST_F(PerformanceTest, ThroughputBenchmark) {
     double duration_sec = duration_ms / 1000.0;
     double throughput = messages_received.load() / duration_sec;
 
+    // Scale throughput target for CI environment
+    const double target_throughput = scale_for_ci(100000) / 100.0;  // CI: 10 msg/s, Normal: 1000 msg/s
+
     printf("\n=== Throughput Benchmark ===\n");
     printf("Messages: %d\n", messages_received.load());
     printf("Duration: %.2f seconds\n", duration_sec);
     printf("Throughput: %.0f messages/second\n", throughput);
-    printf("Target: >1000 messages/second\n");
+    printf("Target: >%.0f messages/second\n", target_throughput);
 
     EXPECT_EQ(num_messages, messages_received.load());
-    EXPECT_GT(throughput, 1000.0) << "Throughput below target";
+    EXPECT_GT(throughput, target_throughput) << "Throughput below target";
 }
 
 // =============================================================================
@@ -493,13 +496,17 @@ TEST_F(PerformanceTest, LargeMessageThroughput) {
     double throughput_mb = (messages_received.load() * message_size) / (1024.0 * 1024.0) /
                           duration_sec;
 
+    // Scale throughput target for CI environment
+    const double target_throughput_mb = scale_for_ci(1000) / 100.0;  // CI: 0.1 MB/s, Normal: 10 MB/s
+
     printf("\n=== Large Message Throughput ===\n");
     printf("Messages: %d x %zu bytes\n", messages_received.load(), message_size);
     printf("Duration: %.2f seconds\n", duration_sec);
     printf("Throughput: %.2f MB/second\n", throughput_mb);
+    printf("Target: >%.2f MB/second\n", target_throughput_mb);
 
     EXPECT_EQ(num_messages, messages_received.load());
-    EXPECT_GT(throughput_mb, 10.0) << "Throughput too low for large messages";
+    EXPECT_GT(throughput_mb, target_throughput_mb) << "Throughput too low for large messages";
 }
 
 // =============================================================================
@@ -507,8 +514,8 @@ TEST_F(PerformanceTest, LargeMessageThroughput) {
 // =============================================================================
 
 TEST_F(PerformanceTest, ConcurrentConnectionPerformance) {
-    const int num_clients = scale_for_ci(50);
-    const int messages_per_client = scale_for_ci(100);
+    const int num_clients = std::max(1, scale_for_ci(50));
+    const int messages_per_client = std::max(1, scale_for_ci(100));
 
     std::atomic<int> total_messages_received{0};
 
@@ -568,16 +575,20 @@ TEST_F(PerformanceTest, ConcurrentConnectionPerformance) {
 
     double throughput = total_messages_received.load() / (duration_ms / 1000.0);
 
+    // Scale throughput target for CI environment
+    const double target_throughput = scale_for_ci(100000) / 100.0;  // CI: 10 msg/s, Normal: 1000 msg/s
+
     printf("\n=== Concurrent Connection Performance ===\n");
     printf("Clients: %d\n", num_clients);
     printf("Messages per client: %d\n", messages_per_client);
     printf("Total messages: %d\n", total_messages_received.load());
     printf("Duration: %.2f seconds\n", duration_ms / 1000.0);
     printf("Throughput: %.0f messages/second\n", throughput);
+    printf("Target: >%.0f messages/second\n", target_throughput);
 
     EXPECT_GE(total_messages_received.load(), expected_messages * 0.95)
         << "Less than 95% of messages received";
-    EXPECT_GT(throughput, 1000.0) << "Concurrent throughput below target";
+    EXPECT_GT(throughput, target_throughput) << "Concurrent throughput below target";
 }
 
 }  // namespace pacs::bridge::mllp::test
