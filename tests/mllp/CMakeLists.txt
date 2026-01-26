@@ -86,6 +86,55 @@ else()
 endif()
 
 # =============================================================================
+# TLS Integration Tests
+# =============================================================================
+
+# Test: TLS Adapter (requires OpenSSL)
+# Note: TLS adapter tests are skipped in coverage builds and when OpenSSL is not available
+if(NOT BRIDGE_ENABLE_COVERAGE AND PACS_BRIDGE_HAS_OPENSSL)
+    add_executable(tls_adapter_test tls_adapter_test.cpp)
+
+    target_include_directories(tls_adapter_test
+        PRIVATE
+            ${PROJECT_SOURCE_DIR}
+    )
+
+    target_link_libraries(tls_adapter_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(tls_adapter_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(tls_adapter_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+
+    # Platform-specific socket libraries
+    if(WIN32)
+        target_link_libraries(tls_adapter_test PRIVATE ws2_32)
+    endif()
+
+    # Discover tests for CTest
+    if(PACS_BRIDGE_HAS_GTEST)
+        gtest_discover_tests(tls_adapter_test
+            PROPERTIES
+                LABELS "integration;mllp;tls;security;phase2"
+                TIMEOUT 60
+        )
+    endif()
+else()
+    if(BRIDGE_ENABLE_COVERAGE)
+        message(STATUS "Skipping tls_adapter_test in coverage build (network I/O with TLS)")
+    elseif(NOT PACS_BRIDGE_HAS_OPENSSL)
+        message(STATUS "Skipping tls_adapter_test (OpenSSL not available)")
+    endif()
+endif()
+
+# =============================================================================
 # Test Data and Fixtures
 # =============================================================================
 
