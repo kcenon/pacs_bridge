@@ -135,6 +135,96 @@ else()
 endif()
 
 # =============================================================================
+# Performance Tests (Issue #317)
+# =============================================================================
+
+# Test: MLLP Performance Benchmarks (throughput, latency)
+# Note: Performance tests are skipped in coverage builds (timing interference)
+if(NOT BRIDGE_ENABLE_COVERAGE)
+    add_executable(mllp_performance_test performance_test.cpp)
+
+    target_include_directories(mllp_performance_test
+        PRIVATE
+            ${PROJECT_SOURCE_DIR}
+    )
+
+    target_link_libraries(mllp_performance_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(mllp_performance_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(mllp_performance_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+
+    # Platform-specific socket libraries
+    if(WIN32)
+        target_link_libraries(mllp_performance_test PRIVATE ws2_32)
+    endif()
+
+    # Discover tests for CTest
+    if(PACS_BRIDGE_HAS_GTEST)
+        gtest_discover_tests(mllp_performance_test
+            PROPERTIES
+                LABELS "performance;mllp;benchmark;phase2"
+                TIMEOUT 120
+        )
+    endif()
+else()
+    message(STATUS "Skipping mllp_performance_test in coverage build (timing interference)")
+endif()
+
+# =============================================================================
+# Memory Leak Tests (Issue #317)
+# =============================================================================
+
+# Test: MLLP Memory Leak Detection
+# Note: Memory leak tests are skipped in coverage builds
+if(NOT BRIDGE_ENABLE_COVERAGE)
+    add_executable(mllp_memory_leak_test memory_leak_test.cpp)
+
+    target_include_directories(mllp_memory_leak_test
+        PRIVATE
+            ${PROJECT_SOURCE_DIR}
+    )
+
+    target_link_libraries(mllp_memory_leak_test
+        PRIVATE
+            pacs_bridge
+            pacs_bridge_compile_options
+    )
+
+    if(PACS_BRIDGE_HAS_GTEST)
+        if(TARGET GTest::gtest_main)
+            target_link_libraries(mllp_memory_leak_test PRIVATE GTest::gtest_main GTest::gmock)
+        elseif(TARGET gtest_main)
+            target_link_libraries(mllp_memory_leak_test PRIVATE gtest_main gmock)
+        endif()
+    endif()
+
+    # Platform-specific socket libraries
+    if(WIN32)
+        target_link_libraries(mllp_memory_leak_test PRIVATE ws2_32 psapi)
+    endif()
+
+    # Discover tests for CTest
+    if(PACS_BRIDGE_HAS_GTEST)
+        gtest_discover_tests(mllp_memory_leak_test
+            PROPERTIES
+                LABELS "memory;mllp;leak-detection;phase2"
+                TIMEOUT 180
+        )
+    endif()
+else()
+    message(STATUS "Skipping mllp_memory_leak_test in coverage build (memory measurement interference)")
+endif()
+
+# =============================================================================
 # Test Data and Fixtures
 # =============================================================================
 
