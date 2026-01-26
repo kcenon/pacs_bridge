@@ -326,9 +326,9 @@ Result<mwl_item> fhir_dicom_mapper::service_request_to_mwl(
     // Map scheduled start date/time
     if (request.occurrence_date_time.has_value()) {
         auto datetime_result = fhir_datetime_to_dicom(*request.occurrence_date_time);
-        if (datetime_result) {
-            sps.scheduled_start_date = datetime_result->first;
-            sps.scheduled_start_time = datetime_result->second;
+        if (datetime_result.is_ok()) {
+            sps.scheduled_start_date = datetime_result.value().first;
+            sps.scheduled_start_time = datetime_result.value().second;
         }
     }
 
@@ -410,7 +410,7 @@ Result<mwl_item> fhir_dicom_mapper::service_request_to_mwl(
 
     auto patient_result = pimpl_->patient_lookup_(*request.subject.reference);
     if (patient_result.is_err()) {
-        return Result<mwl_item>::err(patient_result.err());
+        return Result<mwl_item>::err(patient_result.error());
     }
 
     return service_request_to_mwl(request, patient_result.unwrap());
@@ -457,8 +457,8 @@ fhir_dicom_mapper::study_to_imaging_study(
     if (!study.study_date.empty()) {
         auto datetime_result = dicom_datetime_to_fhir(study.study_date,
                                                        study.study_time);
-        if (datetime_result) {
-            result.started = *datetime_result;
+        if (datetime_result.is_ok()) {
+            result.started = datetime_result.value();
         }
     }
 

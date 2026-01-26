@@ -1105,8 +1105,8 @@ std::unique_ptr<imaging_study_resource> dicom_to_fhir_imaging_study(
     if (!dicom_study.study_date.empty()) {
         auto datetime_result = mapping::fhir_dicom_mapper::dicom_datetime_to_fhir(
             dicom_study.study_date, dicom_study.study_time);
-        if (datetime_result) {
-            study->set_started(*datetime_result);
+        if (datetime_result.is_ok()) {
+            study->set_started(datetime_result.value());
         }
     }
 

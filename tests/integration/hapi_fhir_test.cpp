@@ -547,7 +547,9 @@ bool test_search_include_parameter() {
     params.add("_include", "DiagnosticReport:encounter");
 
     auto query_string = params.to_query_string();
+    // URL encoding converts ':' to '%3A'
     HAPI_TEST_ASSERT(
+        query_string.find("_include=DiagnosticReport%3Asubject") != std::string::npos ||
         query_string.find("_include=DiagnosticReport:subject") != std::string::npos,
         "Should include subject reference");
 
