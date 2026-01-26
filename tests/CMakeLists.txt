@@ -800,6 +800,53 @@ else()
 endif()
 
 # =============================================================================
+# PACS Adapter Test (Issue #283, #319)
+# =============================================================================
+
+# Tests pacs_adapter interface implementations (MPPS, MWL, Storage)
+# Always available (uses memory-based stub in standalone mode)
+add_executable(pacs_adapter_test pacs_adapter_test.cpp)
+target_link_libraries(pacs_adapter_test
+    PRIVATE
+        pacs_bridge
+        pacs_bridge_compile_options
+)
+if(PACS_BRIDGE_HAS_GTEST)
+    if(TARGET GTest::gtest_main)
+        target_link_libraries(pacs_adapter_test PRIVATE GTest::gtest_main GTest::gmock)
+    elseif(TARGET gtest_main)
+        target_link_libraries(pacs_adapter_test PRIVATE gtest_main gmock)
+    endif()
+endif()
+target_include_directories(pacs_adapter_test
+    PRIVATE
+        ${PACS_BRIDGE_TEST_UTILS_DIR}
+)
+target_compile_definitions(pacs_adapter_test
+    PRIVATE
+        PACS_BRIDGE_TEST_DATA_DIR="${PACS_BRIDGE_TEST_DATA_DIR}"
+)
+if(PACS_BRIDGE_HAS_GTEST)
+    include(GoogleTest)
+    gtest_discover_tests(pacs_adapter_test
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        PROPERTIES
+            TIMEOUT 120
+            LABELS "unit;pacs;adapter;phase5"
+    )
+else()
+    add_test(
+        NAME pacs_adapter_test
+        COMMAND pacs_adapter_test
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+    set_tests_properties(pacs_adapter_test PROPERTIES
+        TIMEOUT 120
+        LABELS "unit;pacs;adapter;phase5"
+    )
+endif()
+
+# =============================================================================
 # Messaging Pattern Tests (Issue #146, #142)
 # =============================================================================
 
@@ -1054,6 +1101,9 @@ if(NOT BRIDGE_STANDALONE_BUILD)
 endif()
 message(STATUS "Database Adapter Tests (Issue #274):")
 message(STATUS "  - database_adapter_test (Issue #274)")
+message(STATUS "")
+message(STATUS "PACS Adapter Tests (Issue #283, Phase 5a #319):")
+message(STATUS "  - pacs_adapter_test (MPPS, MWL, Storage)")
 message(STATUS "")
 message(STATUS "Phase 4 Integration Tests:")
 message(STATUS "  - monitoring_integration_test")
