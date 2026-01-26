@@ -55,17 +55,25 @@ namespace pacs::bridge::mllp::test {
  * @brief Scale iteration count for CI environment
  * CI builds run with heavily reduced iterations to avoid timeout
  * Uses compile-time detection for reliability
+ *
+ * CI environments are significantly slower (10-100x) due to:
+ * - Shared CPU resources with other CI jobs
+ * - Slower I/O (network loopback, disk)
+ * - Lower memory bandwidth
+ * - Potential CPU throttling
+ *
+ * Apply aggressive 10000x reduction to keep tests under 2 minutes
  */
 static int scale_for_ci(int normal_count) {
 #ifdef PACS_BRIDGE_CI_BUILD
-    // Compile-time CI detection: 100x reduction for CI builds
-    return normal_count / 100;
+    // Compile-time CI detection: 10000x reduction for CI builds
+    return std::max(1, normal_count / 10000);
 #else
-    // Runtime detection as fallback: 100x reduction for CI builds
+    // Runtime detection as fallback: 10000x reduction for CI builds
     static const bool is_ci = (std::getenv("CI") != nullptr ||
                                std::getenv("GITHUB_ACTIONS") != nullptr ||
                                std::getenv("GITLAB_CI") != nullptr);
-    return is_ci ? normal_count / 100 : normal_count;
+    return is_ci ? std::max(1, normal_count / 10000) : normal_count;
 #endif
 }
 

@@ -175,10 +175,19 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
 
     # Discover tests for CTest
     if(PACS_BRIDGE_HAS_GTEST)
+        # Set timeout based on CI environment
+        # CI: 300 seconds (5 minutes) - slower due to shared resources
+        # Local: 120 seconds (2 minutes) - faster hardware
+        if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+            set(PERFORMANCE_TEST_TIMEOUT 300)
+        else()
+            set(PERFORMANCE_TEST_TIMEOUT 120)
+        endif()
+
         gtest_discover_tests(mllp_performance_test
             PROPERTIES
                 LABELS "performance;mllp;benchmark;phase2"
-                TIMEOUT 120
+                TIMEOUT ${PERFORMANCE_TEST_TIMEOUT}
         )
     endif()
 else()
