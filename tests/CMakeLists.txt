@@ -424,19 +424,21 @@ add_bridge_test(ecosystem_integration_test "integration;ecosystem;phase0")
 macro(add_integration_test TEST_NAME)
     # Parse optional arguments
     set(_INT_TEST_LABELS "integration;phase2")
-
-    # Apply CI scaling factor (10x) for constrained CI environments
-    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
-        set(_INT_TEST_TIMEOUT 3000)  # 50 minutes for CI integration tests
-    else()
-        set(_INT_TEST_TIMEOUT 300)  # 5 minutes for local integration tests
-    endif()
+    set(_INT_BASE_TIMEOUT 300)  # Default 5 minutes base timeout
 
     if(ARGC GREATER 1)
         set(_INT_TEST_LABELS "${ARGV1}")
     endif()
     if(ARGC GREATER 2)
-        set(_INT_TEST_TIMEOUT "${ARGV2}")
+        set(_INT_BASE_TIMEOUT "${ARGV2}")
+    endif()
+
+    # Apply CI scaling factor (10x) for constrained CI environments
+    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+        math(EXPR _INT_TEST_TIMEOUT "${_INT_BASE_TIMEOUT} * 10")
+        message(DEBUG "CI environment detected: Scaling timeout from ${_INT_BASE_TIMEOUT}s to ${_INT_TEST_TIMEOUT}s for ${TEST_NAME}")
+    else()
+        set(_INT_TEST_TIMEOUT "${_INT_BASE_TIMEOUT}")
     endif()
 
     add_executable(${TEST_NAME} integration/${TEST_NAME}.cpp)
