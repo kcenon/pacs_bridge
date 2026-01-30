@@ -193,6 +193,7 @@ jobs:
             -DBRIDGE_BUILD_EXAMPLES=OFF \
             -DBRIDGE_BUILD_HL7=ON \
             -DBRIDGE_BUILD_FHIR=OFF \
+            -DPACS_BRIDGE_CI_BUILD=ON \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \
             "-DCMAKE_CXX_FLAGS=-stdlib=libc++" \
@@ -206,6 +207,7 @@ jobs:
             -DBRIDGE_BUILD_EXAMPLES=OFF \
             -DBRIDGE_BUILD_HL7=ON \
             -DBRIDGE_BUILD_FHIR=OFF \
+            -DPACS_BRIDGE_CI_BUILD=ON \
             -DCMAKE_C_COMPILER=${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
         fi
@@ -230,6 +232,7 @@ jobs:
           -DBRIDGE_BUILD_EXAMPLES=OFF `
           -DBRIDGE_BUILD_HL7=ON `
           -DBRIDGE_BUILD_FHIR=OFF `
+          -DPACS_BRIDGE_CI_BUILD=ON `
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
           -DVCPKG_MANIFEST_MODE=OFF
 

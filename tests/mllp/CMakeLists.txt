@@ -173,7 +173,8 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
     )
 
     # Enable CI build flag for reduced test iterations
-    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+    # Check both CMake variable and environment variables for robustness
+    if(PACS_BRIDGE_CI_BUILD OR DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
         target_compile_definitions(mllp_performance_test PRIVATE PACS_BRIDGE_CI_BUILD=1)
         message(STATUS "CI build detected - performance tests will use reduced iterations")
     endif()
@@ -233,7 +234,8 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
     )
 
     # Enable CI build flag for reduced test iterations
-    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+    # Check both CMake variable and environment variables for robustness
+    if(PACS_BRIDGE_CI_BUILD OR DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
         target_compile_definitions(mllp_memory_leak_test PRIVATE PACS_BRIDGE_CI_BUILD=1)
         message(STATUS "CI build detected - memory leak tests will use reduced iterations")
     endif()
