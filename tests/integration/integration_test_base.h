@@ -21,6 +21,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <condition_variable>
 #include <deque>
 #include <filesystem>
@@ -559,6 +560,23 @@ public:
     static uint16_t generate_test_port() {
         static std::atomic<uint16_t> port_counter{12800};
         return port_counter.fetch_add(1);
+    }
+
+    /**
+     * @brief Scale timeout for CI environment
+     *
+     * CI environments have higher resource contention and I/O latency.
+     * Apply 10x timeout multiplier for CI to prevent false failures.
+     */
+    static std::chrono::milliseconds scale_timeout_for_ci(std::chrono::milliseconds normal_timeout) {
+#ifdef IS_CI_ENV
+        return normal_timeout * 10;
+#else
+        static const bool is_ci = (std::getenv("CI") != nullptr ||
+                                   std::getenv("GITHUB_ACTIONS") != nullptr ||
+                                   std::getenv("GITLAB_CI") != nullptr);
+        return is_ci ? (normal_timeout * 10) : normal_timeout;
+#endif
     }
 
     /**

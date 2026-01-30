@@ -328,10 +328,11 @@ bool test_queue_recovery_ris_unavailable() {
     // Phase 3: RIS becomes available again
     ris.set_available(true);
 
-    // Wait for queued messages to be delivered
+    // Wait for queued messages to be delivered (scaled for CI)
+    auto timeout = integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{5000});
     bool delivered_all = integration_test_fixture::wait_for(
         [&ris]() { return ris.messages_received() >= 3; },
-        std::chrono::milliseconds{5000});
+        timeout);
     INTEGRATION_TEST_ASSERT(delivered_all,
                             "All messages should eventually be delivered");
     INTEGRATION_TEST_ASSERT(queue.queue_empty(),
@@ -403,10 +404,11 @@ bool test_queue_recovery_after_restart() {
         persistence_queue_simulator queue(queue_config);
         queue.start();
 
-        // Wait for delivery of persisted messages
+        // Wait for delivery of persisted messages (scaled for CI)
+        auto timeout = integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{5000});
         bool delivered = integration_test_fixture::wait_for(
             [&ris]() { return ris.messages_received() >= 2; },
-            std::chrono::milliseconds{5000});
+            timeout);
 
         INTEGRATION_TEST_ASSERT(delivered,
                                 "Persisted messages should be delivered");
