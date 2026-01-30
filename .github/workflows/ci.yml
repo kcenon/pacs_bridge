@@ -242,6 +242,9 @@ jobs:
 
     - name: Run tests
       working-directory: pacs_bridge
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         cd build
         ctest --output-on-failure --timeout 600
@@ -328,6 +331,9 @@ jobs:
 
     - name: Run tests for coverage
       working-directory: pacs_bridge/build
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
       run: |
         ctest --output-on-failure --timeout 600 || true
 
