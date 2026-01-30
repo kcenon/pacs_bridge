@@ -249,7 +249,7 @@ bool test_e2e_complete_imaging_workflow() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&ris, &emr]() { return ris.is_running() && emr.is_running(); },
-            std::chrono::milliseconds{2000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{2000})),
         "Servers should start");
 
     // Step 1: Send order status update to RIS (procedure started)
@@ -403,7 +403,7 @@ bool test_e2e_multi_destination_routing() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&ris, &emr]() { return ris.is_running() && emr.is_running(); },
-            std::chrono::milliseconds{2000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{2000})),
         "Servers should start");
 
     // Simulate PACS Bridge routing to both destinations
@@ -499,7 +499,7 @@ bool test_e2e_failover_to_backup() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&backup]() { return backup.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "Backup should start");
 
     // Try primary first (should fail)
@@ -577,7 +577,7 @@ bool test_e2e_recovery_after_failure() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&ris]() { return ris.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "Server should be running");
 
     // Second attempt: should succeed
@@ -632,7 +632,7 @@ bool test_e2e_high_volume_processing() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&ris]() { return ris.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "RIS should start");
 
     const int message_count = 20;
@@ -705,7 +705,7 @@ bool test_e2e_mixed_message_types() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&ris]() { return ris.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "RIS should start");
 
     mllp::mllp_client_config client_config;

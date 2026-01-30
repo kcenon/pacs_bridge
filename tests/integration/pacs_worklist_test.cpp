@@ -275,7 +275,7 @@ bool test_worklist_query_basic() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     // Send worklist query
@@ -342,7 +342,7 @@ bool test_worklist_query_multiple_items() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     INTEGRATION_TEST_ASSERT(pacs.worklist_size() == 5,
@@ -405,7 +405,7 @@ bool test_worklist_update_in_progress() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     // Verify initial status
@@ -469,7 +469,7 @@ bool test_worklist_update_completed() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     // Send ORM with CM status
@@ -525,7 +525,7 @@ bool test_worklist_update_cancelled() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     // Send ORM with DC status
@@ -587,7 +587,7 @@ bool test_worklist_complete_lifecycle() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     mllp::mllp_client_config client_config;
@@ -661,7 +661,7 @@ bool test_worklist_concurrent_updates() {
     INTEGRATION_TEST_ASSERT(
         integration_test_fixture::wait_for(
             [&pacs]() { return pacs.is_running(); },
-            std::chrono::milliseconds{1000}),
+            integration_test_fixture::scale_timeout_for_ci(std::chrono::milliseconds{1000})),
         "PACS server should start");
 
     // Send updates concurrently
