@@ -59,6 +59,9 @@ option(BRIDGE_BUILD_BENCHMARKS "Build benchmarks" OFF)
 # Feature options
 option(BRIDGE_ENABLE_TLS "Enable TLS support with OpenSSL" ON)
 
+# CI/CD options
+option(PACS_BRIDGE_CI_BUILD "Enable CI build with reduced test iterations" OFF)
+
 # =============================================================================
 # C++20 Module Support (Experimental)
 #

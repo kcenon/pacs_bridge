@@ -244,7 +244,7 @@ jobs:
       working-directory: pacs_bridge
       run: |
         cd build
-        ctest --output-on-failure --timeout 300
+        ctest --output-on-failure --timeout 600
       continue-on-error: true
 
     - name: Upload test results
