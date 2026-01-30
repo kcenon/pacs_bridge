@@ -75,10 +75,19 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
 
     # Discover tests for CTest
     if(PACS_BRIDGE_HAS_GTEST)
+        # Set timeout based on CI environment
+        # CI: 600 seconds (10 minutes) - network tests can be slow in CI
+        # Local: 60 seconds (1 minute) - faster hardware and dedicated resources
+        if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+            set(BSD_ADAPTER_TEST_TIMEOUT 600)
+        else()
+            set(BSD_ADAPTER_TEST_TIMEOUT 60)
+        endif()
+
         gtest_discover_tests(bsd_adapter_test
             PROPERTIES
                 LABELS "integration;mllp;network;phase2"
-                TIMEOUT 30
+                TIMEOUT ${BSD_ADAPTER_TEST_TIMEOUT}
         )
     endif()
 else()
@@ -120,10 +129,19 @@ if(NOT BRIDGE_ENABLE_COVERAGE AND PACS_BRIDGE_HAS_OPENSSL)
 
     # Discover tests for CTest
     if(PACS_BRIDGE_HAS_GTEST)
+        # Set timeout based on CI environment
+        # CI: 600 seconds (10 minutes) - TLS tests can be slow in CI
+        # Local: 120 seconds (2 minutes) - faster hardware
+        if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+            set(TLS_ADAPTER_TEST_TIMEOUT 600)
+        else()
+            set(TLS_ADAPTER_TEST_TIMEOUT 120)
+        endif()
+
         gtest_discover_tests(tls_adapter_test
             PROPERTIES
                 LABELS "integration;mllp;tls;security;phase2"
-                TIMEOUT 60
+                TIMEOUT ${TLS_ADAPTER_TEST_TIMEOUT}
         )
     endif()
 else()

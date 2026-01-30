@@ -110,11 +110,21 @@ macro(add_gtest_test TEST_NAME)
     endif()
 
     # Parse timeout from labels or use default
-    set(_TEST_TIMEOUT 60)
-    if(_TEST_LABELS MATCHES "performance")
-        set(_TEST_TIMEOUT 120)
-    elseif(_TEST_LABELS MATCHES "load")
-        set(_TEST_TIMEOUT 180)
+    # Apply CI scaling factor (10x) for constrained CI environments
+    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+        set(_TEST_TIMEOUT 600)  # 10 minutes for CI
+        if(_TEST_LABELS MATCHES "performance")
+            set(_TEST_TIMEOUT 1200)  # 20 minutes for performance tests in CI
+        elseif(_TEST_LABELS MATCHES "load")
+            set(_TEST_TIMEOUT 1800)  # 30 minutes for load tests in CI
+        endif()
+    else()
+        set(_TEST_TIMEOUT 60)  # 1 minute for local
+        if(_TEST_LABELS MATCHES "performance")
+            set(_TEST_TIMEOUT 120)  # 2 minutes for performance tests locally
+        elseif(_TEST_LABELS MATCHES "load")
+            set(_TEST_TIMEOUT 180)  # 3 minutes for load tests locally
+        endif()
     endif()
 
     if(PACS_BRIDGE_HAS_GTEST)
@@ -171,11 +181,21 @@ macro(add_bridge_test TEST_NAME)
     endif()
 
     # Parse timeout from labels or use default
-    set(_TEST_TIMEOUT 60)
-    if(_TEST_LABELS MATCHES "performance")
-        set(_TEST_TIMEOUT 120)
-    elseif(_TEST_LABELS MATCHES "load")
-        set(_TEST_TIMEOUT 180)
+    # Apply CI scaling factor (10x) for constrained CI environments
+    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+        set(_TEST_TIMEOUT 600)  # 10 minutes for CI
+        if(_TEST_LABELS MATCHES "performance")
+            set(_TEST_TIMEOUT 1200)  # 20 minutes for performance tests in CI
+        elseif(_TEST_LABELS MATCHES "load")
+            set(_TEST_TIMEOUT 1800)  # 30 minutes for load tests in CI
+        endif()
+    else()
+        set(_TEST_TIMEOUT 60)  # 1 minute for local
+        if(_TEST_LABELS MATCHES "performance")
+            set(_TEST_TIMEOUT 120)  # 2 minutes for performance tests locally
+        elseif(_TEST_LABELS MATCHES "load")
+            set(_TEST_TIMEOUT 180)  # 3 minutes for load tests locally
+        endif()
     endif()
 
     # Register as a single test (custom framework, no gtest discovery)
@@ -404,7 +424,14 @@ add_bridge_test(ecosystem_integration_test "integration;ecosystem;phase0")
 macro(add_integration_test TEST_NAME)
     # Parse optional arguments
     set(_INT_TEST_LABELS "integration;phase2")
-    set(_INT_TEST_TIMEOUT 300)
+
+    # Apply CI scaling factor (10x) for constrained CI environments
+    if(DEFINED ENV{CI} OR DEFINED ENV{GITHUB_ACTIONS})
+        set(_INT_TEST_TIMEOUT 3000)  # 50 minutes for CI integration tests
+    else()
+        set(_INT_TEST_TIMEOUT 300)  # 5 minutes for local integration tests
+    endif()
+
     if(ARGC GREATER 1)
         set(_INT_TEST_LABELS "${ARGV1}")
     endif()
