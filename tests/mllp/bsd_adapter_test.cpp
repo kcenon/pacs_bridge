@@ -78,12 +78,36 @@ protected:
     }
 
     void TearDown() override {
+        // First, clear all sessions to release resources
+        {
+            std::lock_guard<std::mutex> lock(sessions_mutex_);
+            sessions_.clear();
+        }
+
+        // Stop server with a timeout to prevent hanging
         if (server_) {
-            server_->stop(true);  // Wait for proper cleanup
+            server_->stop(false);  // Don't wait indefinitely
             server_.reset();
         }
+
+        // Join any pending background threads
+        join_threads();
+
         // Give time for socket cleanup to complete
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    /**
+     * @brief Join all background threads
+     */
+    void join_threads() {
+        std::lock_guard<std::mutex> lock(threads_mutex_);
+        for (auto& t : background_threads_) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+        background_threads_.clear();
     }
 
     /**
@@ -131,6 +155,8 @@ protected:
     std::vector<std::unique_ptr<mllp_session>> sessions_;
     std::mutex sessions_mutex_;
     std::condition_variable sessions_cv_;
+    std::vector<std::thread> background_threads_;
+    std::mutex threads_mutex_;
 };
 
 // =============================================================================
@@ -245,17 +271,15 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
     std::mutex data_mutex;
     std::condition_variable data_cv;
     std::atomic<bool> thread_completed{false};
-    std::vector<std::thread> server_threads;
-    std::mutex threads_mutex;
 
     // Custom connection handler
     server_ = create_server(test_port_);
 
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
         // Receive data in background thread
-        std::lock_guard<std::mutex> lock(threads_mutex);
-        server_threads.emplace_back([&, s = std::move(session)]() mutable {
-            auto result = s->receive(1024, std::chrono::seconds(5));
+        std::lock_guard<std::mutex> lock(threads_mutex_);
+        background_threads_.emplace_back([&, s = std::move(session)]() mutable {
+            auto result = s->receive(1024, std::chrono::seconds(2));
             if (result.has_value()) {
                 std::lock_guard<std::mutex> lock(data_mutex);
                 server_received_data = std::move(result.value());
@@ -315,15 +339,7 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
     // Wait for background thread to complete
     EXPECT_TRUE(wait_for([&] { return thread_completed.load(); }, std::chrono::seconds(2)));
 
-    // Join all server threads
-    {
-        std::lock_guard<std::mutex> lock(threads_mutex);
-        for (auto& t : server_threads) {
-            if (t.joinable()) {
-                t.join();
-            }
-        }
-    }
+    // Threads will be joined in TearDown
 }
 
 // =============================================================================
@@ -431,15 +447,13 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
     std::mutex data_mutex;
     std::condition_variable data_cv;
     std::atomic<bool> thread_completed{false};
-    std::vector<std::thread> server_threads;
-    std::mutex threads_mutex;
 
     server_ = create_server(test_port_);
 
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
-        std::lock_guard<std::mutex> lock(threads_mutex);
-        server_threads.emplace_back([&, s = std::move(session)]() mutable {
-            auto result = s->receive(large_data.size(), std::chrono::seconds(30));
+        std::lock_guard<std::mutex> lock(threads_mutex_);
+        background_threads_.emplace_back([&, s = std::move(session)]() mutable {
+            auto result = s->receive(large_data.size(), std::chrono::seconds(10));
             if (result.has_value()) {
                 std::lock_guard<std::mutex> lock(data_mutex);
                 server_received_data = std::move(result.value());
@@ -478,7 +492,7 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
     // Wait for server to receive
     {
         std::unique_lock<std::mutex> lock(data_mutex);
-        ASSERT_TRUE(data_cv.wait_for(lock, std::chrono::seconds(30),
+        ASSERT_TRUE(data_cv.wait_for(lock, std::chrono::seconds(10),
                                       [&] { return !server_received_data.empty(); }));
 
         EXPECT_EQ(large_data.size(), server_received_data.size());
@@ -495,15 +509,7 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
     // Wait for background thread to complete
     EXPECT_TRUE(wait_for([&] { return thread_completed.load(); }, std::chrono::seconds(5)));
 
-    // Join all server threads
-    {
-        std::lock_guard<std::mutex> lock(threads_mutex);
-        for (auto& t : server_threads) {
-            if (t.joinable()) {
-                t.join();
-            }
-        }
-    }
+    // Threads will be joined in TearDown
 }
 
 // =============================================================================
