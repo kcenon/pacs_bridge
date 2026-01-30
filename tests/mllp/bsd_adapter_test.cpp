@@ -245,13 +245,16 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
     std::mutex data_mutex;
     std::condition_variable data_cv;
     std::atomic<bool> thread_completed{false};
+    std::vector<std::thread> server_threads;
+    std::mutex threads_mutex;
 
     // Custom connection handler
     server_ = create_server(test_port_);
 
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
         // Receive data in background thread
-        std::thread([&, s = std::move(session)]() mutable {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        server_threads.emplace_back([&, s = std::move(session)]() mutable {
             auto result = s->receive(1024, std::chrono::seconds(5));
             if (result.has_value()) {
                 std::lock_guard<std::mutex> lock(data_mutex);
@@ -262,7 +265,7 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
                 s->send(server_received_data);
             }
             thread_completed.store(true);
-        }).detach();
+        });
     });
 
     // Connect client
@@ -311,6 +314,16 @@ TEST_F(BSDAdapterTest, SendAndReceive) {
 
     // Wait for background thread to complete
     EXPECT_TRUE(wait_for([&] { return thread_completed.load(); }, std::chrono::seconds(2)));
+
+    // Join all server threads
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        for (auto& t : server_threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    }
 }
 
 // =============================================================================
@@ -418,11 +431,14 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
     std::mutex data_mutex;
     std::condition_variable data_cv;
     std::atomic<bool> thread_completed{false};
+    std::vector<std::thread> server_threads;
+    std::mutex threads_mutex;
 
     server_ = create_server(test_port_);
 
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
-        std::thread([&, s = std::move(session)]() mutable {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        server_threads.emplace_back([&, s = std::move(session)]() mutable {
             auto result = s->receive(large_data.size(), std::chrono::seconds(30));
             if (result.has_value()) {
                 std::lock_guard<std::mutex> lock(data_mutex);
@@ -430,7 +446,7 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
                 data_cv.notify_all();
             }
             thread_completed.store(true);
-        }).detach();
+        });
     });
 
     // Connect and send large data
@@ -478,6 +494,16 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
 
     // Wait for background thread to complete
     EXPECT_TRUE(wait_for([&] { return thread_completed.load(); }, std::chrono::seconds(5)));
+
+    // Join all server threads
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        for (auto& t : server_threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    }
 }
 
 // =============================================================================

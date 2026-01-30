@@ -257,13 +257,16 @@ TEST_F(PerformanceTest, ThroughputBenchmark) {
 
     std::atomic<int> messages_received{0};
     std::mutex stats_mutex;
+    std::vector<std::thread> server_threads;
+    std::mutex threads_mutex;
     auto start_time = std::chrono::steady_clock::now();
 
     server_ = create_server(test_port_);
 
     // Override connection handler to count messages
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
-        std::thread([&, s = std::move(session)]() mutable {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        server_threads.emplace_back([&, s = std::move(session)]() mutable {
             while (messages_received.load() < num_messages) {
                 auto result = s->receive(1024, std::chrono::seconds(10));
                 if (result.has_value()) {
@@ -272,7 +275,7 @@ TEST_F(PerformanceTest, ThroughputBenchmark) {
                     break;
                 }
             }
-        }).detach();
+        });
     });
 
     // Create client and send messages
@@ -302,6 +305,16 @@ TEST_F(PerformanceTest, ThroughputBenchmark) {
 
     close_client_socket(client);
 
+    // Join all server threads
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        for (auto& t : server_threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    }
+
     // Calculate throughput
     double duration_sec = duration_ms / 1000.0;
     double throughput = messages_received.load() / duration_sec;
@@ -330,13 +343,16 @@ TEST_F(PerformanceTest, LatencyBenchmark) {
     std::vector<double> latencies_us;
     std::mutex latencies_mutex;
     std::atomic<bool> server_ready{false};
+    std::vector<std::thread> server_threads;
+    std::mutex threads_mutex;
 
     server_ = create_server(test_port_);
 
     // Echo server
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
         server_ready.store(true);
-        std::thread([&, s = std::move(session)]() mutable {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        server_threads.emplace_back([&, s = std::move(session)]() mutable {
             for (int i = 0; i < num_messages; ++i) {
                 auto result = s->receive(1024, std::chrono::seconds(10));
                 if (result.has_value()) {
@@ -345,7 +361,7 @@ TEST_F(PerformanceTest, LatencyBenchmark) {
                     break;
                 }
             }
-        }).detach();
+        });
     });
 
     socket_t client = create_client_socket(test_port_);
@@ -379,6 +395,16 @@ TEST_F(PerformanceTest, LatencyBenchmark) {
     }
 
     close_client_socket(client);
+
+    // Join all server threads
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        for (auto& t : server_threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    }
 
     // Calculate statistics
     auto stats = calculate_latency_stats(latencies_us);
@@ -453,11 +479,14 @@ TEST_F(PerformanceTest, LargeMessageThroughput) {
 
     std::vector<uint8_t> large_message(message_size, 0xAB);
     std::atomic<int> messages_received{0};
+    std::vector<std::thread> server_threads;
+    std::mutex threads_mutex;
 
     server_ = create_server(test_port_);
 
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
-        std::thread([&, s = std::move(session)]() mutable {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        server_threads.emplace_back([&, s = std::move(session)]() mutable {
             for (int i = 0; i < num_messages; ++i) {
                 auto result = s->receive(message_size, std::chrono::seconds(30));
                 if (result.has_value()) {
@@ -466,7 +495,7 @@ TEST_F(PerformanceTest, LargeMessageThroughput) {
                     break;
                 }
             }
-        }).detach();
+        });
     });
 
     socket_t client = create_client_socket(test_port_);
@@ -500,6 +529,16 @@ TEST_F(PerformanceTest, LargeMessageThroughput) {
 
     close_client_socket(client);
 
+    // Join all server threads
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        for (auto& t : server_threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    }
+
     double duration_sec = duration_ms / 1000.0;
     double throughput_mb = (messages_received.load() * message_size) / (1024.0 * 1024.0) /
                           duration_sec;
@@ -526,11 +565,14 @@ TEST_F(PerformanceTest, ConcurrentConnectionPerformance) {
     const int messages_per_client = std::max(1, scale_for_ci(100));
 
     std::atomic<int> total_messages_received{0};
+    std::vector<std::thread> server_threads;
+    std::mutex threads_mutex;
 
     server_ = create_server(test_port_);
 
     server_->on_connection([&](std::unique_ptr<mllp_session> session) {
-        std::thread([&, s = std::move(session)]() mutable {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        server_threads.emplace_back([&, s = std::move(session)]() mutable {
             for (int i = 0; i < messages_per_client; ++i) {
                 auto result = s->receive(1024, std::chrono::seconds(10));
                 if (result.has_value()) {
@@ -539,7 +581,7 @@ TEST_F(PerformanceTest, ConcurrentConnectionPerformance) {
                     break;
                 }
             }
-        }).detach();
+        });
     });
 
     std::vector<std::thread> client_threads;
@@ -580,6 +622,16 @@ TEST_F(PerformanceTest, ConcurrentConnectionPerformance) {
     auto end_time = std::chrono::steady_clock::now();
     auto duration_ms =
         std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+    // Join all server threads
+    {
+        std::lock_guard<std::mutex> lock(threads_mutex);
+        for (auto& t : server_threads) {
+            if (t.joinable()) {
+                t.join();
+            }
+        }
+    }
 
     double throughput = total_messages_received.load() / (duration_ms / 1000.0);
 
