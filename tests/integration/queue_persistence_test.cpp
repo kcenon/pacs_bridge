@@ -335,7 +335,12 @@ bool test_queue_recovery_ris_unavailable() {
         timeout);
     INTEGRATION_TEST_ASSERT(delivered_all,
                             "All messages should eventually be delivered");
-    INTEGRATION_TEST_ASSERT(queue.queue_empty(),
+
+    // Wait for queue to become empty (messages removed after delivery)
+    bool queue_emptied = integration_test_fixture::wait_for(
+        [&queue]() { return queue.queue_empty(); },
+        std::chrono::milliseconds{1000});
+    INTEGRATION_TEST_ASSERT(queue_emptied,
                             "Queue should be empty after delivery");
 
     // Cleanup
@@ -412,7 +417,12 @@ bool test_queue_recovery_after_restart() {
 
         INTEGRATION_TEST_ASSERT(delivered,
                                 "Persisted messages should be delivered");
-        INTEGRATION_TEST_ASSERT(queue.queue_empty(),
+
+        // Wait for queue to become empty (messages removed after delivery)
+        bool queue_emptied = integration_test_fixture::wait_for(
+            [&queue]() { return queue.queue_empty(); },
+            std::chrono::milliseconds{1000});
+        INTEGRATION_TEST_ASSERT(queue_emptied,
                                 "Queue should be empty after delivery");
 
         queue.stop();

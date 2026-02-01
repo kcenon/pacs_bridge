@@ -303,8 +303,10 @@ public:
         router::queue_config queue_config;
         queue_config.database_path = cfg.queue_db_path;
         queue_config.max_retry_count = cfg.max_retries;
-        queue_config.initial_retry_delay = std::chrono::seconds{1};
-        queue_config.retry_backoff_multiplier = 2.0;
+        // Use shorter retry delays for faster test execution
+        queue_config.initial_retry_delay = std::chrono::milliseconds{100};
+        queue_config.retry_backoff_multiplier = 1.5;
+        queue_config.max_retry_delay = std::chrono::seconds{2};
         queue_config.worker_count = 1;
 
         queue_manager_ = std::make_unique<router::queue_manager>(queue_config);
@@ -441,6 +443,7 @@ bool test_network_connection_refused() {
     client_config.queue_db_path = "/tmp/dr_test_refused_" +
                                    std::to_string(std::time(nullptr)) + ".db";
     client_config.max_retries = 2;
+    client_config.connect_timeout = std::chrono::milliseconds{100};
 
     reliable_message_client client(client_config);
     INTEGRATION_TEST_ASSERT(client.start(), "Client should start");
@@ -450,10 +453,12 @@ bool test_network_connection_refused() {
     bool enqueued = client.send(msg);
     INTEGRATION_TEST_ASSERT(enqueued, "Message should be enqueued");
 
-    // Wait for retry attempts to complete
+    // Wait for retry attempts to complete (scaled for CI)
+    auto timeout = integration_test_fixture::scale_timeout_for_ci(
+        std::chrono::milliseconds{3000});
     integration_test_fixture::wait_for(
         [&client]() { return client.dead_letter_count() > 0; },
-        std::chrono::milliseconds{5000});
+        timeout);
 
     // Message should eventually be dead-lettered after max retries
     INTEGRATION_TEST_ASSERT(client.dead_letter_count() >= 1,
@@ -472,12 +477,12 @@ bool test_network_connection_refused() {
 bool test_network_response_timeout() {
     uint16_t port = integration_test_fixture::generate_test_port();
 
-    // Setup server with response delay
+    // Setup server with response delay (shorter for faster tests)
     resilient_ris_server::config server_config;
     server_config.port = port;
     server_config.failure_config.mode =
         network_failure_simulator::failure_mode::response_timeout;
-    server_config.failure_config.delay = std::chrono::milliseconds{2000};
+    server_config.failure_config.delay = std::chrono::milliseconds{500};
 
     resilient_ris_server server(server_config);
     INTEGRATION_TEST_ASSERT(server.start(), "Server should start");
@@ -485,8 +490,8 @@ bool test_network_response_timeout() {
     // Client with short timeout
     reliable_message_client::config client_config;
     client_config.port = port;
-    client_config.connect_timeout = std::chrono::milliseconds{500};
-    client_config.send_timeout = std::chrono::milliseconds{500};
+    client_config.connect_timeout = std::chrono::milliseconds{200};
+    client_config.send_timeout = std::chrono::milliseconds{200};
     client_config.queue_db_path = "/tmp/dr_test_timeout_" +
                                    std::to_string(std::time(nullptr)) + ".db";
     client_config.max_retries = 2;
@@ -497,10 +502,12 @@ bool test_network_response_timeout() {
     std::string msg = "MSH|^~\\&|PACS||RIS||20240101||ORM^O01|2|P|2.4\r";
     client.send(msg);
 
-    // Wait for retries
+    // Wait for retries (scaled for CI)
+    auto timeout = integration_test_fixture::scale_timeout_for_ci(
+        std::chrono::milliseconds{5000});
     integration_test_fixture::wait_for(
         [&server]() { return server.messages_rejected() >= 2; },
-        std::chrono::milliseconds{8000});
+        timeout);
 
     // Server should have rejected due to simulated timeout
     INTEGRATION_TEST_ASSERT(server.messages_rejected() >= 1,
@@ -580,10 +587,17 @@ bool test_network_recovery_during_retry() {
 
     // Server starts unavailable
     std::atomic<bool> start_server{false};
+    std::atomic<bool> server_done{false};
 
     std::thread server_thread([&]() {
-        // Wait for signal to start
+        // Wait for signal to start with timeout
+        auto start_wait = std::chrono::steady_clock::now();
         while (!start_server) {
+            if (std::chrono::steady_clock::now() - start_wait >
+                std::chrono::seconds{10}) {
+                server_done = true;
+                return;  // Timeout waiting for start signal
+            }
             std::this_thread::yield();
         }
 
@@ -595,13 +609,15 @@ bool test_network_recovery_during_retry() {
         server.start();
 
         // Keep server running for a while
-        std::this_thread::sleep_for(std::chrono::seconds{5});
+        std::this_thread::sleep_for(std::chrono::seconds{3});
         server.stop();
+        server_done = true;
     });
 
     // Client sends message while server is down
     reliable_message_client::config client_config;
     client_config.port = port;
+    client_config.connect_timeout = std::chrono::milliseconds{100};
     client_config.queue_db_path = "/tmp/dr_test_recovery_" +
                                    std::to_string(std::time(nullptr)) + ".db";
     client_config.max_retries = 5;
@@ -613,13 +629,15 @@ bool test_network_recovery_during_retry() {
     client.send(msg);
 
     // Wait a bit then start server
-    std::this_thread::sleep_for(std::chrono::milliseconds{500});
+    std::this_thread::sleep_for(std::chrono::milliseconds{200});
     start_server = true;
 
-    // Wait for successful delivery
+    // Wait for successful delivery (scaled for CI)
+    auto timeout = integration_test_fixture::scale_timeout_for_ci(
+        std::chrono::milliseconds{5000});
     bool delivered = integration_test_fixture::wait_for(
         [&client]() { return client.messages_sent() > 0; },
-        std::chrono::milliseconds{10000});
+        timeout);
 
     // Message should be delivered after server comes up
     INTEGRATION_TEST_ASSERT(delivered, "Message should be delivered after recovery");
@@ -839,9 +857,10 @@ bool test_exponential_backoff_timing() {
     router::queue_config queue_config;
     queue_config.database_path = db_path;
     queue_config.max_retry_count = 4;
-    queue_config.initial_retry_delay = std::chrono::seconds{1};
+    // Use shorter delays for faster test execution
+    queue_config.initial_retry_delay = std::chrono::milliseconds{50};
     queue_config.retry_backoff_multiplier = 2.0;
-    queue_config.max_retry_delay = std::chrono::seconds{60};
+    queue_config.max_retry_delay = std::chrono::seconds{1};
 
     router::queue_manager queue(queue_config);
     INTEGRATION_TEST_ASSERT(queue.start().has_value(), "Queue should start");
@@ -855,7 +874,7 @@ bool test_exponential_backoff_timing() {
 
     for (int i = 0; i < 3; ++i) {
         // Wait for message to become available
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
 
         auto msg = queue.dequeue();
         if (msg) {
@@ -869,13 +888,11 @@ bool test_exponential_backoff_timing() {
             }
         }
 
-        // Wait for retry delay
-        std::this_thread::sleep_for(std::chrono::seconds{2});
+        // Wait for retry delay (shorter for faster tests)
+        std::this_thread::sleep_for(std::chrono::milliseconds{200});
     }
 
     // Verify exponential backoff
-    // With initial_delay=1s and multiplier=2.0:
-    // Retry 1: 1s, Retry 2: 2s, Retry 3: 4s
     INTEGRATION_TEST_ASSERT(scheduled_times.size() >= 2,
                             "Should have at least 2 scheduled times");
 
@@ -913,13 +930,20 @@ bool test_retry_success_after_failures() {
             std::chrono::milliseconds{1000}),
         "Server should be running");
 
-    // Thread to stop failures after 2 attempts
+    // Thread to stop failures after 2 attempts (with timeout)
+    std::atomic<bool> control_done{false};
     std::thread failure_control([&]() {
+        auto start = std::chrono::steady_clock::now();
         while (server.messages_rejected() < 2) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
+            if (std::chrono::steady_clock::now() - start >
+                std::chrono::seconds{10}) {
+                break;  // Timeout
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{50});
         }
         // Stop failures
         server.set_failure_mode(network_failure_simulator::failure_mode::none);
+        control_done = true;
     });
 
     // Send message with retries
@@ -928,6 +952,7 @@ bool test_retry_success_after_failures() {
 
     reliable_message_client::config client_config;
     client_config.port = port;
+    client_config.connect_timeout = std::chrono::milliseconds{100};
     client_config.queue_db_path = db_path;
     client_config.max_retries = 5;
 
@@ -937,10 +962,12 @@ bool test_retry_success_after_failures() {
     std::string msg = "MSH|^~\\&|PACS||RIS||20240101||ORM^O01|RETRY|P|2.4\r";
     client.send(msg);
 
-    // Wait for delivery
+    // Wait for delivery (scaled for CI)
+    auto timeout = integration_test_fixture::scale_timeout_for_ci(
+        std::chrono::milliseconds{5000});
     bool delivered = integration_test_fixture::wait_for(
         [&client]() { return client.messages_sent() > 0; },
-        std::chrono::milliseconds{15000});
+        timeout);
 
     failure_control.join();
 
@@ -969,7 +996,8 @@ bool test_max_retry_dead_letter() {
     router::queue_config queue_config;
     queue_config.database_path = db_path;
     queue_config.max_retry_count = 2;  // Low retry count
-    queue_config.initial_retry_delay = std::chrono::seconds{1};
+    // Use shorter delays for faster test execution
+    queue_config.initial_retry_delay = std::chrono::milliseconds{50};
     queue_config.retry_backoff_multiplier = 1.0;
 
     router::queue_manager queue(queue_config);
@@ -981,12 +1009,12 @@ bool test_max_retry_dead_letter() {
 
     // Fail message 3 times (exceeds max_retry_count of 2)
     for (int i = 0; i <= 2; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
         auto msg = queue.dequeue();
         if (msg) {
             (void)queue.nack(msg->id, "Failure " + std::to_string(i));
         }
-        std::this_thread::sleep_for(std::chrono::seconds{1});
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
     }
 
     // Message should be in dead letter queue
