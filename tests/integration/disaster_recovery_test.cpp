@@ -303,10 +303,10 @@ public:
         router::queue_config queue_config;
         queue_config.database_path = cfg.queue_db_path;
         queue_config.max_retry_count = cfg.max_retries;
-        // Use shorter retry delays for faster test execution
-        queue_config.initial_retry_delay = std::chrono::milliseconds{100};
-        queue_config.retry_backoff_multiplier = 1.5;
-        queue_config.max_retry_delay = std::chrono::seconds{2};
+        // Use minimal retry delays for faster test execution (1s minimum)
+        queue_config.initial_retry_delay = std::chrono::seconds{1};
+        queue_config.retry_backoff_multiplier = 1.2;
+        queue_config.max_retry_delay = std::chrono::seconds{3};
         queue_config.worker_count = 1;
 
         queue_manager_ = std::make_unique<router::queue_manager>(queue_config);
@@ -857,10 +857,10 @@ bool test_exponential_backoff_timing() {
     router::queue_config queue_config;
     queue_config.database_path = db_path;
     queue_config.max_retry_count = 4;
-    // Use shorter delays for faster test execution
-    queue_config.initial_retry_delay = std::chrono::milliseconds{50};
-    queue_config.retry_backoff_multiplier = 2.0;
-    queue_config.max_retry_delay = std::chrono::seconds{1};
+    // Use minimal delays for faster test execution (seconds required by type)
+    queue_config.initial_retry_delay = std::chrono::seconds{1};
+    queue_config.retry_backoff_multiplier = 1.5;
+    queue_config.max_retry_delay = std::chrono::seconds{3};
 
     router::queue_manager queue(queue_config);
     INTEGRATION_TEST_ASSERT(queue.start().has_value(), "Queue should start");
@@ -874,7 +874,7 @@ bool test_exponential_backoff_timing() {
 
     for (int i = 0; i < 3; ++i) {
         // Wait for message to become available
-        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
 
         auto msg = queue.dequeue();
         if (msg) {
@@ -888,8 +888,8 @@ bool test_exponential_backoff_timing() {
             }
         }
 
-        // Wait for retry delay (shorter for faster tests)
-        std::this_thread::sleep_for(std::chrono::milliseconds{200});
+        // Wait for retry delay (1 second minimum per queue_config)
+        std::this_thread::sleep_for(std::chrono::seconds{2});
     }
 
     // Verify exponential backoff
@@ -996,8 +996,8 @@ bool test_max_retry_dead_letter() {
     router::queue_config queue_config;
     queue_config.database_path = db_path;
     queue_config.max_retry_count = 2;  // Low retry count
-    // Use shorter delays for faster test execution
-    queue_config.initial_retry_delay = std::chrono::milliseconds{50};
+    // Use minimal delays for faster test execution (seconds required by type)
+    queue_config.initial_retry_delay = std::chrono::seconds{1};
     queue_config.retry_backoff_multiplier = 1.0;
 
     router::queue_manager queue(queue_config);
@@ -1009,12 +1009,13 @@ bool test_max_retry_dead_letter() {
 
     // Fail message 3 times (exceeds max_retry_count of 2)
     for (int i = 0; i <= 2; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
         auto msg = queue.dequeue();
         if (msg) {
             (void)queue.nack(msg->id, "Failure " + std::to_string(i));
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        // Wait for retry delay (1 second minimum per queue_config)
+        std::this_thread::sleep_for(std::chrono::seconds{2});
     }
 
     // Message should be in dead letter queue
