@@ -231,11 +231,14 @@ jobs:
       working-directory: pacs_bridge
       run: cmake --build build --parallel
 
+    # Run tests excluding performance and memory benchmarks
+    # Performance/memory tests are designed for local benchmarking, not CI
+    # They can timeout on GitHub Actions due to shared infrastructure overhead
     - name: Run tests
       working-directory: pacs_bridge
       run: |
         cd build
-        ctest --output-on-failure --timeout 300
+        ctest --output-on-failure --timeout 300 -LE "performance|memory"
       continue-on-error: true
 
     - name: Upload test results
