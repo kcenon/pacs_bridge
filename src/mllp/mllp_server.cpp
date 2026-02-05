@@ -184,24 +184,13 @@ public:
             stop_requested_ = true;
         }
 
-        // Stop the server adapter
+        // Stop the server adapter (stops accepting new connections)
         if (server_adapter_) {
             server_adapter_->stop(wait_for_connections);
         }
 
-        // Wait for active sessions to close
-        if (wait_for_connections) {
-            auto deadline = std::chrono::steady_clock::now() + timeout;
-            while (std::chrono::steady_clock::now() < deadline) {
-                std::shared_lock lock(sessions_mutex_);
-                if (sessions_.empty()) {
-                    break;
-                }
-                lock.unlock();
-                std::this_thread::sleep_for(std::chrono::milliseconds{100});
-            }
-        }
-
+        // Close all sessions to unblock any poll() calls.
+        // This causes session threads to exit their receive loop.
         close_all_sessions_internal(false);
 
         // Wait for all session threads/futures to complete

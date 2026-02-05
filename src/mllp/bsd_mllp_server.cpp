@@ -201,6 +201,14 @@ bsd_mllp_session::send(std::span<const uint8_t> data) {
 
 void bsd_mllp_session::close() {
     if (is_open_.exchange(false)) {
+        // Use shutdown() to immediately wake up any blocked poll()/recv()
+        // calls on this socket from other threads. This is necessary because
+        // close() alone may not immediately unblock poll() on some systems.
+#ifdef _WIN32
+        shutdown(socket_, SD_BOTH);
+#else
+        shutdown(socket_, SHUT_RDWR);
+#endif
         close_socket(socket_);
         socket_ = INVALID_SOCKET_VALUE;
     }
@@ -363,15 +371,10 @@ void bsd_mllp_server::stop(bool wait_for_connections) {
         accept_thread_.join();
     }
 
-    // Wait for active sessions to close if requested
-    if (wait_for_connections) {
-        auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::seconds{30};
-        while (std::chrono::steady_clock::now() < deadline &&
-               active_sessions_ > 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        }
-    }
+    // Note: Session lifecycle is managed by mllp_server::impl, not by this
+    // adapter. The adapter only handles accept() and creates sessions.
+    // mllp_server::impl::stop_internal() is responsible for waiting on sessions.
+    (void)wait_for_connections;
 
     running_ = false;
 }
