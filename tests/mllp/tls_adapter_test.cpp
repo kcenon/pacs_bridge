@@ -81,10 +81,10 @@ bool wait_for(Predicate condition, std::chrono::milliseconds timeout) {
  */
 static bool check_test_fixtures() {
     std::vector<std::string> required_files = {
-        "tests/mllp/fixtures/tests/mllp/fixtures/test_server_cert.pem",
-        "tests/mllp/fixtures/tests/mllp/fixtures/test_server_key.pem",
-        "tests/mllp/fixtures/tests/mllp/fixtures/test_client_cert.pem",
-        "tests/mllp/fixtures/tests/mllp/fixtures/test_client_key.pem"
+        "tests/mllp/fixtures/test_server_cert.pem",
+        "tests/mllp/fixtures/test_server_key.pem",
+        "tests/mllp/fixtures/test_client_cert.pem",
+        "tests/mllp/fixtures/test_client_key.pem"
     };
 
     for (const auto& file : required_files) {
@@ -136,14 +136,14 @@ protected:
 
         security::tls_config config;
         config.enabled = true;
-        config.cert_path = "tests/mllp/fixtures/tests/mllp/fixtures/test_server_cert.pem";
-        config.key_path = "tests/mllp/fixtures/tests/mllp/fixtures/test_server_key.pem";
+        config.cert_path = "tests/mllp/fixtures/test_server_cert.pem";
+        config.key_path = "tests/mllp/fixtures/test_server_key.pem";
         config.client_auth = auth_mode;
         config.min_version = min_version;
         config.verify_peer = (auth_mode != security::client_auth_mode::none);
 
         if (auth_mode != security::client_auth_mode::none) {
-            config.ca_path = "tests/mllp/fixtures/tests/mllp/fixtures/test_server_cert.pem";  // Use server cert as CA for testing
+            config.ca_path = "tests/mllp/fixtures/test_server_cert.pem";  // Use server cert as CA for testing
         }
 
         return config;
@@ -220,13 +220,13 @@ protected:
         SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, nullptr);
 
         if (use_client_cert) {
-            if (SSL_CTX_use_certificate_file(ctx, "tests/mllp/fixtures/tests/mllp/fixtures/test_client_cert.pem",
+            if (SSL_CTX_use_certificate_file(ctx, "tests/mllp/fixtures/test_client_cert.pem",
                                              SSL_FILETYPE_PEM) <= 0) {
                 SSL_CTX_free(ctx);
                 return nullptr;
             }
 
-            if (SSL_CTX_use_PrivateKey_file(ctx, "tests/mllp/fixtures/tests/mllp/fixtures/test_client_key.pem",
+            if (SSL_CTX_use_PrivateKey_file(ctx, "tests/mllp/fixtures/test_client_key.pem",
                                             SSL_FILETYPE_PEM) <= 0) {
                 SSL_CTX_free(ctx);
                 return nullptr;
