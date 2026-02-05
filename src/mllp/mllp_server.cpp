@@ -472,8 +472,10 @@ private:
             if (!read_result) {
                 auto error = read_result.error();
                 if (error == network_error::timeout) {
-                    // Timeout - check if we should continue
-                    continue;
+                    // Idle timeout reached - close session
+                    // This matches the original behavior where SO_RCVTIMEO
+                    // expiration would close the connection
+                    break;
                 }
                 if (error == network_error::connection_closed) {
                     // Clean disconnect
