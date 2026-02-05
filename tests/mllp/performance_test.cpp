@@ -37,6 +37,10 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 using ssize_t = std::ptrdiff_t;
+// MSG_DONTWAIT is POSIX-only, use 0 on Windows (blocking recv is acceptable for tests)
+#ifndef MSG_DONTWAIT
+#define MSG_DONTWAIT 0
+#endif
 #else
 #include <arpa/inet.h>
 #include <netinet/in.h>
