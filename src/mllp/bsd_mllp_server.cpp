@@ -539,6 +539,50 @@ bsd_mllp_server::configure_socket_options(socket_t sock) {
 
 void bsd_mllp_server::accept_loop() {
     while (!stop_requested_) {
+        // Wait for incoming connection using poll/select before calling
+        // accept. A blocking accept() cannot be reliably interrupted by
+        // closing the socket from another thread on all platforms (POSIX
+        // leaves this unspecified). Using poll with a timeout ensures we
+        // periodically check stop_requested_ and exit cleanly.
+#ifdef _WIN32
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(server_socket_, &read_fds);
+
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 100000;  // 100ms
+
+        int poll_result = select(0, &read_fds, nullptr, nullptr, &tv);
+#else
+        struct pollfd pfd;
+        pfd.fd = server_socket_;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+
+        int poll_result = poll(&pfd, 1, 100);  // 100ms timeout
+#endif
+
+        if (stop_requested_) {
+            break;
+        }
+
+        if (poll_result < 0) {
+            // Error (e.g., socket closed from another thread)
+            break;
+        }
+
+        if (poll_result == 0) {
+            // Timeout, loop back to check stop_requested_
+            continue;
+        }
+
+#ifndef _WIN32
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            break;
+        }
+#endif
+
         struct sockaddr_in client_addr;
 #ifdef _WIN32
         int client_addr_len = sizeof(client_addr);
@@ -555,7 +599,6 @@ void bsd_mllp_server::accept_loop() {
             if (stop_requested_) {
                 break;
             }
-            // Accept failed, continue or break depending on error
             continue;
         }
 
