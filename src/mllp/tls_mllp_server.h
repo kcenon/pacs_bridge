@@ -27,6 +27,9 @@
 #include <thread>
 
 // Platform-specific socket types
+// Note: These may already be defined by bsd_mllp_server.h
+#ifndef PACS_BRIDGE_SOCKET_TYPES_DEFINED
+#define PACS_BRIDGE_SOCKET_TYPES_DEFINED
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -36,6 +39,7 @@ constexpr socket_t INVALID_SOCKET_VALUE = INVALID_SOCKET;
 using socket_t = int;
 constexpr socket_t INVALID_SOCKET_VALUE = -1;
 #endif
+#endif  // PACS_BRIDGE_SOCKET_TYPES_DEFINED
 
 // OpenSSL forward declarations
 #ifdef PACS_BRIDGE_HAS_OPENSSL

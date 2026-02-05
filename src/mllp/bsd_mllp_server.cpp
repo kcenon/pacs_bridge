@@ -201,6 +201,14 @@ bsd_mllp_session::send(std::span<const uint8_t> data) {
 
 void bsd_mllp_session::close() {
     if (is_open_.exchange(false)) {
+        // Use shutdown() to immediately wake up any blocked poll()/recv()
+        // calls on this socket from other threads. This is necessary because
+        // close() alone may not immediately unblock poll() on some systems.
+#ifdef _WIN32
+        shutdown(socket_, SD_BOTH);
+#else
+        shutdown(socket_, SHUT_RDWR);
+#endif
         close_socket(socket_);
         socket_ = INVALID_SOCKET_VALUE;
     }
@@ -363,15 +371,10 @@ void bsd_mllp_server::stop(bool wait_for_connections) {
         accept_thread_.join();
     }
 
-    // Wait for active sessions to close if requested
-    if (wait_for_connections) {
-        auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::seconds{30};
-        while (std::chrono::steady_clock::now() < deadline &&
-               active_sessions_ > 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        }
-    }
+    // Note: Session lifecycle is managed by mllp_server::impl, not by this
+    // adapter. The adapter only handles accept() and creates sessions.
+    // mllp_server::impl::stop_internal() is responsible for waiting on sessions.
+    (void)wait_for_connections;
 
     running_ = false;
 }
@@ -536,6 +539,50 @@ bsd_mllp_server::configure_socket_options(socket_t sock) {
 
 void bsd_mllp_server::accept_loop() {
     while (!stop_requested_) {
+        // Wait for incoming connection using poll/select before calling
+        // accept. A blocking accept() cannot be reliably interrupted by
+        // closing the socket from another thread on all platforms (POSIX
+        // leaves this unspecified). Using poll with a timeout ensures we
+        // periodically check stop_requested_ and exit cleanly.
+#ifdef _WIN32
+        fd_set read_fds;
+        FD_ZERO(&read_fds);
+        FD_SET(server_socket_, &read_fds);
+
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 100000;  // 100ms
+
+        int poll_result = select(0, &read_fds, nullptr, nullptr, &tv);
+#else
+        struct pollfd pfd;
+        pfd.fd = server_socket_;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+
+        int poll_result = poll(&pfd, 1, 100);  // 100ms timeout
+#endif
+
+        if (stop_requested_) {
+            break;
+        }
+
+        if (poll_result < 0) {
+            // Error (e.g., socket closed from another thread)
+            break;
+        }
+
+        if (poll_result == 0) {
+            // Timeout, loop back to check stop_requested_
+            continue;
+        }
+
+#ifndef _WIN32
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            break;
+        }
+#endif
+
         struct sockaddr_in client_addr;
 #ifdef _WIN32
         int client_addr_len = sizeof(client_addr);
@@ -552,7 +599,6 @@ void bsd_mllp_server::accept_loop() {
             if (stop_requested_) {
                 break;
             }
-            // Accept failed, continue or break depending on error
             continue;
         }
 

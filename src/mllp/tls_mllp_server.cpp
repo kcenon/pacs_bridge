@@ -321,6 +321,14 @@ void tls_mllp_session::close() {
             SSL_free(ssl_);
             ssl_ = nullptr;
         }
+        // Use shutdown() to immediately wake up any blocked poll()/recv()
+        // calls on this socket from other threads. This is necessary because
+        // close() alone may not immediately unblock poll() on some systems.
+#ifdef _WIN32
+        shutdown(socket_, SD_BOTH);
+#else
+        shutdown(socket_, SHUT_RDWR);
+#endif
         close_socket(socket_);
         socket_ = INVALID_SOCKET_VALUE;
     }
@@ -531,12 +539,10 @@ void tls_mllp_server::stop(bool wait_for_connections) {
         accept_thread_.join();
     }
 
-    // Wait for active sessions if requested
-    if (wait_for_connections) {
-        while (active_sessions_ > 0) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        }
-    }
+    // Note: Session lifecycle is managed by mllp_server::impl, not by this
+    // adapter. The adapter only handles accept() and creates sessions.
+    // mllp_server::impl::stop_internal() is responsible for waiting on sessions.
+    (void)wait_for_connections;
 
     running_ = false;
 }

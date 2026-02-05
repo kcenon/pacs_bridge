@@ -6,59 +6,35 @@
  * used in healthcare message exchange. Supports concurrent connections, optional
  * TLS encryption, and comprehensive statistics tracking.
  *
- * Key implementation details:
- * - Uses BSD sockets for cross-platform TCP networking
- * - Implements proper MLLP frame detection with VT/FS/CR markers
- * - Supports TLS 1.2/1.3 via OpenSSL when PACS_BRIDGE_HAS_OPENSSL is defined
- * - Thread-safe statistics using std::atomic and std::mutex
- * - Connection management with configurable timeouts
+ * This implementation delegates network operations to mllp_network_adapter,
+ * focusing on MLLP protocol handling and message processing.
  *
  * @see include/pacs/bridge/mllp/mllp_server.h
- * @see https://github.com/kcenon/pacs_bridge/issues/12
+ * @see https://github.com/kcenon/pacs_bridge/issues/278
  */
 
 #include "pacs/bridge/mllp/mllp_server.h"
 
+#include "pacs/bridge/mllp/mllp_network_adapter.h"
 #include "pacs/bridge/monitoring/bridge_metrics.h"
 #include "pacs/bridge/tracing/trace_manager.h"
+
+// Include network adapters
+#include "bsd_mllp_server.h"
+
+#ifdef PACS_BRIDGE_HAS_OPENSSL
+#include "tls_mllp_server.h"
+#endif
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cstring>
 #include <future>
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>
 #include <vector>
-
-// Platform-specific socket headers
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-using socket_t = SOCKET;
-constexpr socket_t INVALID_SOCKET_VALUE = INVALID_SOCKET;
-// ssize_t is POSIX-specific, define for Windows
-using ssize_t = std::ptrdiff_t;
-#else
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/socket.h>
-#include <unistd.h>
-using socket_t = int;
-constexpr socket_t INVALID_SOCKET_VALUE = -1;
-#endif
-
-// OpenSSL headers for TLS support
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-#include <openssl/err.h>
-#include <openssl/ssl.h>
-#endif
 
 namespace pacs::bridge::mllp {
 
@@ -67,30 +43,6 @@ namespace pacs::bridge::mllp {
 // =============================================================================
 
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
-
-/**
- * @brief Job implementation for accept loop execution
- *
- * Wraps the accept loop task for execution via IExecutor.
- * Runs continuously until stop is requested.
- */
-class mllp_accept_job : public kcenon::common::interfaces::IJob {
-public:
-    explicit mllp_accept_job(std::function<void()> accept_loop)
-        : accept_loop_(std::move(accept_loop)) {}
-
-    kcenon::common::VoidResult execute() override {
-        if (accept_loop_) {
-            accept_loop_();
-        }
-        return std::monostate{};
-    }
-
-    std::string get_name() const override { return "mllp_accept"; }
-
-private:
-    std::function<void()> accept_loop_;
-};
 
 /**
  * @brief Job implementation for session handling
@@ -118,85 +70,45 @@ private:
 #endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
-// Internal Session State
+// Session Wrapper
 // =============================================================================
 
 /**
- * @brief Internal session representation for active connections
+ * @brief Wrapper for mllp_session with additional MLLP-specific state
  *
- * Manages the state of a single client connection including socket,
- * TLS state, receive buffer, and per-session statistics.
+ * Manages the receive buffer and per-session statistics for MLLP processing.
+ * The underlying network I/O is delegated to mllp_session.
  */
-struct internal_session {
+struct session_wrapper {
     uint64_t id = 0;
-    socket_t socket = INVALID_SOCKET_VALUE;
-    std::string remote_address;
-    uint16_t remote_port = 0;
-    std::chrono::system_clock::time_point connected_at;
-    std::chrono::system_clock::time_point last_activity;
+    std::unique_ptr<mllp_session> session;
 
     // Receive buffer for partial message accumulation
     std::vector<uint8_t> receive_buffer;
     static constexpr size_t INITIAL_BUFFER_SIZE = 4096;
 
-    // Per-session statistics
+    // Per-session MLLP statistics
     std::atomic<size_t> messages_received{0};
     std::atomic<size_t> messages_sent{0};
-    std::atomic<size_t> bytes_received{0};
-    std::atomic<size_t> bytes_sent{0};
 
-    // TLS state
-    bool tls_enabled = false;
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-    SSL* ssl = nullptr;
-#else
-    void* ssl = nullptr;
-#endif
-    std::string tls_version_str;
-    std::string tls_cipher_str;
-    std::string peer_cert_subject;
-
-    internal_session() { receive_buffer.reserve(INITIAL_BUFFER_SIZE); }
-
-    ~internal_session() { close_socket(); }
-
-    void close_socket() {
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-        if (ssl) {
-            SSL_shutdown(ssl);
-            SSL_free(ssl);
-            ssl = nullptr;
-        }
-#endif
-        if (socket != INVALID_SOCKET_VALUE) {
-#ifdef _WIN32
-            closesocket(socket);
-#else
-            ::close(socket);
-#endif
-            socket = INVALID_SOCKET_VALUE;
-        }
+    explicit session_wrapper(std::unique_ptr<mllp_session> sess)
+        : id(sess ? sess->session_id() : 0), session(std::move(sess)) {
+        receive_buffer.reserve(INITIAL_BUFFER_SIZE);
     }
 
     [[nodiscard]] mllp_session_info to_session_info() const {
         mllp_session_info info;
         info.session_id = id;
-        info.remote_address = remote_address;
-        info.remote_port = remote_port;
-        info.local_port = 0;  // Set by server
-        info.connected_at = connected_at;
+        if (session) {
+            info.remote_address = session->remote_address();
+            info.remote_port = session->remote_port();
+            auto stats = session->get_stats();
+            info.connected_at = stats.connected_at;
+            info.bytes_received = stats.bytes_received;
+            info.bytes_sent = stats.bytes_sent;
+        }
         info.messages_received = messages_received.load();
         info.messages_sent = messages_sent.load();
-        info.bytes_received = bytes_received.load();
-        info.bytes_sent = bytes_sent.load();
-        info.tls_enabled = tls_enabled;
-        if (tls_enabled) {
-            info.tls_version = tls_version_str;
-            info.tls_cipher = tls_cipher_str;
-            if (!peer_cert_subject.empty()) {
-                info.peer_certificate_subject = peer_cert_subject;
-            }
-        }
         return info;
     }
 };
@@ -208,9 +120,8 @@ struct internal_session {
 /**
  * @brief Private implementation of mllp_server
  *
- * Uses PIMPL idiom to hide implementation details and reduce compilation
- * dependencies. Manages the TCP server socket, client sessions, and
- * background accept/receive threads.
+ * Uses PIMPL idiom to hide implementation details. Delegates network
+ * operations to mllp_server_adapter while handling MLLP protocol logic.
  */
 class mllp_server::impl {
 public:
@@ -237,43 +148,26 @@ public:
             return std::unexpected(mllp_error::invalid_configuration);
         }
 
-        // Initialize platform-specific networking
-        if (auto result = initialize_networking(); !result) {
+        // Create appropriate server adapter based on TLS configuration
+        if (auto result = create_server_adapter(); !result) {
             return result;
         }
 
-        // Initialize TLS if enabled
-        if (config_.tls.enabled) {
-            if (auto result = initialize_tls(); !result) {
-                return result;
-            }
+        // Set connection callback
+        server_adapter_->on_connection(
+            [this](std::unique_ptr<mllp_session> session) {
+                handle_new_connection(std::move(session));
+            });
+
+        // Start the server adapter
+        auto start_result = server_adapter_->start();
+        if (!start_result) {
+            server_adapter_.reset();
+            return std::unexpected(mllp_error::socket_error);
         }
 
-        // Create and bind server socket
-        if (auto result = create_server_socket(); !result) {
-            return result;
-        }
-
-        // Start accept loop
         running_ = true;
         stop_requested_ = false;
-
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-        if (config_.executor) {
-            auto job = std::make_unique<mllp_accept_job>([this] { accept_loop(); });
-            auto result = config_.executor->execute(std::move(job));
-            if (result.is_ok()) {
-                accept_future_ = std::move(result.value());
-            } else {
-                // Fallback to std::thread if executor fails
-                accept_thread_ = std::thread([this] { accept_loop(); });
-            }
-        } else {
-            accept_thread_ = std::thread([this] { accept_loop(); });
-        }
-#else
-        accept_thread_ = std::thread([this] { accept_loop(); });
-#endif
 
         // Update statistics
         stats_.started_at = std::chrono::system_clock::now();
@@ -290,39 +184,13 @@ public:
             stop_requested_ = true;
         }
 
-        // Close server socket to unblock accept
-        if (server_socket_ != INVALID_SOCKET_VALUE) {
-#ifdef _WIN32
-            closesocket(server_socket_);
-#else
-            ::close(server_socket_);
-#endif
-            server_socket_ = INVALID_SOCKET_VALUE;
+        // Stop the server adapter (stops accepting new connections)
+        if (server_adapter_) {
+            server_adapter_->stop(wait_for_connections);
         }
 
-        // Wait for accept thread or future
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-        if (accept_future_.valid()) {
-            accept_future_.wait_for(std::chrono::seconds{10});
-        }
-#endif
-        if (accept_thread_.joinable()) {
-            accept_thread_.join();
-        }
-
-        // Close all sessions
-        if (wait_for_connections) {
-            auto deadline = std::chrono::steady_clock::now() + timeout;
-            while (std::chrono::steady_clock::now() < deadline) {
-                std::shared_lock lock(sessions_mutex_);
-                if (sessions_.empty()) {
-                    break;
-                }
-                lock.unlock();
-                std::this_thread::sleep_for(std::chrono::milliseconds{100});
-            }
-        }
-
+        // Close all sessions to unblock any poll() calls.
+        // This causes session threads to exit their receive loop.
         close_all_sessions_internal(false);
 
         // Wait for all session threads/futures to complete
@@ -346,13 +214,8 @@ public:
 #endif
         }
 
-        // Cleanup TLS
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-        if (ssl_ctx_) {
-            SSL_CTX_free(ssl_ctx_);
-            ssl_ctx_ = nullptr;
-        }
-#endif
+        // Cleanup
+        server_adapter_.reset();
 
         {
             std::lock_guard lock(state_mutex_);
@@ -409,8 +272,8 @@ public:
         std::vector<mllp_session_info> result;
         std::shared_lock lock(sessions_mutex_);
         result.reserve(sessions_.size());
-        for (const auto& [id, session] : sessions_) {
-            auto info = session->to_session_info();
+        for (const auto& [id, wrapper] : sessions_) {
+            auto info = wrapper->to_session_info();
             info.local_port = config_.port;
             result.push_back(info);
         }
@@ -429,7 +292,7 @@ public:
         std::unique_lock lock(sessions_mutex_);
         auto it = sessions_.find(session_id);
         if (it != sessions_.end()) {
-            auto session = std::move(it->second);
+            auto wrapper = std::move(it->second);
             sessions_.erase(it);
 
             // Update metrics: decrement active connection count
@@ -439,11 +302,11 @@ public:
             lock.unlock();
 
             // Notify disconnection
-            notify_connection(session->to_session_info(), false);
+            notify_connection(wrapper->to_session_info(), false);
 
-            // Close socket (graceful shutdown handled by session destructor)
-            if (!graceful) {
-                session->close_socket();
+            // Close session
+            if (wrapper->session && !graceful) {
+                wrapper->session->close();
             }
         }
     }
@@ -459,329 +322,109 @@ public:
 
         lock.unlock();
 
-        for (auto& [id, session] : sessions_copy) {
-            notify_connection(session->to_session_info(), false);
-            if (!graceful) {
-                session->close_socket();
+        for (auto& [id, wrapper] : sessions_copy) {
+            notify_connection(wrapper->to_session_info(), false);
+            if (wrapper->session && !graceful) {
+                wrapper->session->close();
             }
         }
     }
 
 private:
     // =========================================================================
-    // Platform Initialization
+    // Server Adapter Creation
     // =========================================================================
 
-    [[nodiscard]] std::expected<void, mllp_error> initialize_networking() {
-#ifdef _WIN32
-        WSADATA wsa_data;
-        if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-            return std::unexpected(mllp_error::socket_error);
-        }
-#endif
-        return {};
-    }
+    [[nodiscard]] std::expected<void, mllp_error> create_server_adapter() {
+        // Create server_config from mllp_server_config
+        server_config adapter_config;
+        adapter_config.port = config_.port;
+        adapter_config.bind_address = config_.bind_address;
+        adapter_config.backlog = static_cast<int>(config_.max_connections);
+        adapter_config.keep_alive = true;
+        adapter_config.no_delay = true;
+        adapter_config.reuse_addr = true;
 
-    [[nodiscard]] std::expected<void, mllp_error> initialize_tls() {
+        if (config_.tls.enabled) {
 #ifdef PACS_BRIDGE_HAS_OPENSSL
-        const SSL_METHOD* method = TLS_server_method();
-        ssl_ctx_ = SSL_CTX_new(method);
-        if (!ssl_ctx_) {
+            server_adapter_ = std::make_unique<tls_mllp_server>(
+                adapter_config, config_.tls);
+#else
+            // TLS requested but OpenSSL not available
             return std::unexpected(mllp_error::invalid_configuration);
-        }
-
-        // Set minimum TLS version
-        int min_version =
-            (config_.tls.min_version == security::tls_version::tls_1_3)
-                ? TLS1_3_VERSION
-                : TLS1_2_VERSION;
-        SSL_CTX_set_min_proto_version(ssl_ctx_, min_version);
-
-        // Load certificate and key
-        if (!config_.tls.cert_path.empty()) {
-            if (SSL_CTX_use_certificate_chain_file(
-                    ssl_ctx_, config_.tls.cert_path.string().c_str()) != 1) {
-                SSL_CTX_free(ssl_ctx_);
-                ssl_ctx_ = nullptr;
-                return std::unexpected(mllp_error::invalid_configuration);
-            }
-        }
-
-        if (!config_.tls.key_path.empty()) {
-            if (SSL_CTX_use_PrivateKey_file(
-                    ssl_ctx_, config_.tls.key_path.string().c_str(),
-                    SSL_FILETYPE_PEM) != 1) {
-                SSL_CTX_free(ssl_ctx_);
-                ssl_ctx_ = nullptr;
-                return std::unexpected(mllp_error::invalid_configuration);
-            }
-
-            if (SSL_CTX_check_private_key(ssl_ctx_) != 1) {
-                SSL_CTX_free(ssl_ctx_);
-                ssl_ctx_ = nullptr;
-                return std::unexpected(mllp_error::invalid_configuration);
-            }
-        }
-
-        // Configure client authentication
-        if (config_.tls.client_auth != security::client_auth_mode::none) {
-            if (!config_.tls.ca_path.empty()) {
-                if (SSL_CTX_load_verify_locations(
-                        ssl_ctx_, config_.tls.ca_path.string().c_str(),
-                        nullptr) != 1) {
-                    SSL_CTX_free(ssl_ctx_);
-                    ssl_ctx_ = nullptr;
-                    return std::unexpected(mllp_error::invalid_configuration);
-                }
-            }
-
-            int verify_mode = SSL_VERIFY_PEER;
-            if (config_.tls.client_auth ==
-                security::client_auth_mode::required) {
-                verify_mode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-            }
-            SSL_CTX_set_verify(ssl_ctx_, verify_mode, nullptr);
-        }
-
-        return {};
-#else
-        // TLS requested but OpenSSL not available
-        return std::unexpected(mllp_error::invalid_configuration);
 #endif
-    }
-
-    // =========================================================================
-    // Server Socket
-    // =========================================================================
-
-    [[nodiscard]] std::expected<void, mllp_error> create_server_socket() {
-        server_socket_ = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (server_socket_ == INVALID_SOCKET_VALUE) {
-            return std::unexpected(mllp_error::socket_error);
-        }
-
-        // Enable address reuse
-        int opt = 1;
-#ifdef _WIN32
-        setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR,
-                   reinterpret_cast<const char*>(&opt), sizeof(opt));
-#else
-        setsockopt(server_socket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-#endif
-
-        // Bind to address
-        struct sockaddr_in server_addr {};
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(config_.port);
-
-        if (config_.bind_address.empty()) {
-            server_addr.sin_addr.s_addr = INADDR_ANY;
         } else {
-            if (inet_pton(AF_INET, config_.bind_address.c_str(),
-                          &server_addr.sin_addr) != 1) {
-                close_server_socket();
-                return std::unexpected(mllp_error::invalid_configuration);
-            }
-        }
-
-        if (::bind(server_socket_, reinterpret_cast<struct sockaddr*>(&server_addr),
-                   sizeof(server_addr)) < 0) {
-            close_server_socket();
-            return std::unexpected(mllp_error::socket_error);
-        }
-
-        // Start listening
-        if (::listen(server_socket_, static_cast<int>(config_.max_connections)) <
-            0) {
-            close_server_socket();
-            return std::unexpected(mllp_error::socket_error);
+            server_adapter_ = std::make_unique<bsd_mllp_server>(adapter_config);
         }
 
         return {};
     }
 
-    void close_server_socket() {
-        if (server_socket_ != INVALID_SOCKET_VALUE) {
-#ifdef _WIN32
-            closesocket(server_socket_);
-#else
-            ::close(server_socket_);
-#endif
-            server_socket_ = INVALID_SOCKET_VALUE;
+    // =========================================================================
+    // Connection Handling
+    // =========================================================================
+
+    void handle_new_connection(std::unique_ptr<mllp_session> session) {
+        if (!session) {
+            return;
         }
-    }
 
-    // =========================================================================
-    // Accept Loop
-    // =========================================================================
-
-    void accept_loop() {
-        while (!stop_requested_) {
-            // Check max connections
-            {
-                std::shared_lock lock(sessions_mutex_);
-                if (sessions_.size() >= config_.max_connections) {
-                    lock.unlock();
-                    std::this_thread::sleep_for(std::chrono::milliseconds{100});
-                    continue;
-                }
-            }
-
-            // Accept new connection with timeout using poll
-#ifndef _WIN32
-            struct pollfd pfd {};
-            pfd.fd = server_socket_;
-            pfd.events = POLLIN;
-            int poll_result = poll(&pfd, 1, 1000);  // 1 second timeout
-
-            if (poll_result <= 0 || stop_requested_) {
-                continue;
-            }
-#endif
-
-            struct sockaddr_in client_addr {};
-            socklen_t client_len = sizeof(client_addr);
-
-            socket_t client_socket = ::accept(
-                server_socket_, reinterpret_cast<struct sockaddr*>(&client_addr),
-                &client_len);
-
-            if (client_socket == INVALID_SOCKET_VALUE) {
-                if (stop_requested_) {
-                    break;
-                }
+        // Check max connections
+        {
+            std::shared_lock lock(sessions_mutex_);
+            if (sessions_.size() >= config_.max_connections) {
+                // Reject connection - at capacity
                 increment_stat(&stats_.connection_errors);
-                continue;
+                session->close();
+                return;
             }
-
-            // Create session
-            auto session = std::make_unique<internal_session>();
-            session->id = next_session_id_++;
-            session->socket = client_socket;
-            session->connected_at = std::chrono::system_clock::now();
-            session->last_activity = session->connected_at;
-
-            // Extract remote address
-            char addr_str[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &client_addr.sin_addr, addr_str, sizeof(addr_str));
-            session->remote_address = addr_str;
-            session->remote_port = ntohs(client_addr.sin_port);
-
-            // Configure socket options
-            configure_socket(client_socket);
-
-            // Perform TLS handshake if enabled
-            if (config_.tls.enabled) {
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-                session->ssl = SSL_new(ssl_ctx_);
-                if (!session->ssl) {
-                    increment_stat(&stats_.tls_failures);
-                    notify_error(mllp_error::connection_failed,
-                                 session->to_session_info(),
-                                 "Failed to create SSL object");
-                    continue;
-                }
-
-                SSL_set_fd(session->ssl, static_cast<int>(client_socket));
-
-                if (SSL_accept(session->ssl) <= 0) {
-                    increment_stat(&stats_.tls_failures);
-                    notify_error(mllp_error::connection_failed,
-                                 session->to_session_info(),
-                                 "TLS handshake failed");
-                    continue;
-                }
-
-                session->tls_enabled = true;
-                session->tls_version_str = SSL_get_version(session->ssl);
-                session->tls_cipher_str = SSL_get_cipher_name(session->ssl);
-
-                // Extract peer certificate info if present
-                X509* peer_cert = SSL_get_peer_certificate(session->ssl);
-                if (peer_cert) {
-                    char* subject = X509_NAME_oneline(
-                        X509_get_subject_name(peer_cert), nullptr, 0);
-                    if (subject) {
-                        session->peer_cert_subject = subject;
-                        OPENSSL_free(subject);
-                    }
-                    X509_free(peer_cert);
-                }
-#endif
-            }
-
-            // Update statistics
-            increment_stat(&stats_.total_connections);
-
-            // Notify connection handler
-            notify_connection(session->to_session_info(), true);
-
-            // Store session and start handler thread
-            uint64_t session_id = session->id;
-            {
-                std::unique_lock lock(sessions_mutex_);
-                sessions_[session_id] = std::move(session);
-
-                // Update metrics: record new connection and active count
-                auto& metrics = monitoring::bridge_metrics_collector::instance();
-                metrics.record_mllp_connection();
-                metrics.set_mllp_active_connections(sessions_.size());
-            }
-
-            // Start session handler
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-            if (config_.executor) {
-                auto job = std::make_unique<mllp_session_job>([this, session_id] {
-                    handle_session(session_id);
-                });
-                auto result = config_.executor->execute(std::move(job));
-                if (result.is_ok()) {
-                    std::lock_guard lock(threads_mutex_);
-                    session_futures_.push_back(std::move(result.value()));
-                }
-            } else {
-                std::lock_guard lock(threads_mutex_);
-                session_threads_.emplace_back([this, session_id] {
-                    handle_session(session_id);
-                });
-            }
-#else
-            {
-                std::lock_guard lock(threads_mutex_);
-                session_threads_.emplace_back([this, session_id] {
-                    handle_session(session_id);
-                });
-            }
-#endif
         }
-    }
 
-    void configure_socket(socket_t socket) {
-        // Set TCP_NODELAY to disable Nagle's algorithm for low latency
-        int flag = 1;
-#ifdef _WIN32
-        setsockopt(socket, IPPROTO_TCP, TCP_NODELAY,
-                   reinterpret_cast<const char*>(&flag), sizeof(flag));
+        // Update statistics
+        increment_stat(&stats_.total_connections);
+
+        // Create session wrapper
+        auto wrapper = std::make_unique<session_wrapper>(std::move(session));
+        uint64_t session_id = wrapper->id;
+
+        // Notify connection handler
+        notify_connection(wrapper->to_session_info(), true);
+
+        // Store session
+        {
+            std::unique_lock lock(sessions_mutex_);
+            sessions_[session_id] = std::move(wrapper);
+
+            // Update metrics
+            auto& metrics = monitoring::bridge_metrics_collector::instance();
+            metrics.record_mllp_connection();
+            metrics.set_mllp_active_connections(sessions_.size());
+        }
+
+        // Start session handler
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+        if (config_.executor) {
+            auto job = std::make_unique<mllp_session_job>([this, session_id] {
+                handle_session(session_id);
+            });
+            auto result = config_.executor->execute(std::move(job));
+            if (result.is_ok()) {
+                std::lock_guard lock(threads_mutex_);
+                session_futures_.push_back(std::move(result.value()));
+            }
+        } else {
+            std::lock_guard lock(threads_mutex_);
+            session_threads_.emplace_back([this, session_id] {
+                handle_session(session_id);
+            });
+        }
 #else
-        setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
-#endif
-
-        // Set receive timeout
-        auto timeout_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                config_.idle_timeout)
-                .count();
-
-#ifdef _WIN32
-        DWORD timeout = static_cast<DWORD>(timeout_ms);
-        setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO,
-                   reinterpret_cast<const char*>(&timeout), sizeof(timeout));
-#else
-        struct timeval tv {};
-        tv.tv_sec = static_cast<time_t>(timeout_ms / 1000);
-        tv.tv_usec =
-            static_cast<suseconds_t>((timeout_ms % 1000) * 1000);
-        setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        {
+            std::lock_guard lock(threads_mutex_);
+            session_threads_.emplace_back([this, session_id] {
+                handle_session(session_id);
+            });
+        }
 #endif
     }
 
@@ -790,90 +433,85 @@ private:
     // =========================================================================
 
     void handle_session(uint64_t session_id) {
-        std::vector<uint8_t> read_buffer(8192);
+        constexpr size_t READ_BUFFER_SIZE = 8192;
+        auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(
+            config_.idle_timeout);
 
         while (!stop_requested_) {
-            // Get session pointer
-            internal_session* session_ptr = nullptr;
+            // Get session wrapper
+            session_wrapper* wrapper_ptr = nullptr;
             {
                 std::shared_lock lock(sessions_mutex_);
                 auto it = sessions_.find(session_id);
                 if (it == sessions_.end()) {
                     break;
                 }
-                session_ptr = it->second.get();
+                wrapper_ptr = it->second.get();
             }
 
-            // Read data from socket
-            ssize_t bytes_read = 0;
-
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-            if (session_ptr->ssl) {
-                bytes_read =
-                    SSL_read(session_ptr->ssl, read_buffer.data(),
-                             static_cast<int>(read_buffer.size()));
-            } else
-#endif
-            {
-                bytes_read =
-                    ::recv(session_ptr->socket,
-                           reinterpret_cast<char*>(read_buffer.data()),
-                           static_cast<int>(read_buffer.size()), 0);
-            }
-
-            if (bytes_read <= 0) {
-                // Connection closed or error
-                if (bytes_read == 0) {
-                    // Clean disconnect
-                } else {
-                    // Error - check for timeout vs actual error
-#ifdef _WIN32
-                    int err = WSAGetLastError();
-                    if (err != WSAETIMEDOUT)
-#else
-                    if (errno != EAGAIN && errno != EWOULDBLOCK)
-#endif
-                    {
-                        increment_stat(&stats_.connection_errors);
-                    }
-                }
+            if (!wrapper_ptr || !wrapper_ptr->session ||
+                !wrapper_ptr->session->is_open()) {
                 break;
             }
 
+            // Read data from session
+            auto read_result =
+                wrapper_ptr->session->receive(READ_BUFFER_SIZE, timeout);
+
+            if (!read_result) {
+                auto error = read_result.error();
+                if (error == network_error::timeout) {
+                    // Idle timeout reached - close session
+                    // This matches the original behavior where SO_RCVTIMEO
+                    // expiration would close the connection
+                    break;
+                }
+                if (error == network_error::connection_closed) {
+                    // Clean disconnect
+                    break;
+                }
+                // Other error
+                increment_stat(&stats_.connection_errors);
+                break;
+            }
+
+            const auto& data = read_result.value();
+            if (data.empty()) {
+                continue;
+            }
+
             // Update statistics
-            session_ptr->bytes_received += static_cast<size_t>(bytes_read);
-            session_ptr->last_activity = std::chrono::system_clock::now();
-            add_stat(&stats_.bytes_received, static_cast<size_t>(bytes_read));
+            add_stat(&stats_.bytes_received, data.size());
 
             // Append to receive buffer
-            session_ptr->receive_buffer.insert(
-                session_ptr->receive_buffer.end(), read_buffer.begin(),
-                read_buffer.begin() + bytes_read);
+            wrapper_ptr->receive_buffer.insert(wrapper_ptr->receive_buffer.end(),
+                                               data.begin(), data.end());
 
             // Check buffer size limit
-            if (session_ptr->receive_buffer.size() > config_.max_message_size) {
+            if (wrapper_ptr->receive_buffer.size() > config_.max_message_size) {
                 increment_stat(&stats_.protocol_errors);
                 notify_error(mllp_error::message_too_large,
-                             session_ptr->to_session_info(),
+                             wrapper_ptr->to_session_info(),
                              "Message exceeds maximum size");
                 break;
             }
 
             // Process complete MLLP messages
-            process_messages(session_ptr);
+            process_messages(wrapper_ptr);
         }
 
         // Close session
         close_session(session_id, true);
     }
 
-    void process_messages(internal_session* session) {
-        auto& buffer = session->receive_buffer;
+    void process_messages(session_wrapper* wrapper) {
+        auto& buffer = wrapper->receive_buffer;
 
         while (true) {
             // Find start of message (VT byte)
-            auto start_it = std::find(buffer.begin(), buffer.end(),
-                                       static_cast<uint8_t>(MLLP_START_BYTE));
+            auto start_it =
+                std::find(buffer.begin(), buffer.end(),
+                          static_cast<uint8_t>(MLLP_START_BYTE));
             if (start_it == buffer.end()) {
                 // No start marker found, clear any garbage data
                 buffer.clear();
@@ -904,24 +542,28 @@ private:
             auto span = tracing::trace_manager::instance().start_span(
                 "mllp_receive", tracing::span_kind::server);
             span.set_attribute("mllp.port", static_cast<int64_t>(config_.port))
-                .set_attribute("mllp.remote_address", session->remote_address)
-                .set_attribute("mllp.remote_port", static_cast<int64_t>(session->remote_port))
-                .set_attribute("mllp.session_id", static_cast<int64_t>(session->id));
+                .set_attribute("mllp.remote_address",
+                               wrapper->session->remote_address())
+                .set_attribute("mllp.remote_port",
+                               static_cast<int64_t>(wrapper->session->remote_port()))
+                .set_attribute("mllp.session_id",
+                               static_cast<int64_t>(wrapper->id));
 
             // Extract message content (between VT and FS)
             mllp_message msg;
             msg.content.assign(buffer.begin() + 1, end_it);
-            msg.session = session->to_session_info();
+            msg.session = wrapper->to_session_info();
             msg.received_at = std::chrono::system_clock::now();
 
             // Add message size to span
-            span.set_attribute("mllp.message_size", static_cast<int64_t>(msg.content.size()));
+            span.set_attribute("mllp.message_size",
+                               static_cast<int64_t>(msg.content.size()));
 
             // Remove processed message from buffer (including CR)
             buffer.erase(buffer.begin(), end_it + 2);
 
             // Update statistics
-            session->messages_received++;
+            wrapper->messages_received++;
             increment_stat(&stats_.messages_received);
 
             // Call message handler
@@ -935,7 +577,7 @@ private:
 
             // Send response if provided
             if (response) {
-                send_response(session, *response);
+                send_response(wrapper, *response);
                 span.set_attribute("mllp.response_sent", true);
             } else {
                 span.set_attribute("mllp.response_sent", false);
@@ -945,27 +587,18 @@ private:
         }
     }
 
-    void send_response(internal_session* session, const mllp_message& response) {
-        auto framed = response.frame();
-
-        ssize_t bytes_sent = 0;
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-        if (session->ssl) {
-            bytes_sent = SSL_write(session->ssl, framed.data(),
-                                   static_cast<int>(framed.size()));
-        } else
-#endif
-        {
-            bytes_sent = ::send(session->socket,
-                                reinterpret_cast<const char*>(framed.data()),
-                                static_cast<int>(framed.size()), 0);
+    void send_response(session_wrapper* wrapper, const mllp_message& response) {
+        if (!wrapper->session || !wrapper->session->is_open()) {
+            return;
         }
 
-        if (bytes_sent > 0) {
-            session->messages_sent++;
-            session->bytes_sent += static_cast<size_t>(bytes_sent);
+        auto framed = response.frame();
+        auto send_result = wrapper->session->send(framed);
+
+        if (send_result) {
+            wrapper->messages_sent++;
             increment_stat(&stats_.messages_sent);
-            add_stat(&stats_.bytes_sent, static_cast<size_t>(bytes_sent));
+            add_stat(&stats_.bytes_sent, send_result.value());
         }
     }
 
@@ -1008,15 +641,9 @@ private:
     // =========================================================================
 
     mllp_server_config config_;
-    socket_t server_socket_ = INVALID_SOCKET_VALUE;
-    std::atomic<uint64_t> next_session_id_{1};
 
-    // TLS context
-#ifdef PACS_BRIDGE_HAS_OPENSSL
-    SSL_CTX* ssl_ctx_ = nullptr;
-#else
-    void* ssl_ctx_ = nullptr;
-#endif
+    // Network adapter (BSD or TLS)
+    std::unique_ptr<mllp_server_adapter> server_adapter_;
 
     // State management
     mutable std::shared_mutex state_mutex_;
@@ -1024,20 +651,17 @@ private:
     std::atomic<bool> stop_requested_{false};
 
     // Threads
-    std::thread accept_thread_;
     std::mutex threads_mutex_;
     std::vector<std::thread> session_threads_;
 
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
-    // Future for executor-based accept loop
-    std::future<void> accept_future_;
     // Futures for executor-based session tasks
     std::vector<std::future<void>> session_futures_;
 #endif
 
     // Sessions
     mutable std::shared_mutex sessions_mutex_;
-    std::unordered_map<uint64_t, std::unique_ptr<internal_session>> sessions_;
+    std::unordered_map<uint64_t, std::unique_ptr<session_wrapper>> sessions_;
 
     // Handlers
     mutable std::shared_mutex handlers_mutex_;

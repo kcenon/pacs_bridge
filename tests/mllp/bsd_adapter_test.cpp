@@ -174,6 +174,11 @@ TEST_F(BSDAdapterTest, ServerPortAlreadyInUse) {
     // Try to start second server on same port
     server_config config;
     config.port = test_port_;
+    // Explicitly disable SO_REUSEADDR for this test.
+    // On Windows, SO_REUSEADDR allows multiple sockets to bind to the same
+    // port (unlike POSIX), so we must disable it to test the expected
+    // "port already in use" behavior.
+    config.reuse_addr = false;
 
     auto server2 = std::make_unique<bsd_mllp_server>(config);
     server2->on_connection([](std::unique_ptr<mllp_session>) {});
@@ -485,7 +490,44 @@ TEST_F(BSDAdapterTest, LargeMessageTransmission) {
 // =============================================================================
 
 TEST_F(BSDAdapterTest, SessionStatistics) {
+    // Track received data for verification
+    std::vector<uint8_t> received_data;
+    std::mutex data_mutex;
+    std::condition_variable data_cv;
+    std::atomic<bool> receive_done{false};
+
     server_ = create_server(test_port_);
+
+    // Override connection handler to receive data in background
+    server_->on_connection([&](std::unique_ptr<mllp_session> session) {
+        // Store session in fixture's list first
+        {
+            std::lock_guard<std::mutex> lock(sessions_mutex_);
+            sessions_.push_back(std::move(session));
+            sessions_cv_.notify_all();
+        }
+
+        // Start a receive thread to actually read data and update stats
+        std::thread([&]() {
+            std::unique_lock<std::mutex> lock(sessions_mutex_);
+            if (sessions_.empty()) {
+                receive_done.store(true);
+                data_cv.notify_all();
+                return;
+            }
+            auto& s = sessions_.back();
+            lock.unlock();
+
+            // Receive data (this updates bytes_received statistics)
+            auto result = s->receive(1024, std::chrono::seconds(5));
+            if (result.has_value()) {
+                std::lock_guard<std::mutex> data_lock(data_mutex);
+                received_data = std::move(result.value());
+            }
+            receive_done.store(true);
+            data_cv.notify_all();
+        }).detach();
+    });
 
     // Connect client
     socket_t client_sock;
@@ -511,17 +553,29 @@ TEST_F(BSDAdapterTest, SessionStatistics) {
     std::string test_data = "Test data for statistics";
     send(client_sock, test_data.data(), test_data.size(), 0);
 
-    // Give server time to receive
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // Wait for server to receive the data (updates statistics)
+    {
+        std::unique_lock<std::mutex> lock(data_mutex);
+        ASSERT_TRUE(data_cv.wait_for(lock, std::chrono::seconds(5),
+                                      [&] { return receive_done.load(); }));
+    }
 
     // Check statistics
     {
         std::lock_guard<std::mutex> lock(sessions_mutex_);
-        auto& session = sessions_[0];
+        ASSERT_FALSE(sessions_.empty());
+        auto& session = sessions_.back();
 
         auto stats = session->get_stats();
         EXPECT_GT(stats.bytes_received, 0u);
         EXPECT_EQ("127.0.0.1", session->remote_address());
+    }
+
+    // Verify received data matches sent data
+    {
+        std::lock_guard<std::mutex> lock(data_mutex);
+        std::string received_str(received_data.begin(), received_data.end());
+        EXPECT_EQ(test_data, received_str);
     }
 
 #ifdef _WIN32
