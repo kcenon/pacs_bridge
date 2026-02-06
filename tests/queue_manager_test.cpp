@@ -406,7 +406,11 @@ TEST_F(QueueOperationsTest, NackMessage) {
 TEST_F(QueueOperationsTest, NackMaxRetries) {
     auto config = queue_config_builder::create()
                       .database(test_db_path_ + "_retry")
-                      .retry_policy(2, std::chrono::seconds{1}, 1.0)
+                      // Use 0s retry delay so retry-scheduled messages are immediately
+                      // dequeue-able. Previous value of 1s caused dequeue() to return
+                      // nullopt because scheduled_at was 1s in the future while the
+                      // test only slept 10ms between attempts.
+                      .retry_policy(2, std::chrono::seconds{0}, 1.0)
                       .build();
 
     queue_manager queue(config);
@@ -416,20 +420,21 @@ TEST_F(QueueOperationsTest, NackMaxRetries) {
     ASSERT_EXPECTED_OK(enqueue_result);
     std::string msg_id = *enqueue_result;
 
-    // Dequeue and nack twice
-    for (int i = 0; i < 2; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    // First dequeue and nack: attempt_count becomes 1, 1 < 2 → retry_scheduled
+    {
         auto msg = queue.dequeue();
-        if (msg) {
-            (void)queue.nack(msg->id, "Failed attempt " + std::to_string(i + 1));
-        }
+        ASSERT_TRUE(msg.has_value()) << "First dequeue must succeed";
+        auto nack_result = queue.nack(msg->id, "Failed attempt 1");
+        ASSERT_EXPECTED_OK(nack_result);
     }
 
-    // Third dequeue and nack should move to dead letter
-    std::this_thread::sleep_for(std::chrono::milliseconds{10});
-    auto msg = queue.dequeue();
-    if (msg) {
-        (void)queue.nack(msg->id, "Final failure");
+    // Second dequeue and nack: attempt_count becomes 2, 2 >= 2 → dead letter
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        auto msg = queue.dequeue();
+        ASSERT_TRUE(msg.has_value()) << "Second dequeue must succeed (retry_scheduled with 0s delay)";
+        auto nack_result = queue.nack(msg->id, "Failed attempt 2");
+        ASSERT_EXPECTED_OK(nack_result);
     }
 
     // Check dead letter queue
@@ -859,6 +864,106 @@ TEST_F(QueueCapacityTest, QueueFull) {
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), queue_error::queue_full);
 
+    queue.stop();
+}
+
+// =============================================================================
+// Worker Thread Integration Tests (thread_adapter migration)
+// =============================================================================
+
+class WorkerThreadTest : public QueueManagerLifecycleTest {};
+
+TEST_F(WorkerThreadTest, WorkersProcessMessages) {
+    auto config = queue_config_builder::create()
+                      .database(test_db_path_)
+                      .workers(2)
+                      .build();
+
+    queue_manager queue(config);
+    ASSERT_EXPECTED_OK(queue.start());
+
+    std::atomic<int> delivered_count{0};
+    std::mutex delivered_mutex;
+    std::condition_variable delivered_cv;
+
+    queue.start_workers([&](const queued_message& msg) -> std::expected<void, std::string> {
+        delivered_count.fetch_add(1, std::memory_order_relaxed);
+        delivered_cv.notify_all();
+        return {};
+    });
+
+    // Enqueue a message
+    ASSERT_EXPECTED_OK(queue.enqueue("RIS", "WORKER_TEST_PAYLOAD"));
+
+    // Wait for delivery (up to 5 seconds)
+    {
+        std::unique_lock<std::mutex> lock(delivered_mutex);
+        delivered_cv.wait_for(lock, std::chrono::seconds{5},
+                              [&] { return delivered_count.load() >= 1; });
+    }
+
+    EXPECT_GE(delivered_count.load(), 1);
+
+    queue.stop_workers();
+    queue.stop();
+}
+
+TEST_F(WorkerThreadTest, WorkersCleanShutdown) {
+    auto config = queue_config_builder::create()
+                      .database(test_db_path_)
+                      .workers(2)
+                      .build();
+
+    queue_manager queue(config);
+    ASSERT_EXPECTED_OK(queue.start());
+
+    queue.start_workers([](const queued_message&) -> std::expected<void, std::string> {
+        return {};
+    });
+
+    EXPECT_TRUE(queue.workers_running());
+
+    queue.stop_workers();
+    EXPECT_FALSE(queue.workers_running());
+
+    queue.stop();
+}
+
+TEST_F(WorkerThreadTest, WorkersHandleMultipleMessages) {
+    auto config = queue_config_builder::create()
+                      .database(test_db_path_)
+                      .workers(2)
+                      .build();
+
+    queue_manager queue(config);
+    ASSERT_EXPECTED_OK(queue.start());
+
+    constexpr int message_count = 5;
+    std::atomic<int> delivered_count{0};
+    std::mutex delivered_mutex;
+    std::condition_variable delivered_cv;
+
+    queue.start_workers([&](const queued_message&) -> std::expected<void, std::string> {
+        delivered_count.fetch_add(1, std::memory_order_relaxed);
+        delivered_cv.notify_all();
+        return {};
+    });
+
+    // Enqueue multiple messages
+    for (int i = 0; i < message_count; ++i) {
+        ASSERT_EXPECTED_OK(queue.enqueue("RIS", "MSG_" + std::to_string(i)));
+    }
+
+    // Wait for all deliveries (up to 10 seconds)
+    {
+        std::unique_lock<std::mutex> lock(delivered_mutex);
+        delivered_cv.wait_for(lock, std::chrono::seconds{10},
+                              [&] { return delivered_count.load() >= message_count; });
+    }
+
+    EXPECT_EQ(delivered_count.load(), message_count);
+
+    queue.stop_workers();
     queue.stop();
 }
 

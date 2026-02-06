@@ -27,6 +27,9 @@
 // Database adapter for standardized database access (Phase 1b migration)
 #include "pacs/bridge/integration/database_adapter.h"
 
+// Thread adapter for centralized thread management (Phase 3a migration)
+#include "pacs/bridge/integration/thread_adapter.h"
+
 namespace pacs::bridge::router {
 
 // =============================================================================
@@ -195,10 +198,14 @@ public:
     // Database adapter (Phase 1b Part 1: DDL operations only)
     std::shared_ptr<integration::database_adapter> db_adapter_;
 
-    // Worker threads
-    std::vector<std::thread> worker_threads_;
+    // Worker thread pool (used in non-executor mode)
+    std::unique_ptr<integration::thread_adapter> thread_pool_;
     std::condition_variable_any worker_cv_;
     sender_function sender_;
+
+    // Futures for tracking worker/cleanup tasks
+    std::vector<std::future<void>> worker_futures_;
+    std::future<void> cleanup_future_;
 
     // Callbacks
     dead_letter_callback dead_letter_callback_;
@@ -208,17 +215,10 @@ public:
     mutable std::mutex stats_mutex_;
     queue_statistics stats_;
 
-    // Cleanup thread
-    std::thread cleanup_thread_;
+    // Cleanup state
     std::atomic<bool> cleanup_running_{false};
     std::condition_variable cleanup_cv_;
     std::mutex cleanup_mutex_;
-
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-    // Futures for tracking executor-based jobs
-    std::vector<std::future<void>> worker_futures_;
-    std::future<void> cleanup_future_;
-#endif
 
     explicit impl(const queue_config& config) : config_(config) {}
 
@@ -229,19 +229,18 @@ public:
         cleanup_running_ = false;
         cleanup_cv_.notify_all();
 
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-        // Wait for executor-based cleanup job to complete
-        if (config_.executor && cleanup_future_.valid()) {
+        if (cleanup_future_.valid()) {
             cleanup_future_.wait_for(std::chrono::seconds{5});
-        }
-#endif
-
-        if (cleanup_thread_.joinable()) {
-            cleanup_thread_.join();
         }
 
         // Stop workers
         stop_workers();
+
+        // Shutdown thread pool after all tasks have been waited on
+        if (thread_pool_) {
+            thread_pool_->shutdown(true);
+            thread_pool_.reset();
+        }
 
         // Close database
         {
@@ -259,24 +258,12 @@ public:
         workers_running_ = false;
         worker_cv_.notify_all();
 
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-        // Wait for executor-based worker jobs to complete
-        if (config_.executor) {
-            for (auto& future : worker_futures_) {
-                if (future.valid()) {
-                    future.wait_for(std::chrono::seconds{5});
-                }
-            }
-            worker_futures_.clear();
-        }
-#endif
-
-        for (auto& worker : worker_threads_) {
-            if (worker.joinable()) {
-                worker.join();
+        for (auto& future : worker_futures_) {
+            if (future.valid()) {
+                future.wait_for(std::chrono::seconds{5});
             }
         }
-        worker_threads_.clear();
+        worker_futures_.clear();
     }
 
     std::expected<void, queue_error> start() {
@@ -304,12 +291,22 @@ public:
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
         if (config_.executor) {
             schedule_cleanup_job();
-        } else {
-            cleanup_thread_ = std::thread([this]() { cleanup_loop(); });
-        }
-#else
-        cleanup_thread_ = std::thread([this]() { cleanup_loop(); });
+        } else
 #endif
+        {
+            thread_pool_ = integration::create_thread_adapter();
+            integration::worker_pool_config pool_config;
+            pool_config.name = "queue_manager";
+            pool_config.min_threads = config_.worker_count + 1;
+            pool_config.max_threads = config_.worker_count + 1;
+            if (!thread_pool_->initialize(pool_config)) {
+                thread_pool_.reset();
+                running_ = false;
+                return std::unexpected(queue_error::worker_error);
+            }
+            cleanup_future_ = thread_pool_->submit(
+                [this]() { cleanup_loop(); }, integration::task_priority::low);
+        }
 
         return {};
     }
@@ -1112,16 +1109,16 @@ public:
             for (size_t i = 0; i < config_.worker_count; ++i) {
                 schedule_worker_job();
             }
-        } else {
+        } else
+#endif
+        {
             for (size_t i = 0; i < config_.worker_count; ++i) {
-                worker_threads_.emplace_back([this]() { worker_loop(); });
+                worker_futures_.push_back(
+                    thread_pool_->submit(
+                        [this]() { worker_loop(); },
+                        integration::task_priority::normal));
             }
         }
-#else
-        for (size_t i = 0; i < config_.worker_count; ++i) {
-            worker_threads_.emplace_back([this]() { worker_loop(); });
-        }
-#endif
     }
 
     std::vector<dead_letter_entry> get_dead_letters_internal(size_t limit, size_t offset) const {

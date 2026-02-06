@@ -13,7 +13,9 @@
 
 #include "pacs/bridge/integration/thread_adapter.h"
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
 #include <kcenon/thread/thread_pool.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -24,6 +26,8 @@
 #include <vector>
 
 namespace pacs::bridge::integration {
+
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // thread_pool_adapter - Wraps thread_system's thread_pool
@@ -110,6 +114,8 @@ private:
     std::atomic<bool> running_{false};
     mutable std::mutex mutex_;
 };
+
+#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // simple_thread_adapter - Standalone Fallback
