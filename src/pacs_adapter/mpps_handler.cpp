@@ -161,7 +161,11 @@ void format_dicom_datetime(std::chrono::system_clock::time_point tp,
                            std::string& out_time) {
     auto time_t_val = std::chrono::system_clock::to_time_t(tp);
     std::tm tm = {};
+#ifdef _WIN32
+    localtime_s(&tm, &time_t_val);
+#else
     localtime_r(&time_t_val, &tm);
+#endif
 
     char date_buf[9];
     char time_buf[7];
