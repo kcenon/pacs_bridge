@@ -194,6 +194,24 @@ struct mpps_record {
     /** Series Instance UIDs */
     std::vector<std::string> series_instance_uids;
 
+    /** Accession Number (0008,0050) */
+    std::string accession_number;
+
+    /** Modality (0008,0060) */
+    std::string modality;
+
+    /** Performed Procedure Step Description (0040,0254) */
+    std::string performed_procedure_description;
+
+    /** Referring Physician's Name (0008,0090) */
+    std::string referring_physician;
+
+    /** Requested Procedure ID (0040,1001) */
+    std::string requested_procedure_id;
+
+    /** Discontinuation Reason */
+    std::string discontinuation_reason;
+
     /**
      * @brief Validate MPPS record fields
      *
@@ -263,6 +281,15 @@ struct mpps_query_params {
 
     /** Status filter: "IN PROGRESS", "COMPLETED", "DISCONTINUED" (optional) */
     std::optional<std::string> status;
+
+    /** Station AE Title filter (optional) */
+    std::optional<std::string> station_ae_title;
+
+    /** Modality filter (optional) */
+    std::optional<std::string> modality;
+
+    /** Accession Number filter (optional) */
+    std::optional<std::string> accession_number;
 
     /** Start datetime range (from) */
     std::optional<std::chrono::system_clock::time_point> from_datetime;

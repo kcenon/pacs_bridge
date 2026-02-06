@@ -177,11 +177,14 @@ TEST(MppsRecordTest, MissingRequiredFields) {
     // Missing all required fields
     EXPECT_FALSE(record.is_valid());
 
-    // Missing scheduled_procedure_step_id
+    // Has sop_instance_uid and status, but no identifier (no SPS ID, no accession)
     record.sop_instance_uid = "1.2.3.4.5";
-    record.performed_procedure_step_id = "PPS001";
     record.status = "IN PROGRESS";
     EXPECT_FALSE(record.is_valid());
+
+    // With accession_number (but no SPS ID) - should be valid
+    record.accession_number = "ACC001";
+    EXPECT_TRUE(record.is_valid());
 }
 
 TEST(MppsRecordTest, ValidStatuses) {
@@ -304,6 +307,32 @@ TEST_F(PacsAdapterTest, CreateMpps) {
     EXPECT_TRUE(result.has_value());
 }
 
+TEST_F(PacsAdapterTest, CreateDuplicateMpps) {
+    ASSERT_TRUE(adapter_->connect().has_value());
+
+    auto mpps = adapter_->get_mpps_adapter();
+    ASSERT_NE(mpps, nullptr);
+
+    mpps_record record;
+    record.sop_instance_uid = "1.2.840.10008.1.2.3.4.999";
+    record.scheduled_procedure_step_id = "SPS001";
+    record.performed_procedure_step_id = "PPS001";
+    record.performed_station_ae_title = "MODALITY1";
+    record.status = "IN PROGRESS";
+    record.study_instance_uid = "1.2.840.10008.1.2.3";
+    record.patient_id = "PAT123";
+    record.patient_name = "Test^Patient";
+    record.start_datetime = std::chrono::system_clock::now();
+
+    auto result1 = mpps->create_mpps(record);
+    EXPECT_TRUE(result1.has_value());
+
+    // Duplicate create should fail
+    auto result2 = mpps->create_mpps(record);
+    EXPECT_FALSE(result2.has_value());
+    EXPECT_EQ(result2.error(), pacs_error::duplicate_entry);
+}
+
 TEST_F(PacsAdapterTest, CreateInvalidMpps) {
     ASSERT_TRUE(adapter_->connect().has_value());
 
@@ -361,10 +390,10 @@ TEST_F(PacsAdapterTest, UpdateNonExistentMpps) {
     record.status = "COMPLETED";
     record.end_datetime = std::chrono::system_clock::now();
 
-    // Stub implementation validates but doesn't check if record exists
-    // So update will succeed (no-op)
+    // In-memory adapter checks existence, returns not_found
     auto result = mpps->update_mpps(record);
-    EXPECT_TRUE(result.has_value());
+    EXPECT_FALSE(result.has_value());
+    EXPECT_EQ(result.error(), pacs_error::not_found);
 }
 
 TEST_F(PacsAdapterTest, QueryMpps) {
@@ -392,14 +421,13 @@ TEST_F(PacsAdapterTest, QueryMpps) {
         ASSERT_TRUE(mpps->create_mpps(record).has_value());
     }
 
-    // Query all MPPS (stub returns empty)
+    // Query all MPPS (in-memory adapter returns stored records)
     mpps_query_params params;
     params.max_results = 100;
 
     auto result = mpps->query_mpps(params);
     ASSERT_TRUE(result.has_value());
-    // Stub implementation doesn't store data, so query returns empty
-    EXPECT_EQ(result->size(), 0);
+    EXPECT_EQ(result->size(), 3);
 }
 
 TEST_F(PacsAdapterTest, QueryMppsByStatus) {
@@ -459,10 +487,12 @@ TEST_F(PacsAdapterTest, GetMpps) {
 
     ASSERT_TRUE(mpps->create_mpps(record).has_value());
 
-    // Get by SOP Instance UID (stub doesn't store, so returns not_found)
+    // Get by SOP Instance UID (in-memory adapter returns the stored record)
     auto result = mpps->get_mpps(sop_uid);
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), pacs_error::not_found);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result->sop_instance_uid, sop_uid);
+    EXPECT_EQ(result->patient_id, "PAT300");
+    EXPECT_EQ(result->status, "IN PROGRESS");
 }
 
 TEST_F(PacsAdapterTest, GetNonExistentMpps) {

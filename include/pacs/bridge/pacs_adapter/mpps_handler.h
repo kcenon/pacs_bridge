@@ -33,6 +33,11 @@
 #include <string_view>
 #include <vector>
 
+// Forward declaration to avoid header coupling
+namespace pacs::bridge::integration {
+class mpps_adapter;
+}
+
 // IExecutor interface for task execution (when available)
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
 #include <kcenon/common/interfaces/executor_interface.h>
@@ -417,6 +422,13 @@ struct mpps_handler_config {
 
     /** Maximum age for recovering pending MPPS (0 = no limit) */
     std::chrono::hours max_recovery_age{24};
+
+    // =========================================================================
+    // MPPS Adapter (persistence backend)
+    // =========================================================================
+
+    /** MPPS adapter for persistence (nullptr = create default via create_pacs_adapter()) */
+    std::shared_ptr<integration::mpps_adapter> mpps_adapter;
 
     // =========================================================================
     // Executor Options (IExecutor integration)
