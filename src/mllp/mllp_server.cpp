@@ -26,6 +26,10 @@
 #include "tls_mllp_server.h"
 #endif
 
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+#include "network_system_mllp_server.h"
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -354,7 +358,13 @@ private:
             return std::unexpected(mllp_error::invalid_configuration);
 #endif
         } else {
+#ifndef PACS_BRIDGE_STANDALONE_BUILD
+            // Prefer network_system adapter when kcenon ecosystem is available
+            server_adapter_ =
+                std::make_unique<network_system_mllp_server>(adapter_config);
+#else
             server_adapter_ = std::make_unique<bsd_mllp_server>(adapter_config);
+#endif
         }
 
         return {};
