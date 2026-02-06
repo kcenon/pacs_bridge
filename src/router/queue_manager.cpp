@@ -16,15 +16,11 @@
 #include <iomanip>
 #include <mutex>
 #include <random>
-#include <shared_mutex>
 #include <sstream>
 #include <thread>
 #include <vector>
 
-// SQLite header - using sqlite3 from vcpkg
-#include <sqlite3.h>
-
-// Database adapter for standardized database access (Phase 1b migration)
+// Database adapter for standardized database access
 #include "pacs/bridge/integration/database_adapter.h"
 
 // Thread adapter for centralized thread management (Phase 3a migration)
@@ -191,16 +187,13 @@ public:
     std::atomic<bool> running_{false};
     std::atomic<bool> workers_running_{false};
 
-    // SQLite database (legacy - to be migrated in Phase 1b parts 2-3)
-    sqlite3* db_ = nullptr;
-    mutable std::shared_mutex db_mutex_;
-
-    // Database adapter (Phase 1b Part 1: DDL operations only)
+    // Database adapter for standardized database access
     std::shared_ptr<integration::database_adapter> db_adapter_;
 
     // Worker thread pool (used in non-executor mode)
     std::unique_ptr<integration::thread_adapter> thread_pool_;
-    std::condition_variable_any worker_cv_;
+    std::mutex worker_mutex_;
+    std::condition_variable worker_cv_;
     sender_function sender_;
 
     // Futures for tracking worker/cleanup tasks
@@ -242,14 +235,8 @@ public:
             thread_pool_.reset();
         }
 
-        // Close database
-        {
-            std::unique_lock<std::shared_mutex> lock(db_mutex_);
-            if (db_) {
-                sqlite3_close(db_);
-                db_ = nullptr;
-            }
-        }
+        // Release database adapter (closes all pooled connections)
+        db_adapter_.reset();
 
         running_ = false;
     }
@@ -312,9 +299,6 @@ public:
     }
 
     std::expected<void, queue_error> open_database() {
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-
-        // Phase 1b Part 1: Initialize database_adapter for DDL operations
         integration::database_config db_config;
         db_config.database_path = config_.database_path;
         db_config.pool_size = 5;
@@ -328,32 +312,8 @@ public:
             return std::unexpected(queue_error::database_error);
         }
 
-        // Legacy SQLite initialization (to be removed in Parts 2-3)
-        int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX;
-        int rc = sqlite3_open_v2(config_.database_path.c_str(), &db_, flags, nullptr);
-        if (rc != SQLITE_OK) {
-            if (db_) {
-                sqlite3_close(db_);
-                db_ = nullptr;
-            }
-            db_adapter_.reset();
-            return std::unexpected(queue_error::database_error);
-        }
-
-        // Enable WAL mode for better concurrent access
-        if (config_.enable_wal_mode) {
-            execute_sql("PRAGMA journal_mode=WAL");
-            execute_sql("PRAGMA synchronous=NORMAL");
-        }
-
-        // Set busy timeout
-        sqlite3_busy_timeout(db_, 5000);
-
-        // Create tables using database_adapter (Phase 1b Part 1)
         auto create_result = create_tables();
         if (!create_result) {
-            sqlite3_close(db_);
-            db_ = nullptr;
             db_adapter_.reset();
             return create_result;
         }
@@ -422,19 +382,6 @@ public:
         }
 
         return {};
-    }
-
-    bool execute_sql(const char* sql) {
-        // Legacy helper for PRAGMA statements (Phase 1b Part 1: kept for compatibility)
-        char* error_msg = nullptr;
-        int rc = sqlite3_exec(db_, sql, nullptr, nullptr, &error_msg);
-        if (rc != SQLITE_OK) {
-            if (error_msg) {
-                sqlite3_free(error_msg);
-            }
-            return false;
-        }
-        return true;
     }
 
     void cleanup_loop() {
@@ -547,28 +494,30 @@ public:
     }
 
     size_t recover_internal() {
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) return 0;
+        if (!db_adapter_) return 0;
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) return 0;
+        auto& conn_scope = *conn_result;
 
         // Reset processing state to pending
         const char* sql =
             "UPDATE message_queue SET state = ?, scheduled_at = ? "
             "WHERE state = ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) return 0;
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) return 0;
+        auto& stmt = *stmt_result.value();
 
         std::string now_str = to_sqlite_timestamp(std::chrono::system_clock::now());
-        sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::pending));
-        sqlite3_bind_text(stmt, 2, now_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(stmt, 3, static_cast<int>(message_state::processing));
+        if (!stmt.bind_int64(1, static_cast<int>(message_state::pending))) return 0;
+        if (!stmt.bind_string(2, now_str)) return 0;
+        if (!stmt.bind_int64(3, static_cast<int>(message_state::processing))) return 0;
 
-        rc = sqlite3_step(stmt);
-        int changes = sqlite3_changes(db_);
-        sqlite3_finalize(stmt);
+        auto result = stmt.execute();
+        if (!result) return 0;
 
-        return static_cast<size_t>(changes);
+        return result.value()->affected_rows();
     }
 
     std::expected<std::string, queue_error> enqueue_internal(std::string_view destination,
@@ -585,14 +534,19 @@ public:
             return std::unexpected(queue_error::queue_full);
         }
 
+        if (!db_adapter_) {
+            return std::unexpected(queue_error::not_running);
+        }
+
         std::string id = generate_message_id();
         auto now = std::chrono::system_clock::now();
         std::string now_str = to_sqlite_timestamp(now);
 
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) {
-            return std::unexpected(queue_error::not_running);
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::unexpected(queue_error::database_error);
         }
+        auto& conn_scope = *conn_result;
 
         const char* sql =
             "INSERT INTO message_queue "
@@ -600,26 +554,26 @@ public:
             "attempt_count, correlation_id, message_type) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& stmt = *stmt_result.value();
+
+        if (!stmt.bind_string(1, id) ||
+            !stmt.bind_string(2, destination) ||
+            !stmt.bind_string(3, payload) ||
+            !stmt.bind_int64(4, priority) ||
+            !stmt.bind_int64(5, static_cast<int>(message_state::pending)) ||
+            !stmt.bind_string(6, now_str) ||
+            !stmt.bind_string(7, now_str) ||
+            !stmt.bind_string(8, correlation_id) ||
+            !stmt.bind_string(9, message_type)) {
             return std::unexpected(queue_error::database_error);
         }
 
-        sqlite3_bind_text(stmt, 1, id.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 2, std::string(destination).c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 3, std::string(payload).c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 4, priority);
-        sqlite3_bind_int(stmt, 5, static_cast<int>(message_state::pending));
-        sqlite3_bind_text(stmt, 6, now_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 7, now_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 8, std::string(correlation_id).c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 9, std::string(message_type).c_str(), -1, SQLITE_TRANSIENT);
-
-        rc = sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
-
-        if (rc != SQLITE_DONE) {
+        auto result = stmt.execute();
+        if (!result) {
             return std::unexpected(queue_error::database_error);
         }
 
@@ -750,29 +704,34 @@ public:
             }
         }
 
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) {
+        if (!db_adapter_) {
             return std::unexpected(queue_error::not_running);
         }
 
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& conn_scope = *conn_result;
+
         const char* sql = "DELETE FROM message_queue WHERE id = ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& stmt = *stmt_result.value();
+
+        if (!stmt.bind_string(1, message_id)) {
             return std::unexpected(queue_error::database_error);
         }
 
-        sqlite3_bind_text(stmt, 1, std::string(message_id).c_str(), -1, SQLITE_TRANSIENT);
-        rc = sqlite3_step(stmt);
-        int changes = sqlite3_changes(db_);
-        sqlite3_finalize(stmt);
-
-        if (rc != SQLITE_DONE) {
+        auto result = stmt.execute();
+        if (!result) {
             return std::unexpected(queue_error::database_error);
         }
 
-        if (changes == 0) {
+        if (result.value()->affected_rows() == 0) {
             return std::unexpected(queue_error::message_not_found);
         }
 
@@ -817,30 +776,35 @@ public:
         auto next_retry = std::chrono::system_clock::now() + delay;
         std::string next_retry_str = to_sqlite_timestamp(next_retry);
 
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) {
+        if (!db_adapter_) {
             return std::unexpected(queue_error::not_running);
         }
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& conn_scope = *conn_result;
 
         const char* sql =
             "UPDATE message_queue SET state = ?, scheduled_at = ?, last_error = ? "
             "WHERE id = ?";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& stmt = *stmt_result.value();
+
+        if (!stmt.bind_int64(1, static_cast<int>(message_state::retry_scheduled)) ||
+            !stmt.bind_string(2, next_retry_str) ||
+            !stmt.bind_string(3, error) ||
+            !stmt.bind_string(4, message_id)) {
             return std::unexpected(queue_error::database_error);
         }
 
-        sqlite3_bind_int(stmt, 1, static_cast<int>(message_state::retry_scheduled));
-        sqlite3_bind_text(stmt, 2, next_retry_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 3, std::string(error).c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 4, std::string(message_id).c_str(), -1, SQLITE_TRANSIENT);
-
-        rc = sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
-
-        if (rc != SQLITE_DONE) {
+        auto result = stmt.execute();
+        if (!result) {
             return std::unexpected(queue_error::database_error);
         }
 
@@ -862,16 +826,24 @@ public:
             return std::unexpected(queue_error::message_not_found);
         }
 
-        auto now = std::chrono::system_clock::now();
-        std::string now_str = to_sqlite_timestamp(now);
-
-        std::unique_lock<std::shared_mutex> lock(db_mutex_);
-        if (!db_) {
+        if (!db_adapter_) {
             return std::unexpected(queue_error::not_running);
         }
 
-        // Begin transaction
-        execute_sql("BEGIN TRANSACTION");
+        auto now = std::chrono::system_clock::now();
+        std::string now_str = to_sqlite_timestamp(now);
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& conn_scope = *conn_result;
+
+        // Use transaction_guard for atomic INSERT + DELETE
+        auto guard = integration::transaction_guard::begin(conn_scope.connection());
+        if (!guard) {
+            return std::unexpected(queue_error::database_error);
+        }
 
         // Insert into dead letter queue
         const char* insert_sql =
@@ -880,52 +852,54 @@ public:
             "reason, dead_lettered_at, error_history, correlation_id, message_type) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
-        sqlite3_stmt* stmt = nullptr;
-        int rc = sqlite3_prepare_v2(db_, insert_sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
-            execute_sql("ROLLBACK");
+        auto insert_stmt_result = conn_scope.connection().prepare(insert_sql);
+        if (!insert_stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& insert_stmt = *insert_stmt_result.value();
+
+        std::string created_str = to_sqlite_timestamp(msg->created_at);
+        if (!insert_stmt.bind_string(1, msg->id) ||
+            !insert_stmt.bind_string(2, msg->destination) ||
+            !insert_stmt.bind_string(3, msg->payload) ||
+            !insert_stmt.bind_int64(4, msg->priority) ||
+            !insert_stmt.bind_string(5, created_str) ||
+            !insert_stmt.bind_int64(6, msg->attempt_count) ||
+            !insert_stmt.bind_string(7, reason) ||
+            !insert_stmt.bind_string(8, now_str) ||
+            !insert_stmt.bind_string(9, msg->last_error) ||
+            !insert_stmt.bind_string(10, msg->correlation_id) ||
+            !insert_stmt.bind_string(11, msg->message_type)) {
             return std::unexpected(queue_error::database_error);
         }
 
-        std::string created_str = to_sqlite_timestamp(msg->created_at);
-        sqlite3_bind_text(stmt, 1, msg->id.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 2, msg->destination.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 3, msg->payload.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(stmt, 4, msg->priority);
-        sqlite3_bind_text(stmt, 5, created_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_int(stmt, 6, msg->attempt_count);
-        sqlite3_bind_text(stmt, 7, std::string(reason).c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 8, now_str.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 9, msg->last_error.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 10, msg->correlation_id.c_str(), -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 11, msg->message_type.c_str(), -1, SQLITE_STATIC);
-
-        rc = sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
-
-        if (rc != SQLITE_DONE) {
-            execute_sql("ROLLBACK");
+        auto insert_result = insert_stmt.execute();
+        if (!insert_result) {
             return std::unexpected(queue_error::database_error);
         }
 
         // Delete from main queue
         const char* delete_sql = "DELETE FROM message_queue WHERE id = ?";
-        rc = sqlite3_prepare_v2(db_, delete_sql, -1, &stmt, nullptr);
-        if (rc != SQLITE_OK) {
-            execute_sql("ROLLBACK");
+        auto delete_stmt_result = conn_scope.connection().prepare(delete_sql);
+        if (!delete_stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& delete_stmt = *delete_stmt_result.value();
+
+        if (!delete_stmt.bind_string(1, message_id)) {
             return std::unexpected(queue_error::database_error);
         }
 
-        sqlite3_bind_text(stmt, 1, std::string(message_id).c_str(), -1, SQLITE_TRANSIENT);
-        rc = sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
-
-        if (rc != SQLITE_DONE) {
-            execute_sql("ROLLBACK");
+        auto delete_result = delete_stmt.execute();
+        if (!delete_result) {
             return std::unexpected(queue_error::database_error);
         }
 
-        execute_sql("COMMIT");
+        // Commit transaction (auto-rollback if this line is not reached)
+        auto commit_result = guard->commit();
+        if (!commit_result) {
+            return std::unexpected(queue_error::database_error);
+        }
 
         // Update statistics
         {
@@ -1051,7 +1025,7 @@ public:
             std::optional<queued_message> msg;
 
             {
-                std::shared_lock<std::shared_mutex> lock(db_mutex_);
+                std::unique_lock<std::mutex> lock(worker_mutex_);
                 worker_cv_.wait(lock, [this]() {
                     return !workers_running_ || queue_depth_internal("") > 0;
                 });
@@ -1242,6 +1216,195 @@ public:
         return results;
     }
 
+    std::expected<void, queue_error> retry_dead_letter_internal(std::string_view message_id) {
+        if (!db_adapter_) {
+            return std::unexpected(queue_error::not_running);
+        }
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& conn_scope = *conn_result;
+
+        // Get the dead letter message
+        const char* select_sql =
+            "SELECT id, destination, payload, priority, created_at, correlation_id, message_type "
+            "FROM dead_letter_queue WHERE id = ?";
+
+        auto select_stmt_result = conn_scope.connection().prepare(select_sql);
+        if (!select_stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& select_stmt = *select_stmt_result.value();
+
+        if (!select_stmt.bind_string(1, message_id)) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        auto select_result = select_stmt.execute();
+        if (!select_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        if (!select_result.value()->next()) {
+            return std::unexpected(queue_error::message_not_found);
+        }
+
+        const auto& row = select_result.value()->current_row();
+        queued_message msg;
+        msg.id = row.get_string(0);
+        msg.destination = row.get_string(1);
+        msg.payload = row.get_string(2);
+        msg.priority = static_cast<int>(row.get_int64(3));
+        msg.created_at = from_sqlite_timestamp(row.get_string(4));
+        if (!row.is_null(5)) msg.correlation_id = row.get_string(5);
+        if (!row.is_null(6)) msg.message_type = row.get_string(6);
+
+        // Use transaction_guard for atomic INSERT + DELETE
+        auto guard = integration::transaction_guard::begin(conn_scope.connection());
+        if (!guard) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        // Insert back into main queue with reset attempt count
+        auto now = std::chrono::system_clock::now();
+        std::string now_str = to_sqlite_timestamp(now);
+        std::string created_str = to_sqlite_timestamp(msg.created_at);
+
+        const char* insert_sql =
+            "INSERT INTO message_queue "
+            "(id, destination, payload, priority, state, created_at, scheduled_at, "
+            "attempt_count, correlation_id, message_type) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)";
+
+        auto insert_stmt_result = conn_scope.connection().prepare(insert_sql);
+        if (!insert_stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& insert_stmt = *insert_stmt_result.value();
+
+        if (!insert_stmt.bind_string(1, msg.id) ||
+            !insert_stmt.bind_string(2, msg.destination) ||
+            !insert_stmt.bind_string(3, msg.payload) ||
+            !insert_stmt.bind_int64(4, msg.priority) ||
+            !insert_stmt.bind_int64(5, static_cast<int>(message_state::pending)) ||
+            !insert_stmt.bind_string(6, created_str) ||
+            !insert_stmt.bind_string(7, now_str) ||
+            !insert_stmt.bind_string(8, msg.correlation_id) ||
+            !insert_stmt.bind_string(9, msg.message_type)) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        auto insert_result = insert_stmt.execute();
+        if (!insert_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        // Delete from dead letter queue
+        const char* delete_sql = "DELETE FROM dead_letter_queue WHERE id = ?";
+        auto delete_stmt_result = conn_scope.connection().prepare(delete_sql);
+        if (!delete_stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& delete_stmt = *delete_stmt_result.value();
+
+        if (!delete_stmt.bind_string(1, message_id)) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        auto delete_result = delete_stmt.execute();
+        if (!delete_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        auto commit_result = guard->commit();
+        if (!commit_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        // Update statistics
+        {
+            std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+            if (stats_.dead_letter_count > 0) stats_.dead_letter_count--;
+            stats_.pending_count++;
+        }
+
+        // Notify workers
+        worker_cv_.notify_one();
+
+        return {};
+    }
+
+    std::expected<void, queue_error> delete_dead_letter_internal(std::string_view message_id) {
+        if (!db_adapter_) {
+            return std::unexpected(queue_error::not_running);
+        }
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& conn_scope = *conn_result;
+
+        const char* sql = "DELETE FROM dead_letter_queue WHERE id = ?";
+
+        auto stmt_result = conn_scope.connection().prepare(sql);
+        if (!stmt_result) {
+            return std::unexpected(queue_error::database_error);
+        }
+        auto& stmt = *stmt_result.value();
+
+        if (!stmt.bind_string(1, message_id)) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        auto result = stmt.execute();
+        if (!result) {
+            return std::unexpected(queue_error::database_error);
+        }
+
+        if (result.value()->affected_rows() == 0) {
+            return std::unexpected(queue_error::message_not_found);
+        }
+
+        // Update statistics
+        {
+            std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+            if (stats_.dead_letter_count > 0) stats_.dead_letter_count--;
+        }
+
+        return {};
+    }
+
+    size_t purge_dead_letters_internal() {
+        if (!db_adapter_) return 0;
+
+        size_t count = dead_letter_count_internal();
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) return 0;
+
+        (void)conn_result->connection().execute("DELETE FROM dead_letter_queue");
+
+        // Update statistics
+        {
+            std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+            stats_.dead_letter_count = 0;
+        }
+
+        return count;
+    }
+
+    void compact_internal() {
+        if (!db_adapter_) return;
+
+        auto conn_result = integration::connection_scope::acquire(*db_adapter_);
+        if (!conn_result) return;
+
+        (void)conn_result->connection().execute("VACUUM");
+    }
+
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
     /**
      * @brief Schedule worker job using IExecutor
@@ -1261,7 +1424,7 @@ public:
             std::optional<queued_message> msg;
 
             {
-                std::shared_lock<std::shared_mutex> lock(db_mutex_);
+                std::unique_lock<std::mutex> lock(worker_mutex_);
                 worker_cv_.wait_for(lock, std::chrono::milliseconds{100}, [this]() {
                     return !workers_running_ || queue_depth_internal("") > 0;
                 });
@@ -1472,190 +1635,21 @@ std::expected<void, queue_error> queue_manager::retry_dead_letter(std::string_vi
     if (!pimpl_->running_) {
         return std::unexpected(queue_error::not_running);
     }
-
-    // Get dead letter entry
-    auto entries = pimpl_->get_dead_letters_internal(1, 0);
-    std::optional<dead_letter_entry> target;
-    for (const auto& entry : entries) {
-        if (entry.message.id == message_id) {
-            target = entry;
-            break;
-        }
-    }
-
-    // Search in all dead letters for the specific ID
-    std::unique_lock<std::shared_mutex> lock(pimpl_->db_mutex_);
-    if (!pimpl_->db_) {
-        return std::unexpected(queue_error::not_running);
-    }
-
-    // Get the dead letter message
-    const char* select_sql =
-        "SELECT id, destination, payload, priority, created_at, correlation_id, message_type "
-        "FROM dead_letter_queue WHERE id = ?";
-
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(pimpl_->db_, select_sql, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        return std::unexpected(queue_error::database_error);
-    }
-
-    sqlite3_bind_text(stmt, 1, std::string(message_id).c_str(), -1, SQLITE_TRANSIENT);
-
-    queued_message msg;
-    bool found = false;
-    if (sqlite3_step(stmt) == SQLITE_ROW) {
-        msg.id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        msg.destination = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-        msg.payload = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-        msg.priority = sqlite3_column_int(stmt, 3);
-        msg.created_at = from_sqlite_timestamp(
-            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4)));
-
-        const char* corr_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
-        if (corr_id) msg.correlation_id = corr_id;
-
-        const char* msg_type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
-        if (msg_type) msg.message_type = msg_type;
-
-        found = true;
-    }
-    sqlite3_finalize(stmt);
-
-    if (!found) {
-        return std::unexpected(queue_error::message_not_found);
-    }
-
-    // Begin transaction
-    pimpl_->execute_sql("BEGIN TRANSACTION");
-
-    // Insert back into main queue with reset attempt count
-    auto now = std::chrono::system_clock::now();
-    std::string now_str = to_sqlite_timestamp(now);
-    std::string created_str = to_sqlite_timestamp(msg.created_at);
-
-    const char* insert_sql =
-        "INSERT INTO message_queue "
-        "(id, destination, payload, priority, state, created_at, scheduled_at, "
-        "attempt_count, correlation_id, message_type) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)";
-
-    rc = sqlite3_prepare_v2(pimpl_->db_, insert_sql, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        pimpl_->execute_sql("ROLLBACK");
-        return std::unexpected(queue_error::database_error);
-    }
-
-    sqlite3_bind_text(stmt, 1, msg.id.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, msg.destination.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, msg.payload.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 4, msg.priority);
-    sqlite3_bind_int(stmt, 5, static_cast<int>(message_state::pending));
-    sqlite3_bind_text(stmt, 6, created_str.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 7, now_str.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 8, msg.correlation_id.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 9, msg.message_type.c_str(), -1, SQLITE_STATIC);
-
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-
-    if (rc != SQLITE_DONE) {
-        pimpl_->execute_sql("ROLLBACK");
-        return std::unexpected(queue_error::database_error);
-    }
-
-    // Delete from dead letter queue
-    const char* delete_sql = "DELETE FROM dead_letter_queue WHERE id = ?";
-    rc = sqlite3_prepare_v2(pimpl_->db_, delete_sql, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        pimpl_->execute_sql("ROLLBACK");
-        return std::unexpected(queue_error::database_error);
-    }
-
-    sqlite3_bind_text(stmt, 1, std::string(message_id).c_str(), -1, SQLITE_TRANSIENT);
-    rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-
-    if (rc != SQLITE_DONE) {
-        pimpl_->execute_sql("ROLLBACK");
-        return std::unexpected(queue_error::database_error);
-    }
-
-    pimpl_->execute_sql("COMMIT");
-
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> stats_lock(pimpl_->stats_mutex_);
-        if (pimpl_->stats_.dead_letter_count > 0) pimpl_->stats_.dead_letter_count--;
-        pimpl_->stats_.pending_count++;
-    }
-
-    // Notify workers
-    pimpl_->worker_cv_.notify_one();
-
-    return {};
+    return pimpl_->retry_dead_letter_internal(message_id);
 }
 
 std::expected<void, queue_error> queue_manager::delete_dead_letter(std::string_view message_id) {
     if (!pimpl_->running_) {
         return std::unexpected(queue_error::not_running);
     }
-
-    std::unique_lock<std::shared_mutex> lock(pimpl_->db_mutex_);
-    if (!pimpl_->db_) {
-        return std::unexpected(queue_error::not_running);
-    }
-
-    const char* sql = "DELETE FROM dead_letter_queue WHERE id = ?";
-
-    sqlite3_stmt* stmt = nullptr;
-    int rc = sqlite3_prepare_v2(pimpl_->db_, sql, -1, &stmt, nullptr);
-    if (rc != SQLITE_OK) {
-        return std::unexpected(queue_error::database_error);
-    }
-
-    sqlite3_bind_text(stmt, 1, std::string(message_id).c_str(), -1, SQLITE_TRANSIENT);
-    rc = sqlite3_step(stmt);
-    int changes = sqlite3_changes(pimpl_->db_);
-    sqlite3_finalize(stmt);
-
-    if (rc != SQLITE_DONE) {
-        return std::unexpected(queue_error::database_error);
-    }
-
-    if (changes == 0) {
-        return std::unexpected(queue_error::message_not_found);
-    }
-
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> stats_lock(pimpl_->stats_mutex_);
-        if (pimpl_->stats_.dead_letter_count > 0) pimpl_->stats_.dead_letter_count--;
-    }
-
-    return {};
+    return pimpl_->delete_dead_letter_internal(message_id);
 }
 
 size_t queue_manager::purge_dead_letters() {
     if (!pimpl_->running_) {
         return 0;
     }
-
-    std::unique_lock<std::shared_mutex> lock(pimpl_->db_mutex_);
-    if (!pimpl_->db_) {
-        return 0;
-    }
-
-    size_t count = pimpl_->dead_letter_count_internal();
-    pimpl_->execute_sql("DELETE FROM dead_letter_queue");
-
-    // Update statistics
-    {
-        std::lock_guard<std::mutex> stats_lock(pimpl_->stats_mutex_);
-        pimpl_->stats_.dead_letter_count = 0;
-    }
-
-    return count;
+    return pimpl_->purge_dead_letters_internal();
 }
 
 void queue_manager::set_dead_letter_callback(dead_letter_callback callback) {
@@ -1842,10 +1836,7 @@ size_t queue_manager::cleanup_expired() {
 }
 
 void queue_manager::compact() {
-    std::unique_lock<std::shared_mutex> lock(pimpl_->db_mutex_);
-    if (pimpl_->db_) {
-        pimpl_->execute_sql("VACUUM");
-    }
+    pimpl_->compact_internal();
 }
 
 size_t queue_manager::recover() {
