@@ -13,7 +13,7 @@
 
 #include "network_system_mllp_server.h"
 
-#include <kcenon/network/session/messaging_session.h>
+#include <kcenon/network/detail/session/messaging_session.h>
 
 #include <asio.hpp>
 
