@@ -160,7 +160,6 @@ if(NOT BRIDGE_STANDALONE_BUILD)
         src/integration/executor_adapter.cpp
         src/integration/logger_adapter.cpp
         src/integration/network_adapter.cpp
-        src/integration/thread_adapter.cpp
     )
     list(APPEND PACS_BRIDGE_HEADERS
         include/pacs/bridge/integration/executor_adapter.h
@@ -182,6 +181,11 @@ if(PACS_BRIDGE_HAS_SQLITE)
         src/integration/database_adapter.cpp
     )
 endif()
+
+# Thread adapter (always available - simple_thread_adapter fallback for standalone)
+list(APPEND PACS_BRIDGE_SOURCES
+    src/integration/thread_adapter.cpp
+)
 
 # MWL adapter - abstraction for MWL storage
 # See: https://github.com/kcenon/pacs_bridge/issues/285
