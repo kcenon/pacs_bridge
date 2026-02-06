@@ -14,7 +14,6 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <future>
 #include <mutex>
 #include <shared_mutex>
 #include <sstream>
@@ -23,38 +22,6 @@
 namespace integration = pacs::bridge::integration;
 
 namespace pacs::bridge::pacs_adapter {
-
-// =============================================================================
-// IExecutor Job Implementations (when available)
-// =============================================================================
-
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-
-/**
- * @brief Job implementation for periodic monitor execution
- *
- * Wraps a single monitor iteration. Designed to be rescheduled
- * after completion for continuous monitoring.
- */
-class mpps_monitor_job : public kcenon::common::interfaces::IJob {
-public:
-    explicit mpps_monitor_job(std::function<void()> monitor_func)
-        : monitor_func_(std::move(monitor_func)) {}
-
-    kcenon::common::VoidResult execute() override {
-        if (monitor_func_) {
-            monitor_func_();
-        }
-        return std::monostate{};
-    }
-
-    std::string get_name() const override { return "mpps_monitor"; }
-
-private:
-    std::function<void()> monitor_func_;
-};
-
-#endif  // PACS_BRIDGE_STANDALONE_BUILD
 
 // =============================================================================
 // Utility Function Implementations
@@ -366,15 +333,7 @@ public:
         // Start monitor for connection health
         if (config_.auto_reconnect) {
             stop_requested_ = false;
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-            if (config_.executor) {
-                schedule_monitor_job();
-            } else {
-                monitor_thread_ = std::thread(&mpps_handler_impl::monitor_connection, this);
-            }
-#else
             monitor_thread_ = std::thread(&mpps_handler_impl::monitor_connection, this);
-#endif
         }
 
         return {};
@@ -396,12 +355,6 @@ public:
         if (graceful) {
             std::unique_lock lock(pending_mutex_);
         }
-
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-        if (config_.executor && monitor_future_.valid()) {
-            monitor_future_.wait_for(std::chrono::seconds{5});
-        }
-#endif
 
         if (monitor_thread_.joinable()) {
             monitor_thread_.join();
@@ -703,34 +656,6 @@ private:
     // Monitor Thread
     // =========================================================================
 
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-    void schedule_monitor_job() {
-        if (stop_requested_ || !config_.executor) {
-            return;
-        }
-
-        auto delay = std::chrono::duration_cast<std::chrono::milliseconds>(
-            config_.reconnect_delay);
-
-        auto job = std::make_unique<mpps_monitor_job>([this]() {
-            if (stop_requested_) {
-                return;
-            }
-
-            {
-                std::shared_lock lock(state_mutex_);
-            }
-
-            schedule_monitor_job();
-        });
-
-        auto result = config_.executor->execute_delayed(std::move(job), delay);
-        if (result.is_ok()) {
-            monitor_future_ = std::move(result.value());
-        }
-    }
-#endif  // PACS_BRIDGE_STANDALONE_BUILD
-
     void monitor_connection() {
         while (!stop_requested_) {
             std::this_thread::sleep_for(config_.reconnect_delay);
@@ -816,10 +741,6 @@ private:
 
     // Monitor thread
     std::thread monitor_thread_;
-
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-    std::future<void> monitor_future_;
-#endif
 
     // Statistics
     statistics stats_;
