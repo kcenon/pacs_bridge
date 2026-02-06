@@ -457,6 +457,50 @@ private:
 };
 
 // =============================================================================
+// Database Adapter Statistics
+// =============================================================================
+
+/**
+ * @brief Statistics for database adapter operations
+ *
+ * Tracks connection pool usage, query execution counts, and error rates.
+ * All counters are cumulative since adapter creation.
+ *
+ * @see session_stats in mllp_network_adapter.h for similar pattern
+ */
+struct database_adapter_stats {
+    /** Total connections acquired from pool */
+    uint64_t connections_acquired = 0;
+
+    /** Total connections released back to pool */
+    uint64_t connections_released = 0;
+
+    /** Peak concurrent active connections (high watermark) */
+    std::size_t peak_active_connections = 0;
+
+    /** Total connection acquire failures (pool exhausted, etc.) */
+    uint64_t connection_failures = 0;
+
+    /** Total queries executed (via execute() and prepared statements) */
+    uint64_t queries_executed = 0;
+
+    /** Total query execution failures */
+    uint64_t query_failures = 0;
+
+    /** Total schema DDL operations executed */
+    uint64_t schemas_executed = 0;
+
+    /** Total schema DDL failures */
+    uint64_t schema_failures = 0;
+
+    /** Total transactions committed */
+    uint64_t transactions_committed = 0;
+
+    /** Total transactions rolled back */
+    uint64_t transactions_rolled_back = 0;
+};
+
+// =============================================================================
 // Database Adapter
 // =============================================================================
 
@@ -516,6 +560,18 @@ public:
      */
     [[nodiscard]] virtual std::expected<void, database_error>
     execute_schema(std::string_view ddl) = 0;
+
+    // =========================================================================
+    // Statistics
+    // =========================================================================
+
+    /**
+     * @brief Get cumulative adapter statistics
+     *
+     * Returns a snapshot of all counters since adapter creation.
+     * Thread-safe: values are captured under lock.
+     */
+    [[nodiscard]] virtual database_adapter_stats stats() const = 0;
 
     // =========================================================================
     // Configuration

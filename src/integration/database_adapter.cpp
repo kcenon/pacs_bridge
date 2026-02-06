@@ -670,9 +670,12 @@ public:
                 auto conn = std::make_shared<sqlite_connection>(config_);
                 if (conn->is_valid()) {
                     active_count_++;
+                    stats_.connections_acquired++;
+                    update_peak_locked();
                     return conn;
                 }
             }
+            stats_.connection_failures++;
             return std::unexpected(database_error::pool_exhausted);
         }
 
@@ -685,10 +688,13 @@ public:
             conn = std::make_shared<sqlite_connection>(config_);
             if (!conn->is_valid()) {
                 active_count_--;
+                stats_.connection_failures++;
                 return std::unexpected(database_error::connection_failed);
             }
         }
 
+        stats_.connections_acquired++;
+        update_peak_locked();
         return conn;
     }
 
@@ -699,6 +705,7 @@ public:
 
         std::lock_guard<std::mutex> lock(pool_mutex_);
         active_count_--;
+        stats_.connections_released++;
 
         if (conn->is_valid() && pool_.size() < config_.pool_size) {
             pool_.push(std::dynamic_pointer_cast<sqlite_connection>(conn));
@@ -724,6 +731,8 @@ public:
     execute_schema(std::string_view ddl) override {
         auto conn_result = acquire_connection();
         if (!conn_result) {
+            std::lock_guard<std::mutex> lock(pool_mutex_);
+            stats_.schema_failures++;
             return std::unexpected(conn_result.error());
         }
 
@@ -731,6 +740,8 @@ public:
 
         if (!result) {
             release_connection(*conn_result);
+            std::lock_guard<std::mutex> lock(pool_mutex_);
+            stats_.schema_failures++;
             return std::unexpected(result.error());
         }
 
@@ -740,7 +751,17 @@ public:
         }
 
         release_connection(*conn_result);
+
+        {
+            std::lock_guard<std::mutex> lock(pool_mutex_);
+            stats_.schemas_executed++;
+        }
         return {};
+    }
+
+    [[nodiscard]] database_adapter_stats stats() const override {
+        std::lock_guard<std::mutex> lock(pool_mutex_);
+        return stats_;
     }
 
     [[nodiscard]] const database_config& config() const override {
@@ -748,10 +769,18 @@ public:
     }
 
 private:
+    /** Update peak active connections (must be called under lock) */
+    void update_peak_locked() {
+        if (active_count_ > stats_.peak_active_connections) {
+            stats_.peak_active_connections = active_count_;
+        }
+    }
+
     database_config config_;
     mutable std::mutex pool_mutex_;
     std::queue<std::shared_ptr<sqlite_connection>> pool_;
     std::size_t active_count_ = 0;
+    database_adapter_stats stats_;
 };
 
 // =============================================================================
@@ -1165,7 +1194,18 @@ public:
     acquire_connection() override {
         auto conn = pool_->acquire();
         if (!conn) {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            stats_.connection_failures++;
             return std::unexpected(database_error::pool_exhausted);
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            stats_.connections_acquired++;
+            auto active = pool_->active();
+            if (active > stats_.peak_active_connections) {
+                stats_.peak_active_connections = active;
+            }
         }
         return std::make_shared<pool_connection_wrapper>(std::move(conn));
     }
@@ -1174,6 +1214,9 @@ public:
         // Connection returned to pool automatically via RAII
         // No explicit action needed - pooled_connection destructor handles return
         (void)conn;  // Suppress unused parameter warning
+
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        stats_.connections_released++;
     }
 
     [[nodiscard]] std::size_t available_connections() const override {
@@ -1192,11 +1235,15 @@ public:
     execute_schema(std::string_view ddl) override {
         auto conn_result = acquire_connection();
         if (!conn_result) {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            stats_.schema_failures++;
             return std::unexpected(conn_result.error());
         }
 
         auto result = (*conn_result)->execute(ddl);
         if (!result) {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            stats_.schema_failures++;
             return std::unexpected(result.error());
         }
 
@@ -1205,7 +1252,16 @@ public:
             // DDL doesn't return rows, but we need to step through
         }
 
+        {
+            std::lock_guard<std::mutex> lock(stats_mutex_);
+            stats_.schemas_executed++;
+        }
         return {};
+    }
+
+    [[nodiscard]] database_adapter_stats stats() const override {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        return stats_;
     }
 
     [[nodiscard]] const database_config& config() const override {
@@ -1215,6 +1271,8 @@ public:
 private:
     std::shared_ptr<kcenon::database::database_pool> pool_;
     database_config config_;
+    mutable std::mutex stats_mutex_;
+    database_adapter_stats stats_;
 };
 
 }  // namespace pacs::bridge::integration
