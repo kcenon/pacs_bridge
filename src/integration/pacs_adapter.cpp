@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <cassert>
+#include <mutex>
+#include <unordered_map>
 
 namespace pacs::bridge::integration {
 
@@ -89,9 +91,12 @@ void dicom_dataset::clear() {
 bool mpps_record::is_valid() const {
     // Check required fields
     if (sop_instance_uid.empty()) return false;
-    if (scheduled_procedure_step_id.empty()) return false;
-    if (performed_procedure_step_id.empty()) return false;
     if (status.empty()) return false;
+
+    // Require at least one identifier for tracking
+    if (scheduled_procedure_step_id.empty() && accession_number.empty()) {
+        return false;
+    }
 
     // Validate status
     if (status != "IN PROGRESS" && status != "COMPLETED" && status != "DISCONTINUED") {
@@ -126,9 +131,10 @@ bool mwl_item::is_valid() const {
 // =============================================================================
 
 /**
- * @brief Stub implementation of MPPS adapter (standalone mode)
+ * @brief In-memory implementation of MPPS adapter (standalone mode)
  *
- * Provides no-op implementations for testing and standalone usage.
+ * Provides thread-safe in-memory storage for MPPS records,
+ * enabling standalone testing and operation without pacs_system.
  */
 class stub_mpps_adapter : public mpps_adapter {
 public:
@@ -136,7 +142,12 @@ public:
         if (!record.is_valid()) {
             return std::unexpected(pacs_error::validation_failed);
         }
-        // Stub: no-op implementation
+
+        std::lock_guard lock(mutex_);
+        auto [it, inserted] = records_.emplace(record.sop_instance_uid, record);
+        if (!inserted) {
+            return std::unexpected(pacs_error::duplicate_entry);
+        }
         return {};
     }
 
@@ -144,14 +155,50 @@ public:
         if (!record.is_valid()) {
             return std::unexpected(pacs_error::validation_failed);
         }
-        // Stub: no-op implementation
+
+        std::lock_guard lock(mutex_);
+        auto it = records_.find(record.sop_instance_uid);
+        if (it == records_.end()) {
+            return std::unexpected(pacs_error::not_found);
+        }
+        it->second = record;
         return {};
     }
 
     std::expected<std::vector<mpps_record>, pacs_error> query_mpps(
         const mpps_query_params& params) override {
-        // Stub: return empty result
-        return std::vector<mpps_record>{};
+        std::lock_guard lock(mutex_);
+        std::vector<mpps_record> results;
+
+        for (const auto& [uid, record] : records_) {
+            bool match = true;
+            if (params.patient_id && *params.patient_id != record.patient_id) {
+                match = false;
+            }
+            if (params.study_instance_uid && *params.study_instance_uid != record.study_instance_uid) {
+                match = false;
+            }
+            if (params.status && *params.status != record.status) {
+                match = false;
+            }
+            if (params.station_ae_title && *params.station_ae_title != record.performed_station_ae_title) {
+                match = false;
+            }
+            if (params.modality && *params.modality != record.modality) {
+                match = false;
+            }
+            if (params.accession_number && *params.accession_number != record.accession_number) {
+                match = false;
+            }
+            if (match) {
+                results.push_back(record);
+                if (results.size() >= params.max_results) {
+                    break;
+                }
+            }
+        }
+
+        return results;
     }
 
     std::expected<mpps_record, pacs_error> get_mpps(
@@ -159,9 +206,18 @@ public:
         if (sop_instance_uid.empty()) {
             return std::unexpected(pacs_error::invalid_sop_uid);
         }
-        // Stub: not found
-        return std::unexpected(pacs_error::not_found);
+
+        std::lock_guard lock(mutex_);
+        auto it = records_.find(std::string(sop_instance_uid));
+        if (it == records_.end()) {
+            return std::unexpected(pacs_error::not_found);
+        }
+        return it->second;
     }
+
+private:
+    mutable std::mutex mutex_;
+    std::unordered_map<std::string, mpps_record> records_;
 };
 
 // =============================================================================
