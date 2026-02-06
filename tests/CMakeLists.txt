@@ -1008,6 +1008,26 @@ else()
 endif()
 
 # =============================================================================
+# System Adapter Integration Tests (Issue #320, Phase 5b)
+# =============================================================================
+
+# System Integration Tests - Cross-adapter workflow tests
+# Requires SQLite for database adapter standalone mode
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_integration_test(system_integration_test "integration;adapter;system;phase5b" 120)
+else()
+    message(STATUS "Skipping system_integration_test: requires SQLite (PACS_BRIDGE_HAS_SQLITE)")
+endif()
+
+# Standalone Mode Tests - Fallback adapter verification
+# Requires SQLite for database adapter standalone mode
+if(PACS_BRIDGE_HAS_SQLITE)
+    add_integration_test(standalone_mode_test "integration;adapter;standalone;phase5b" 120)
+else()
+    message(STATUS "Skipping standalone_mode_test: requires SQLite (PACS_BRIDGE_HAS_SQLITE)")
+endif()
+
+# =============================================================================
 # Test Summary
 # =============================================================================
 
@@ -1128,6 +1148,14 @@ message(STATUS "")
 message(STATUS "Phase 5 EMR Integration Tests:")
 message(STATUS "  - emr_e2e_test")
 message(STATUS "  - hapi_fhir_test")
+message(STATUS "")
+message(STATUS "Phase 5b System Adapter Integration Tests (Issue #320):")
+if(PACS_BRIDGE_HAS_SQLITE)
+    message(STATUS "  - system_integration_test (cross-adapter workflows)")
+    message(STATUS "  - standalone_mode_test (fallback adapter verification)")
+else()
+    message(STATUS "  (skipped - requires SQLite)")
+endif()
 message(STATUS "==========================")
 message(STATUS "")
 
