@@ -38,11 +38,6 @@ namespace pacs::bridge::integration {
 class mpps_adapter;
 }
 
-// IExecutor interface for task execution (when available)
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-#include <kcenon/common/interfaces/executor_interface.h>
-#endif
-
 namespace pacs::bridge::pacs_adapter {
 
 // =============================================================================
@@ -430,14 +425,6 @@ struct mpps_handler_config {
     /** MPPS adapter for persistence (nullptr = create default via create_pacs_adapter()) */
     std::shared_ptr<integration::mpps_adapter> mpps_adapter;
 
-    // =========================================================================
-    // Executor Options (IExecutor integration)
-    // =========================================================================
-
-#ifndef PACS_BRIDGE_STANDALONE_BUILD
-    /** Optional executor for task execution (nullptr = use internal std::thread) */
-    std::shared_ptr<kcenon::common::interfaces::IExecutor> executor;
-#endif
 };
 
 // =============================================================================
