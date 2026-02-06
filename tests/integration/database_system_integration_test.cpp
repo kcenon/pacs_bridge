@@ -609,32 +609,165 @@ TEST_F(DatabaseAdapterTest, ConstraintViolation) {
 }
 
 // =============================================================================
+// Adapter Statistics Tests (Standalone Mode)
+// =============================================================================
+
+TEST_F(DatabaseAdapterTest, StatsConnectionPoolTracking) {
+    create_adapter(3);
+
+    // Initial stats should be zeroed
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.connections_acquired, 0u);
+    EXPECT_EQ(s.connections_released, 0u);
+    EXPECT_EQ(s.peak_active_connections, 0u);
+
+    // Acquire and release connections
+    auto conn1 = adapter_->acquire_connection();
+    ASSERT_EXPECTED_OK(conn1);
+
+    auto conn2 = adapter_->acquire_connection();
+    ASSERT_EXPECTED_OK(conn2);
+
+    s = adapter_->stats();
+    EXPECT_EQ(s.connections_acquired, 2u);
+    EXPECT_EQ(s.peak_active_connections, 2u);
+
+    adapter_->release_connection(*conn1);
+    adapter_->release_connection(*conn2);
+
+    s = adapter_->stats();
+    EXPECT_EQ(s.connections_released, 2u);
+    EXPECT_EQ(s.peak_active_connections, 2u);  // Peak preserved
+}
+
+TEST_F(DatabaseAdapterTest, StatsSchemaTracking) {
+    create_adapter();
+
+    auto ok = adapter_->execute_schema(
+        "CREATE TABLE stats_test (id INTEGER PRIMARY KEY, name TEXT)"
+    );
+    ASSERT_EXPECTED_OK(ok);
+
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.schemas_executed, 1u);
+    EXPECT_EQ(s.schema_failures, 0u);
+
+    // Invalid schema increments failure counter
+    auto bad = adapter_->execute_schema("INVALID DDL STATEMENT");
+    ASSERT_EXPECTED_ERROR(bad);
+
+    s = adapter_->stats();
+    EXPECT_EQ(s.schemas_executed, 1u);
+    EXPECT_EQ(s.schema_failures, 1u);
+}
+
+TEST_F(DatabaseAdapterTest, StatsConcurrentConnectionTracking) {
+    create_adapter(5);
+
+    const int num_threads = 4;
+    const int ops_per_thread = 5;
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([this]() {
+            for (int j = 0; j < ops_per_thread; ++j) {
+                auto conn = adapter_->acquire_connection();
+                if (conn) {
+                    adapter_->release_connection(*conn);
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.connections_acquired, s.connections_released);
+    EXPECT_GE(s.connections_acquired,
+              static_cast<uint64_t>(num_threads * ops_per_thread));
+    EXPECT_GE(s.peak_active_connections, 1u);
+}
+
+// =============================================================================
 // Conditional Compilation - database_system Integration Tests
 // =============================================================================
 
 #ifdef PACS_BRIDGE_HAS_DATABASE_SYSTEM
 
-TEST_F(DatabaseAdapterTest, DatabaseSystemPoolIntegration) {
-    // Test that database_system pool integration works
-    // This test requires database_system to be available
-
+TEST_F(DatabaseAdapterTest, DatabaseSystemPoolCreation) {
+    // Verify pool-based adapter can be created via factory
     database_config config;
-    config.connection_string = "test_connection_string";
+    config.connection_string = "sqlite://test_pool.db";
     config.pool_size = 5;
+    config.connection_timeout = std::chrono::seconds{10};
 
-    // Note: This requires actual database_system::database_pool implementation
-    // which is part of issue #299
-    GTEST_SKIP() << "database_system integration pending (issue #299)";
+    auto adapter = create_database_adapter(config);
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_TRUE(adapter->is_healthy());
+    EXPECT_EQ(adapter->config().pool_size, 5u);
 }
 
-TEST_F(DatabaseAdapterTest, PerformanceComparison) {
-    // Compare performance between database_system and SQLite
-    GTEST_SKIP() << "Performance comparison pending (issue #299)";
+TEST_F(DatabaseAdapterTest, DatabaseSystemPoolBasicOperations) {
+    // Verify basic CRUD via pool adapter
+    database_config config;
+    config.connection_string = "sqlite://test_pool_ops.db";
+    config.pool_size = 3;
+
+    auto adapter = create_database_adapter(config);
+    ASSERT_NE(adapter, nullptr);
+
+    // Schema execution
+    auto schema = adapter->execute_schema(
+        "CREATE TABLE pool_test (id INTEGER PRIMARY KEY, value TEXT)"
+    );
+    ASSERT_EXPECTED_OK(schema);
+
+    // Connection acquire/release cycle
+    auto conn = adapter->acquire_connection();
+    ASSERT_EXPECTED_OK(conn);
+    EXPECT_TRUE(conn.value()->is_valid());
+
+    auto insert = conn.value()->execute(
+        "INSERT INTO pool_test (value) VALUES ('pool_value')"
+    );
+    ASSERT_EXPECTED_OK(insert);
+
+    adapter->release_connection(*conn);
 }
 
-TEST_F(DatabaseAdapterTest, FallbackBehavior) {
-    // Test fallback to SQLite when database_system unavailable
-    GTEST_SKIP() << "Fallback behavior pending (issue #299)";
+TEST_F(DatabaseAdapterTest, DatabaseSystemPoolMetrics) {
+    // Verify metrics work with pool adapter
+    database_config config;
+    config.connection_string = "sqlite://test_pool_metrics.db";
+    config.pool_size = 3;
+
+    auto adapter = create_database_adapter(config);
+    ASSERT_NE(adapter, nullptr);
+
+    auto conn = adapter->acquire_connection();
+    ASSERT_EXPECTED_OK(conn);
+
+    auto s = adapter->stats();
+    EXPECT_EQ(s.connections_acquired, 1u);
+    EXPECT_GE(s.peak_active_connections, 1u);
+
+    adapter->release_connection(*conn);
+
+    s = adapter->stats();
+    EXPECT_EQ(s.connections_released, 1u);
+}
+
+TEST_F(DatabaseAdapterTest, DatabaseSystemFallbackToSqlite) {
+    // When connection_string is empty, should fall back to SQLite
+    database_config config;
+    config.database_path = test_db_path_.string();
+    config.pool_size = 3;
+
+    auto adapter = create_database_adapter(config);
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_TRUE(adapter->is_healthy());
 }
 
 #endif  // PACS_BRIDGE_HAS_DATABASE_SYSTEM

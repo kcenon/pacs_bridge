@@ -555,5 +555,84 @@ TEST_F(DatabaseAdapterTest, ConcurrentAccess) {
     adapter_->release_connection(*conn_result);
 }
 
+// =============================================================================
+// Statistics Tests
+// =============================================================================
+
+TEST_F(DatabaseAdapterTest, StatsInitialState) {
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.connections_acquired, 0u);
+    EXPECT_EQ(s.connections_released, 0u);
+    EXPECT_EQ(s.peak_active_connections, 0u);
+    EXPECT_EQ(s.connection_failures, 0u);
+    EXPECT_EQ(s.queries_executed, 0u);
+    EXPECT_EQ(s.query_failures, 0u);
+    EXPECT_EQ(s.schemas_executed, 0u);
+    EXPECT_EQ(s.schema_failures, 0u);
+    EXPECT_EQ(s.transactions_committed, 0u);
+    EXPECT_EQ(s.transactions_rolled_back, 0u);
+}
+
+TEST_F(DatabaseAdapterTest, StatsConnectionTracking) {
+    auto conn = adapter_->acquire_connection();
+    ASSERT_TRUE(conn.has_value());
+
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.connections_acquired, 1u);
+    EXPECT_EQ(s.connections_released, 0u);
+    EXPECT_EQ(s.peak_active_connections, 1u);
+
+    adapter_->release_connection(*conn);
+
+    s = adapter_->stats();
+    EXPECT_EQ(s.connections_acquired, 1u);
+    EXPECT_EQ(s.connections_released, 1u);
+    EXPECT_EQ(s.peak_active_connections, 1u);
+}
+
+TEST_F(DatabaseAdapterTest, StatsPeakActiveConnections) {
+    std::vector<std::shared_ptr<database_connection>> conns;
+
+    // Acquire 3 connections
+    for (int i = 0; i < 3; ++i) {
+        auto c = adapter_->acquire_connection();
+        ASSERT_TRUE(c.has_value());
+        conns.push_back(*c);
+    }
+
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.peak_active_connections, 3u);
+
+    // Release all
+    for (auto& c : conns) {
+        adapter_->release_connection(c);
+    }
+
+    // Peak should remain at 3
+    s = adapter_->stats();
+    EXPECT_EQ(s.peak_active_connections, 3u);
+    EXPECT_EQ(s.connections_acquired, 3u);
+    EXPECT_EQ(s.connections_released, 3u);
+}
+
+TEST_F(DatabaseAdapterTest, StatsSchemaExecution) {
+    auto result = adapter_->execute_schema(
+        "CREATE TABLE IF NOT EXISTS stats_test (id INTEGER PRIMARY KEY)"
+    );
+    EXPECT_TRUE(result.has_value());
+
+    auto s = adapter_->stats();
+    EXPECT_EQ(s.schemas_executed, 1u);
+    EXPECT_EQ(s.schema_failures, 0u);
+
+    // Invalid schema should increment failure counter
+    auto bad_result = adapter_->execute_schema("CREATE TABLE");
+    EXPECT_FALSE(bad_result.has_value());
+
+    s = adapter_->stats();
+    EXPECT_EQ(s.schemas_executed, 1u);
+    EXPECT_EQ(s.schema_failures, 1u);
+}
+
 }  // namespace
 }  // namespace pacs::bridge::integration
