@@ -528,7 +528,7 @@ This report was updated on 2026-02-07 to reflect actual implementation status. K
 3. **MLLP adapter pattern** provides standalone build mode not in PRD
 4. **~33 source files** in undocumented modules (tracing, performance, messaging, testing, EMR)
 
-See the [Consistency Analysis Report](CONSISTENCY_ANALYSIS.md) for full details.
+See the planning document consistency analysis in the project documentation for full details.
 
 **Verification Status: PASSED (Implementation Phase) — with documentation update required**
 
