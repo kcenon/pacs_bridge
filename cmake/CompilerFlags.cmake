@@ -17,20 +17,20 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # =============================================================================
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11.0")
-        message(FATAL_ERROR "GCC 11+ required for C++20 support. Found: ${CMAKE_CXX_COMPILER_VERSION}")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13.0")
+        message(FATAL_ERROR "GCC 13+ required for C++23 support (std::expected). Found: ${CMAKE_CXX_COMPILER_VERSION}")
     endif()
     set(PACS_BRIDGE_COMPILER_GNU TRUE)
 
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "14.0")
-        message(FATAL_ERROR "Clang 14+ required for C++20 support. Found: ${CMAKE_CXX_COMPILER_VERSION}")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "16.0")
+        message(FATAL_ERROR "Clang 16+ required for C++23 support (std::expected). Found: ${CMAKE_CXX_COMPILER_VERSION}")
     endif()
     set(PACS_BRIDGE_COMPILER_CLANG TRUE)
 
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     if(MSVC_VERSION LESS 1930)
-        message(FATAL_ERROR "MSVC 2022 (v17.0+) required for C++20 support. Found: ${MSVC_VERSION}")
+        message(FATAL_ERROR "MSVC 2022 (v17.0+) required for C++23 support. Found: ${MSVC_VERSION}")
     endif()
     set(PACS_BRIDGE_COMPILER_MSVC TRUE)
 
