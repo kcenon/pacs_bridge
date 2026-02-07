@@ -1,8 +1,8 @@
 # SDS - Requirements Traceability Matrix
 
-> **Version:** 0.1.1.0
+> **Version:** 0.2.0.0
 > **Parent Document:** [SDS.md](SDS.md)
-> **Last Updated:** 2025-12-10
+> **Last Updated:** 2026-02-07
 
 ---
 
@@ -59,31 +59,31 @@ This document establishes bidirectional traceability between:
 | FR-1.2.1 | Process ADT^A01, A04, A08, A40 | DES-HL7-004, INT-MOD-001 | SEQ-002 | ✓ |
 | FR-1.2.2 | Process ORM^O01 | DES-TRANS-001 | SEQ-003 | ✓ |
 | FR-1.2.3 | Generate ORU^R01 | DES-HL7-003 (hl7_builder) | - | ✓ |
-| FR-1.2.4 | Process SIU^S12-S15 | DES-HL7-004 | - | ○ |
+| FR-1.2.4 | Process SIU^S12-S15 | DES-HL7-004 | - | ✓ |
 | FR-1.2.5 | Generate ACK responses | DES-HL7-003, INT-API-002 | SEQ-001 | ✓ |
 | FR-1.3.1 | Implement MLLP server (listener) | DES-MLLP-001 | SEQ-001 | ✓ |
 | FR-1.3.2 | Implement MLLP client (sender) | DES-MLLP-002 | SEQ-005 | ✓ |
 | FR-1.3.3 | Support persistent and transient connections | DES-MLLP-001, DES-MLLP-002 | - | ✓ |
 | FR-1.3.4 | Handle message framing (VT, FS, CR) | DES-MLLP-003 | SEQ-001 | ✓ |
-| FR-1.3.5 | Support MLLP over TLS | DES-MLLP-001, DES-MLLP-002 | - | ○ |
+| FR-1.3.5 | Support MLLP over TLS | DES-MLLP-001, DES-MLLP-002 | - | ✓ |
 
 ### 2.2 FR-2: FHIR R4 Gateway
 
 | Requirement ID | Requirement | Design Element | Sequence | Status |
 |---------------|-------------|----------------|----------|--------|
-| FR-2.1.1 | Implement FHIR REST server | DES-FHIR-001 | SEQ-007 | ○ |
-| FR-2.1.2 | Support CRUD operations on resources | DES-FHIR-001 | SEQ-007, SEQ-008 | ○ |
-| FR-2.1.3 | Implement search parameters | DES-FHIR-001, INT-EXT-002 | SEQ-008 | ○ |
-| FR-2.1.4 | Support JSON and XML formats | DES-FHIR-002 | - | ○ |
+| FR-2.1.1 | Implement FHIR REST server | DES-FHIR-001 | SEQ-007 | ✓ |
+| FR-2.1.2 | Support CRUD operations on resources | DES-FHIR-001 | SEQ-007, SEQ-008 | ✓ |
+| FR-2.1.3 | Implement search parameters | DES-FHIR-001, INT-EXT-002 | SEQ-008 | ✓ |
+| FR-2.1.4 | Support JSON and XML formats | DES-FHIR-002 | - | ◐ |
 | FR-2.1.5 | Handle pagination for large result sets | DES-FHIR-001 | - | ○ |
-| FR-2.2.1 | Support Patient resource | DES-FHIR-002 (patient_resource) | - | ○ |
-| FR-2.2.2 | Support ServiceRequest (imaging orders) | DES-FHIR-002 (service_request_resource) | SEQ-007 | ○ |
+| FR-2.2.1 | Support Patient resource | DES-FHIR-002 (patient_resource) | - | ✓ |
+| FR-2.2.2 | Support ServiceRequest (imaging orders) | DES-FHIR-002 (service_request_resource) | SEQ-007 | ✓ |
 | FR-2.2.3 | Support ImagingStudy resource | DES-FHIR-002 (imaging_study_resource) | SEQ-008 | ✓ |
-| FR-2.2.4 | Support DiagnosticReport resource | DES-FHIR-002 (diagnostic_report_resource) | - | ○ |
+| FR-2.2.4 | Support DiagnosticReport resource | DES-FHIR-002 (diagnostic_report_resource) | - | ✓ |
 | FR-2.2.5 | Support Task (worklist items) | DES-FHIR-002 | - | ○ |
-| FR-2.3.1 | Support REST-hook subscriptions | - | - | ○ |
-| FR-2.3.2 | Notify on study availability | - | - | ○ |
-| FR-2.3.3 | Notify on report completion | - | - | ○ |
+| FR-2.3.1 | Support REST-hook subscriptions | DES-FHIR-003 (subscription_resource) | - | ✓ |
+| FR-2.3.2 | Notify on study availability | DES-FHIR-003 | - | ◐ |
+| FR-2.3.3 | Notify on report completion | DES-FHIR-003 | - | ◐ |
 
 ### 2.3 FR-3: DICOM Integration
 
@@ -94,16 +94,16 @@ This document establishes bidirectional traceability between:
 | FR-3.1.3 | Map order information (ORC/OBR → SPS) | DES-TRANS-001 | SEQ-003 | ✓ |
 | FR-3.1.4 | Support Study Instance UID pre-assignment (ZDS) | DES-TRANS-001 | SEQ-003 | ✓ |
 | FR-3.1.5 | Handle order cancellation (ORC-1=CA) | DES-TRANS-001, DES-PACS-001 | SEQ-004 | ✓ |
-| FR-3.1.6 | Handle order modification (ORC-1=XO) | DES-TRANS-001, DES-PACS-001 | - | ○ |
+| FR-3.1.6 | Handle order modification (ORC-1=XO) | DES-TRANS-001, DES-PACS-001 | - | ✓ |
 | FR-3.2.1 | Receive MPPS N-CREATE notifications | DES-PACS-002 | SEQ-005 | ✓ |
 | FR-3.2.2 | Convert MPPS IN PROGRESS to HL7 ORM status | DES-TRANS-002 | SEQ-005 | ✓ |
 | FR-3.2.3 | Receive MPPS N-SET (COMPLETED) notifications | DES-PACS-002 | SEQ-006 | ✓ |
 | FR-3.2.4 | Convert MPPS COMPLETED to HL7 ORM status | DES-TRANS-002 | SEQ-006 | ✓ |
-| FR-3.2.5 | Handle MPPS DISCONTINUED | DES-TRANS-002 | - | ○ |
-| FR-3.3.1 | Receive report status from PACS | - | - | ○ |
-| FR-3.3.2 | Generate ORU^R01 for preliminary reports | DES-HL7-003, DES-TRANS-002 | - | ○ |
-| FR-3.3.3 | Generate ORU^R01 for final reports | DES-HL7-003, DES-TRANS-002 | - | ○ |
-| FR-3.3.4 | Support report amendments | - | - | ○ |
+| FR-3.2.5 | Handle MPPS DISCONTINUED | DES-TRANS-002 | - | ✓ |
+| FR-3.3.1 | Receive report status from PACS | DES-PACS-002 | - | ✓ |
+| FR-3.3.2 | Generate ORU^R01 for preliminary reports | DES-HL7-003, DES-TRANS-002 | - | ✓ |
+| FR-3.3.3 | Generate ORU^R01 for final reports | DES-HL7-003, DES-TRANS-002 | - | ✓ |
+| FR-3.3.4 | Support report amendments | DES-HL7-003 | - | ○ |
 
 ### 2.4 FR-4: Message Routing
 
@@ -112,11 +112,11 @@ This document establishes bidirectional traceability between:
 | FR-4.1.1 | Route ADT messages to patient cache | DES-ROUTE-001, DES-PACS-003 | SEQ-002 | ✓ |
 | FR-4.1.2 | Route ORM messages to MWL manager | DES-ROUTE-001 | SEQ-003 | ✓ |
 | FR-4.1.3 | Route based on message type and trigger | DES-ROUTE-001 | SEQ-001 | ✓ |
-| FR-4.1.4 | Support conditional routing rules | DES-ROUTE-001 | - | ○ |
+| FR-4.1.4 | Support conditional routing rules | DES-ROUTE-001 | - | ✓ |
 | FR-4.2.1 | Route MPPS notifications to RIS | DES-ROUTE-001 | SEQ-005, SEQ-006 | ✓ |
-| FR-4.2.2 | Route ORU messages to configured endpoints | DES-ROUTE-001 | - | ○ |
-| FR-4.2.3 | Support multiple destination routing | DES-ROUTE-001 | - | ○ |
-| FR-4.2.4 | Implement failover routing | DES-ROUTE-001 | - | ○ |
+| FR-4.2.2 | Route ORU messages to configured endpoints | DES-ROUTE-001 | - | ✓ |
+| FR-4.2.3 | Support multiple destination routing | DES-ROUTE-001 | - | ✓ |
+| FR-4.2.4 | Implement failover routing | DES-ROUTE-001 | - | ✓ |
 | FR-4.3.1 | Queue outbound messages for reliable delivery | DES-ROUTE-002 | SEQ-009 | ✓ |
 | FR-4.3.2 | Implement retry with exponential backoff | DES-ROUTE-002 | SEQ-009 | ✓ |
 | FR-4.3.3 | Support message prioritization | DES-ROUTE-002 | SEQ-009 | ✓ |
@@ -131,9 +131,9 @@ This document establishes bidirectional traceability between:
 | FR-5.1.3 | Configure pacs_system connection | DES-CFG-001, INT-CFG-001 | - | ✓ |
 | FR-5.1.4 | Support hot-reload of configuration | DES-CFG-001, INT-API-001 | - | ○ |
 | FR-5.2.1 | Configure modality-to-AE-title mapping | DES-CFG-001, INT-CFG-001 | - | ✓ |
-| FR-5.2.2 | Configure procedure code mappings | DES-CFG-001, DES-TRANS-001 | - | ○ |
-| FR-5.2.3 | Configure patient ID domain mappings | DES-CFG-001 | - | ○ |
-| FR-5.2.4 | Support custom field mappings | DES-CFG-001 | - | ○ |
+| FR-5.2.2 | Configure procedure code mappings | DES-CFG-001, DES-TRANS-001 | - | ✓ |
+| FR-5.2.3 | Configure patient ID domain mappings | DES-CFG-001 | - | ✓ |
+| FR-5.2.4 | Support custom field mappings | DES-CFG-001 | - | ◐ |
 
 ---
 
@@ -173,19 +173,19 @@ This document establishes bidirectional traceability between:
 
 | Requirement ID | Requirement | Design Element | Implementation Strategy | Status |
 |---------------|-------------|----------------|------------------------|--------|
-| NFR-4.1 | TLS support (TLS 1.2/1.3) | DES-MLLP-001, DES-FHIR-001 | network_system TLS | ○ |
+| NFR-4.1 | TLS support (TLS 1.2/1.3) | DES-MLLP-001, DES-FHIR-001 | OpenSSL TLS | ✓ |
 | NFR-4.2 | Access logging (complete) | INT-ECO-002 | Structured logging | ✓ |
 | NFR-4.3 | Audit trail (HIPAA compliant) | INT-ECO-002 | Audit file | ✓ |
 | NFR-4.4 | Input validation (100%) | DES-HL7-004 | Schema validation | ✓ |
-| NFR-4.5 | Certificate management (X.509) | DES-MLLP-001 | TLS config | ○ |
+| NFR-4.5 | Certificate management (X.509) | DES-MLLP-001 | TLS config | ✓ |
 
 ### 3.5 NFR-5: Maintainability
 
 | Requirement ID | Requirement | Design Element | Implementation Strategy | Status |
 |---------------|-------------|----------------|------------------------|--------|
-| NFR-5.1 | Code coverage ≥80% | All | Unit tests | ○ |
+| NFR-5.1 | Code coverage ≥80% | All | Unit tests (94 test files) | ◐ |
 | NFR-5.2 | Documentation (complete) | SDS suite | API docs, examples | ✓ |
-| NFR-5.3 | CI/CD pipeline (100% green) | - | GitHub Actions | ○ |
+| NFR-5.3 | CI/CD pipeline (100% green) | - | GitHub Actions | ✓ |
 | NFR-5.4 | Configuration (externalized) | DES-CFG-001 | YAML/JSON files | ✓ |
 | NFR-5.5 | Logging (structured) | INT-ECO-002 | JSON format | ✓ |
 
@@ -309,57 +309,71 @@ This document establishes bidirectional traceability between:
 
 | Requirement ID | Description | Priority | Target Phase |
 |---------------|-------------|----------|--------------|
-| FR-1.2.4 | SIU^S12-S15 processing | Should Have | Phase 2 |
-| FR-1.3.5 | MLLP over TLS | Should Have | Phase 2 |
-| FR-2.x | FHIR Gateway (all) | Should Have | Phase 3 |
-| FR-3.1.6 | Order modification | Should Have | Phase 2 |
-| FR-3.2.5 | MPPS DISCONTINUED | Should Have | Phase 2 |
-| FR-3.3.x | Report integration | Should Have | Phase 3 |
-| FR-4.1.4 | Conditional routing | Should Have | Phase 2 |
-| FR-4.2.2-4 | Advanced routing | Should Have | Phase 3 |
-| FR-5.1.4 | Hot-reload configuration | Should Have | Phase 3 |
-| FR-5.2.2-4 | Advanced mappings | Could Have | Phase 3 |
+| FR-2.1.5 | Handle pagination for large result sets | Could Have | Future |
+| FR-2.2.5 | Support Task (worklist items) | Could Have | Future |
+| FR-3.3.4 | Support report amendments | Could Have | Future |
+| FR-5.1.4 | Hot-reload configuration | Should Have | Future |
 
 ### 6.2 Design Elements Pending Implementation
 
-| Design ID | Component | Status | Blocker |
-|-----------|-----------|--------|---------|
-| DES-FHIR-001 | fhir_server | Planned | Phase 3 |
-| DES-FHIR-002 | fhir_resource | Planned | Phase 3 |
-| DES-TRANS-003 | fhir_dicom_mapper | Planned | Phase 3 |
+All originally planned design elements have been implemented. Remaining gaps are low-priority features deferred to future phases.
 
 ### 6.3 Coverage Summary
 
 | Category | Total | Designed | Implemented | Coverage |
 |----------|-------|----------|-------------|----------|
-| FR-1 (HL7 Gateway) | 15 | 14 | 0 | 93% designed |
-| FR-2 (FHIR Gateway) | 13 | 13 | 0 | 100% designed (Phase 3) |
-| FR-3 (DICOM Integration) | 14 | 12 | 0 | 86% designed |
-| FR-4 (Message Routing) | 12 | 10 | 0 | 83% designed |
-| FR-5 (Configuration) | 8 | 6 | 0 | 75% designed |
-| **Total** | **62** | **55** | **0** | **89% designed** |
+| FR-1 (HL7 Gateway) | 15 | 15 | 15 | 100% |
+| FR-2 (FHIR Gateway) | 13 | 13 | 10 | 77% implemented |
+| FR-3 (DICOM Integration) | 14 | 14 | 13 | 93% implemented |
+| FR-4 (Message Routing) | 12 | 12 | 12 | 100% |
+| FR-5 (Configuration) | 8 | 8 | 7 | 88% implemented |
+| **Total (Planned)** | **62** | **62** | **57** | **92% implemented** |
 
-### 6.4 Recommended Actions
+### 6.4 Undocumented Modules (Implemented Without PRD/SRS Coverage)
 
-1. **Phase 1 Priority:**
-   - Complete implementation of all "Must Have" requirements
-   - Focus on core HL7/MLLP and ORM→MWL flow
-   - Establish comprehensive unit test suite
+The following modules were implemented during development but have no formal requirements traceability. Requirements should be retroactively created (see PRD FR-6.x series).
 
-2. **Phase 2 Additions:**
-   - Add SIU message support (scheduling)
-   - Implement TLS for MLLP
-   - Add order modification handling
-   - Enhance routing capabilities
+| Module | Location | Source Files | Description | Proposed Requirement |
+|--------|----------|-------------|-------------|---------------------|
+| EMR Client | `src/emr/` | 13 | FHIR R4 client for external EMR integration (patient lookup, result posting) | FR-6.x (Phase 5) |
+| Distributed Tracing | `src/tracing/` | 6 | OpenTelemetry-compatible span tracking and context propagation | NFR-6.x |
+| Performance | `src/performance/` | 6 | Zero-copy parser, object pools, lock-free queues, thread pool manager | NFR-7.x |
+| Messaging Patterns | `src/messaging/` | 5 | Event bus, HL7 pipeline, async request handling | Internal architecture |
+| Load Testing | `src/testing/` | 3 | Load generation framework with reporting | Test infrastructure |
 
-3. **Phase 3 Roadmap:**
-   - Full FHIR R4 gateway implementation
-   - Report integration (ORU generation)
-   - Hot-reload configuration
-   - Advanced mapping features
+**Total undocumented: ~33 source files requiring retroactive requirements traceability.**
+
+### 6.5 MLLP Adapter Architecture (Undocumented in PRD)
+
+PRD SAR-2 states `mllp_transport` depends on `network_system`. The actual implementation uses an **adapter pattern** with three interchangeable backends:
+
+| Backend | File | Dependency | Build Mode |
+|---------|------|-----------|------------|
+| BSD Sockets | `bsd_mllp_server.cpp` | None (POSIX) | `BRIDGE_STANDALONE_BUILD=ON` (default) |
+| TLS | `tls_mllp_server.cpp` | OpenSSL | `BRIDGE_ENABLE_TLS=ON` |
+| network_system | `network_system_mllp_server.cpp` | kcenon ecosystem | `BRIDGE_STANDALONE_BUILD=OFF` |
+
+This flexible architecture allows standalone deployment without ecosystem dependencies, which is not reflected in the planning documents.
+
+### 6.6 Recommended Actions
+
+1. **Immediate:**
+   - Create FR-6.x requirements for EMR Client module in PRD addendum
+   - Create SRS-EMR-xxx requirements for FHIR Client functionality
+   - Update C++ standard references from C++20 to C++23 across all documents
+
+2. **Short-term:**
+   - Create NFR-6.x requirements for distributed tracing
+   - Create NFR-7.x requirements for performance optimizations
+   - Document MLLP adapter pattern in architecture documentation
+
+3. **Medium-term:**
+   - Perform full code-to-requirement mapping audit
+   - Establish documentation update policy tied to PR workflow
 
 ---
 
-*Document Version: 0.1.0.0*
+*Document Version: 0.2.0.0*
 *Created: 2025-12-07*
+*Updated: 2026-02-07*
 *Author: kcenon@naver.com*

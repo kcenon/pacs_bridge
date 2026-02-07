@@ -1,7 +1,7 @@
 # Software Requirements Specification - PACS Bridge
 
-> **Version:** 0.1.0.0
-> **Last Updated:** 2025-12-07
+> **Version:** 0.2.0.0
+> **Last Updated:** 2026-02-07
 > **Language:** **English** | [한국어](SRS_KO.md)
 > **Standard:** IEEE 830-1998 based
 
@@ -14,7 +14,7 @@
 | **Document ID** | BRIDGE-SRS-001 |
 | **Project** | PACS Bridge |
 | **Author** | kcenon@naver.com |
-| **Status** | Draft |
+| **Status** | Active |
 | **Related Documents** | [PRD](PRD.md), [Reference Materials](reference_materials/README.md) |
 
 ---
@@ -171,7 +171,7 @@ This document is organized as follows:
 | Component | Requirement |
 |-----------|-------------|
 | **Operating System** | Linux (Ubuntu 22.04+), macOS 14+, Windows 10/11 |
-| **Compiler** | C++20 (GCC 11+, Clang 14+, MSVC 2022+) |
+| **Compiler** | C++23 (GCC 13+, Clang 16+, MSVC 2022 v17.0+) |
 | **Memory** | Minimum 2 GB, Recommended 8 GB |
 | **Network** | 100 Mbps Ethernet minimum |
 | **Dependencies** | pacs_system v0.2.0+, kcenon ecosystem |
@@ -192,7 +192,7 @@ This document is organized as follows:
 | ID | Assumption/Dependency |
 |----|----------------------|
 | **A1** | pacs_system MWL/MPPS services are operational |
-| **A2** | network_system provides stable MLLP transport |
+| **A2** | network_system provides stable MLLP transport (ecosystem mode); BSD sockets used in standalone mode |
 | **A3** | HIS/RIS systems implement standard HL7 v2.x |
 | **A4** | FHIR endpoints follow R4 specification |
 | **D1** | pacs_system v0.2.0+ available |
@@ -851,6 +851,83 @@ pacs_system:
 
 ---
 
+### 3.8 EMR Integration Requirements (Phase 5)
+
+#### SRS-EMR-001: FHIR R4 Client
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-001 |
+| **Title** | FHIR R4 HTTP Client |
+| **Description** | The system shall implement a FHIR R4 client for outbound HTTP communication with EMR systems, supporting Bundle operations and connection pooling. |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.1.1 - FR-6.1.4 |
+
+**Acceptance Criteria:**
+1. Perform FHIR RESTful HTTP requests (GET, POST, PUT)
+2. Support Bundle transaction and batch operations
+3. Implement connection pooling for persistent connections
+4. Support OAuth2 token-based authentication
+5. Handle FHIR OperationOutcome error responses
+
+---
+
+#### SRS-EMR-002: Patient Lookup Service
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-002 |
+| **Title** | EMR Patient Lookup |
+| **Description** | The system shall query external EMR systems for patient demographics via FHIR Patient resource search, with result caching and patient matching logic. |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.2.1 - FR-6.2.4 |
+
+**Acceptance Criteria:**
+1. Query EMR by patient identifier (MRN, national ID)
+2. Parse FHIR Patient resource responses
+3. Implement configurable patient matching algorithm
+4. Cache lookup results with configurable TTL
+5. Handle partial matches and ambiguous results
+
+---
+
+#### SRS-EMR-003: Result Posting Service
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-003 |
+| **Title** | EMR Result Posting |
+| **Description** | The system shall post radiology reports and study results to external EMR systems as FHIR DiagnosticReport resources. |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.3.1 - FR-6.3.4 |
+
+**Acceptance Criteria:**
+1. Build FHIR DiagnosticReport from internal report data
+2. Post DiagnosticReport to EMR endpoint
+3. Track delivery status with retry on failure
+4. Include encounter context and patient reference
+5. Support preliminary and final report statuses
+
+---
+
+#### SRS-EMR-004: EMR Adapter Pattern
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-004 |
+| **Title** | Abstract EMR Adapter Interface |
+| **Description** | The system shall define an abstract EMR adapter interface to support multiple EMR system types through a pluggable architecture. |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.4.1 - FR-6.4.3 |
+
+**Acceptance Criteria:**
+1. Define abstract interface for EMR operations (lookup, post, subscribe)
+2. Implement generic FHIR-based adapter as default
+3. Support EMR-specific configuration per deployment
+4. Allow runtime selection of EMR adapter
+
+---
+
 ## 4. External Interface Requirements
 
 ### 4.1 User Interfaces
@@ -997,7 +1074,8 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 |----|-------------|--------|-----------|
 | SRS-PERF-001 | HL7 message throughput | ≥500 msg/s | NFR-1.1 |
 | SRS-PERF-002 | Message latency (P95) | <50 ms | NFR-1.2 |
-| SRS-PERF-003 | MWL creation from ORM | <100 ms | NFR-1.3 |
+| SRS-PERF-003a | MWL creation from ORM | <50 ms | PR-1, NFR-1.3 |
+| SRS-PERF-003b | MWL query response | <100 ms | NFR-1.3 |
 | SRS-PERF-004 | Concurrent connections | ≥50 | NFR-1.4 |
 | SRS-PERF-005 | Memory baseline | <200 MB | NFR-1.5 |
 | SRS-PERF-006 | CPU utilization (idle) | <20% | NFR-1.6 |
@@ -1068,6 +1146,10 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 | FR-4.3.1-4 | SRS-ROUTE-003 | Specified |
 | FR-5.1.1-4 | SRS-CFG-001 | Specified |
 | FR-5.2.1-4 | SRS-CFG-002 | Specified |
+| FR-6.1.1-4 | SRS-EMR-001 | Specified |
+| FR-6.2.1-4 | SRS-EMR-002 | Specified |
+| FR-6.3.1-4 | SRS-EMR-003 | Specified |
+| FR-6.4.1-3 | SRS-EMR-004 | Specified |
 | NFR-1.1-6 | SRS-PERF-001-006 | Specified |
 | NFR-2.1-5 | SRS-REL-001-005 | Specified |
 | NFR-3.1-4 | SRS-SCALE-001-004 | Specified |
@@ -1095,6 +1177,10 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 | SRS-ROUTE-003 | TC-ROUTE-003 | Integration | Planned |
 | SRS-PACS-001 | TC-PACS-001 | Integration | Planned |
 | SRS-PACS-002 | TC-PACS-002 | Integration | Planned |
+| SRS-EMR-001 | TC-EMR-001 | Integration | Planned |
+| SRS-EMR-002 | TC-EMR-002 | Integration | Planned |
+| SRS-EMR-003 | TC-EMR-003 | Integration | Planned |
+| SRS-EMR-004 | TC-EMR-004 | Unit | Planned |
 
 ### 7.3 Cross-Reference Summary
 
@@ -1123,6 +1209,9 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 │                                                                          │
 │   FR-5.x  ────────────►  SRS-CFG-xxx   ────────►  TC-CFG-xxx           │
 │   (Configuration)        (Config Module)          (Config Tests)        │
+│                                                                          │
+│   FR-6.x  ────────────►  SRS-EMR-xxx   ────────►  TC-EMR-xxx           │
+│   (EMR Integration)      (EMR Module)             (EMR Tests)           │
 │                                                                          │
 │   NFR-x   ────────────►  SRS-PERF-xxx  ────────►  TC-PERF-xxx          │
 │   (Non-Functional)       SRS-REL-xxx              (Performance)         │
@@ -1153,6 +1242,7 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 | SRS-SEC-xxx | Security | SRS-SEC-001 |
 | SRS-SCALE-xxx | Scalability | SRS-SCALE-001 |
 | SRS-MAINT-xxx | Maintainability | SRS-MAINT-001 |
+| SRS-EMR-xxx | EMR Integration | SRS-EMR-001 |
 
 ### Appendix B: Error Code Registry
 
@@ -1209,6 +1299,7 @@ pacs_system Integration Errors (-980 to -999):
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0.0 | 2025-12-07 | kcenon | Initial version |
+| 2.0.0 | 2026-02-07 | kcenon | C++20→C++23, added SRS-EMR-001-004 (Phase 5 EMR Integration), split SRS-PERF-003 into creation/query, added requirement count reconciliation |
 
 ### Appendix E: Glossary
 
@@ -1223,6 +1314,13 @@ pacs_system Integration Errors (-980 to -999):
 
 ---
 
-*Document Version: 0.1.0.0*
+### Appendix F: Requirement Count Reconciliation
+
+> **Note**: The PRD defines **77 functional requirement items** at the FR-x.y.z granularity level (62 original + 15 new EMR requirements). The SRS aggregates these into **30 functional SRS requirements** (26 original + 4 EMR). This is intentional — each SRS requirement covers a group of related PRD items (e.g., FR-1.1.1 through FR-1.1.5 → SRS-HL7-001). Additionally, there are 25 non-functional SRS requirements, totaling **55 SRS requirements**.
+
+---
+
+*Document Version: 0.2.0.0*
 *Created: 2025-12-07*
+*Updated: 2026-02-07*
 *Author: kcenon@naver.com*

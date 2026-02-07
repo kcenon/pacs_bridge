@@ -1,7 +1,7 @@
 # Product Requirements Document - PACS Bridge
 
-> **Version:** 0.1.0.0
-> **Last Updated:** 2025-12-07
+> **Version:** 0.2.0.0
+> **Last Updated:** 2026-02-07
 > **Language:** **English** | [한국어](PRD_KO.md)
 
 ---
@@ -31,14 +31,14 @@
 PACS Bridge (HIS/RIS Integration Gateway)
 
 ### Product Description
-A C++20 integration gateway that bridges Hospital Information Systems (HIS) and Radiology Information Systems (RIS) with PACS (Picture Archiving and Communication System). PACS Bridge translates between HL7 v2.x/FHIR messaging protocols and DICOM services, enabling seamless workflow integration in radiology departments.
+A C++23 integration gateway that bridges Hospital Information Systems (HIS) and Radiology Information Systems (RIS) with PACS (Picture Archiving and Communication System). PACS Bridge translates between HL7 v2.x/FHIR messaging protocols and DICOM services, enabling seamless workflow integration in radiology departments.
 
 ### Key Differentiators
 - **Dual Protocol Support**: Both HL7 v2.x (legacy) and FHIR R4 (modern) gateways
 - **Full pacs_system Integration**: Native integration with pacs_system MWL/MPPS services
 - **IHE SWF Compliant**: Follows IHE Scheduled Workflow integration profile
 - **Production Grade**: Built on proven kcenon ecosystem infrastructure
-- **Zero External Dependencies**: Pure C++20 implementation using ecosystem components
+- **Zero External Dependencies**: Pure C++23 implementation using ecosystem components
 
 ---
 
@@ -250,6 +250,43 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 
 ---
 
+### FR-6: EMR Integration (Phase 5 Addendum)
+
+> **Note:** This section was added in v0.2.0 to document Phase 5 requirements that were implemented but not covered in the original PRD.
+
+#### FR-6.1: FHIR R4 Client
+| ID | Requirement | Priority | Phase |
+|----|-------------|----------|-------|
+| FR-6.1.1 | Implement FHIR R4 HTTP client for outbound EMR communication | Must Have | 5 |
+| FR-6.1.2 | Support FHIR Bundle operations (batch/transaction) | Must Have | 5 |
+| FR-6.1.3 | Implement HTTP client adapter with connection pooling | Must Have | 5 |
+| FR-6.1.4 | Support OAuth2 authentication for EMR endpoints | Must Have | 5 |
+
+#### FR-6.2: Patient Lookup
+| ID | Requirement | Priority | Phase |
+|----|-------------|----------|-------|
+| FR-6.2.1 | Query external EMR for patient demographics | Must Have | 5 |
+| FR-6.2.2 | Parse FHIR Patient resources from EMR responses | Must Have | 5 |
+| FR-6.2.3 | Match patients across systems using configurable criteria | Must Have | 5 |
+| FR-6.2.4 | Cache EMR patient lookups with configurable TTL | Should Have | 5 |
+
+#### FR-6.3: Result Posting
+| ID | Requirement | Priority | Phase |
+|----|-------------|----------|-------|
+| FR-6.3.1 | Post DiagnosticReport resources to external EMR | Must Have | 5 |
+| FR-6.3.2 | Build FHIR DiagnosticReport from PACS study results | Must Have | 5 |
+| FR-6.3.3 | Track result delivery status and handle retries | Must Have | 5 |
+| FR-6.3.4 | Support encounter context for clinical correlation | Should Have | 5 |
+
+#### FR-6.4: EMR Adapter Pattern
+| ID | Requirement | Priority | Phase |
+|----|-------------|----------|-------|
+| FR-6.4.1 | Provide abstract EMR adapter interface | Must Have | 5 |
+| FR-6.4.2 | Implement generic FHIR adapter for standard EMR systems | Must Have | 5 |
+| FR-6.4.3 | Support EMR-specific configuration (endpoints, auth, mappings) | Must Have | 5 |
+
+---
+
 ## Non-Functional Requirements
 
 ### NFR-1: Performance
@@ -361,8 +398,16 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 | **message_router** | queue_manager, config | Message routing logic |
 | **translation_layer** | hl7_dicom_mapper, fhir_mapper | Protocol translation |
 | **pacs_adapter** | pacs_system (external) | DICOM service integration |
-| **mllp_transport** | network_system | MLLP protocol handling |
+| **mllp_transport** | adapter pattern (see below) | MLLP protocol handling |
 | **http_server** | network_system | HTTP/HTTPS server |
+| **emr_client** | fhir_client, http_client | EMR integration (Phase 5) |
+
+> **MLLP Transport Adapter Pattern**: The `mllp_transport` module uses an abstract adapter interface (`mllp_server_adapter`, `mllp_session`) with three interchangeable backends:
+> 1. **BSD Sockets** (`bsd_mllp_server`) — Default standalone mode (`BRIDGE_STANDALONE_BUILD=ON`), no external dependencies
+> 2. **TLS** (`tls_mllp_server`) — Secure transport, requires OpenSSL only
+> 3. **network_system** (`network_system_mllp_server`) — Ecosystem mode (`BRIDGE_STANDALONE_BUILD=OFF`), uses kcenon network_system
+>
+> The default build uses BSD sockets, enabling deployment without the full kcenon ecosystem.
 
 ### SAR-3: Thread Model Requirements
 
@@ -570,6 +615,24 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 
 **Dependencies**: Phase 3 complete
 
+### Phase 5: EMR Integration (Extension — Added v0.2.0)
+
+> **Note:** This phase was added post-initial planning to address EMR integration requirements discovered during implementation.
+
+**Objective**: Outbound FHIR R4 client for external EMR system integration
+
+| Deliverable | Description | Acceptance Criteria |
+|-------------|-------------|---------------------|
+| FHIR Client | HTTP client for EMR communication | Connect to external FHIR servers |
+| Patient Lookup | Query EMR for demographics | Match patients across systems |
+| Result Poster | Post DiagnosticReports to EMR | Reliable delivery with tracking |
+| EMR Adapter | Abstract adapter pattern | Support multiple EMR vendors |
+| E2E Tests | End-to-end workflow tests | Full EMR integration workflow |
+
+**Dependencies**: Phase 2 complete (MLLP, HL7 core)
+
+**Implementation Note:** Some Phase 4 features (TLS, security, monitoring) were implemented ahead of schedule during Phases 1-2 due to the standalone build architecture requiring early security primitives. The MLLP transport uses an **adapter pattern** with three interchangeable backends (BSD sockets, TLS, network_system) enabling standalone deployment without ecosystem dependencies.
+
 ---
 
 ## Success Metrics
@@ -752,6 +815,7 @@ logging:
 
 ---
 
-*Document Version: 0.1.0.0*
+*Document Version: 0.2.0.0*
 *Created: 2025-12-07*
+*Updated: 2026-02-07*
 *Author: kcenon@naver.com*
