@@ -1172,3 +1172,10 @@ message(STATUS "")
 
 # Add MLLP test subdirectory
 add_subdirectory(mllp)
+
+# =============================================================================
+# E2E Workflow Tests (Issue #321, Phase 5c)
+# =============================================================================
+
+# Add E2E workflow test subdirectory
+add_subdirectory(e2e)
