@@ -519,6 +519,9 @@ struct pacs_config {
 
     /** Query timeout */
     std::chrono::seconds query_timeout{60};
+
+    /** Path to PACS index database (optional, for pacs_system integration) */
+    std::string database_path;
 };
 
 // =============================================================================
@@ -533,22 +536,6 @@ struct pacs_config {
  */
 [[nodiscard]] std::shared_ptr<pacs_adapter>
 create_pacs_adapter(const pacs_config& config);
-
-#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
-// Forward declaration for pacs_system integration
-namespace kcenon::pacs::services {
-class pacs_server;
-}
-
-/**
- * @brief Create PACS adapter using pacs_system (full integration mode)
- *
- * @param server Shared pointer to pacs_server
- * @return Shared pointer to PACS adapter
- */
-[[nodiscard]] std::shared_ptr<pacs_adapter> create_pacs_adapter(
-    std::shared_ptr<kcenon::pacs::services::pacs_server> server);
-#endif
 
 }  // namespace pacs::bridge::integration
 

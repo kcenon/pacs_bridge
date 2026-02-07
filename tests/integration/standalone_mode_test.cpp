@@ -271,10 +271,11 @@ TEST_F(StandalonePacsTest, MppsCreateValidRecord) {
     auto create_result = mpps->create_mpps(record);
     EXPECT_TRUE(create_result.has_value());
 
-    // Stub get_mpps returns not_found (no-op storage)
+    // Stub stores records in memory - verify retrieval succeeds
     auto get_result = mpps->get_mpps(record.sop_instance_uid);
-    EXPECT_FALSE(get_result.has_value());
-    EXPECT_EQ(get_result.error(), pacs_error::not_found);
+    EXPECT_TRUE(get_result.has_value());
+    EXPECT_EQ(get_result->sop_instance_uid, record.sop_instance_uid);
+    EXPECT_EQ(get_result->status, "IN PROGRESS");
 }
 
 TEST_F(StandalonePacsTest, MppsCreateInvalidRecord) {
