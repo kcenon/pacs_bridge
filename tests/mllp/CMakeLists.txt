@@ -78,10 +78,13 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
     endif()
 
     # Discover tests for CTest
+    # Note: gtest_discover_tests expands LABELS list to space-separated tokens,
+    # causing only the first label to be recognized by CTest. Place the most
+    # important exclusion label first (phase2) so -LE filters work correctly.
     if(PACS_BRIDGE_HAS_GTEST)
         gtest_discover_tests(bsd_adapter_test
             PROPERTIES
-                LABELS "integration;mllp;network;phase2"
+                LABELS "phase2"
                 TIMEOUT 30
         )
     endif()
@@ -126,7 +129,7 @@ if(NOT BRIDGE_ENABLE_COVERAGE AND PACS_BRIDGE_HAS_OPENSSL)
     if(PACS_BRIDGE_HAS_GTEST)
         gtest_discover_tests(tls_adapter_test
             PROPERTIES
-                LABELS "integration;mllp;tls;security;phase2"
+                LABELS "phase2"
                 TIMEOUT 60
         )
     endif()
@@ -175,7 +178,7 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
     if(PACS_BRIDGE_HAS_GTEST)
         gtest_discover_tests(mllp_performance_test
             PROPERTIES
-                LABELS "performance;mllp;benchmark;phase2"
+                LABELS "performance"
                 TIMEOUT 120
         )
     endif()
@@ -222,7 +225,7 @@ if(NOT BRIDGE_ENABLE_COVERAGE)
     if(PACS_BRIDGE_HAS_GTEST)
         gtest_discover_tests(mllp_memory_leak_test
             PROPERTIES
-                LABELS "memory;mllp;leak-check;phase2"
+                LABELS "memory"
                 TIMEOUT 60
         )
     endif()
