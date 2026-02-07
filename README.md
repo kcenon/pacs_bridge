@@ -180,6 +180,26 @@ cmake --build build
 | `BRIDGE_ENABLE_COVERAGE` | `OFF` | Enable code coverage instrumentation (GCC/Clang only) |
 | `BRIDGE_BUILD_MODULES` | `OFF` | Build C++20 module version (experimental, requires CMake 3.28+) |
 
+### Benchmarks
+
+Performance benchmarks measure adapter throughput, latency, and overhead:
+
+```bash
+# Build with benchmarks enabled
+cmake -B build -DBRIDGE_BUILD_BENCHMARKS=ON
+cmake --build build --config Release
+
+# Or using the build script
+./build.sh --benchmarks
+
+# Run benchmarks
+./build/bin/adapter_benchmark    # Adapter performance (database, thread, MWL)
+./build/bin/baseline_benchmark   # Overhead comparison (adapter vs direct)
+```
+
+See [docs/performance_report.md](docs/performance_report.md) for results template and SRS targets.
+See [docs/integration_guide.md](docs/integration_guide.md) for adapter usage reference.
+
 ### C++20 Modules (Experimental)
 
 PACS Bridge supports C++20 modules for improved compilation times and better encapsulation.
