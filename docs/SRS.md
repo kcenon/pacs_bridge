@@ -183,7 +183,7 @@ This document is organized as follows:
 | **C1** | Must use pacs_system for DICOM services |
 | **C2** | Must use kcenon ecosystem components |
 | **C3** | Cross-platform compatibility required |
-| **C4** | HL7 v2.3.1 to v2.9 compatibility required |
+| **C4** | HL7 v2.3 to v2.5.1 compatibility required |
 | **C5** | IHE SWF profile conformance required |
 | **C6** | BSD 3-Clause license compatibility |
 
@@ -213,7 +213,7 @@ This document is organized as follows:
 |-----------|-------|
 | **ID** | SRS-HL7-001 |
 | **Title** | HL7 v2.x Message Parser |
-| **Description** | The system shall parse HL7 v2.x messages (v2.3.1 to v2.9) with support for standard delimiters, escape sequences, repeating fields, and custom Z-segments. |
+| **Description** | The system shall parse HL7 v2.x messages (v2.3 to v2.5.1) with support for standard delimiters, escape sequences, repeating fields, and custom Z-segments. |
 | **Priority** | Must Have |
 | **Phase** | 1 |
 | **Traces To** | FR-1.1.1 - FR-1.1.5 |

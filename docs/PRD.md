@@ -52,7 +52,7 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 | Goal | Description | Success Criteria |
 |------|-------------|------------------|
 | **Interoperability** | Bridge HL7 and DICOM protocols | 100% HL7-to-DICOM message translation |
-| **Legacy Support** | Support existing HIS/RIS systems | HL7 v2.3.1 to v2.9 compatibility |
+| **Legacy Support** | Support existing HIS/RIS systems | HL7 v2.3 to v2.5.1 compatibility |
 | **Modernization** | Enable FHIR-based integration | FHIR R4 ImagingStudy, ServiceRequest |
 | **Reliability** | Ensure message delivery | Zero message loss, guaranteed delivery |
 | **Performance** | Handle high message volumes | ≥500 messages/second throughput |
@@ -116,7 +116,7 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 #### FR-1.1: Message Parsing
 | ID | Requirement | Priority | Phase |
 |----|-------------|----------|-------|
-| FR-1.1.1 | Parse HL7 v2.x messages (v2.3.1 to v2.9) | Must Have | 1 |
+| FR-1.1.1 | Parse HL7 v2.x messages (v2.3 to v2.5.1) | Must Have | 1 |
 | FR-1.1.2 | Support standard delimiters and escape sequences | Must Have | 1 |
 | FR-1.1.3 | Handle repeating fields and components | Must Have | 1 |
 | FR-1.1.4 | Validate message structure against schemas | Should Have | 2 |
@@ -428,12 +428,11 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 #### Supported Versions
 | Version | Support Level |
 |---------|--------------|
+| 2.3 | Full |
 | 2.3.1 | Full |
 | 2.4 | Full |
 | 2.5 | Full |
 | 2.5.1 | Full (Recommended) |
-| 2.6 | Partial |
-| 2.7 | Partial |
 
 #### Supported Message Types
 | Message | Trigger | Direction | Priority |
