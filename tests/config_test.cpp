@@ -150,13 +150,13 @@ bool test_config_error_to_string() {
 }
 
 bool test_config_error_code_values() {
-    TEST_ASSERT(to_error_code(config_error::file_not_found) == -900,
+    TEST_ASSERT(to_error_code(config_error::file_not_found) == -750,
                 "file_not_found code");
-    TEST_ASSERT(to_error_code(config_error::parse_error) == -901,
+    TEST_ASSERT(to_error_code(config_error::parse_error) == -751,
                 "parse_error code");
-    TEST_ASSERT(to_error_code(config_error::validation_error) == -902,
+    TEST_ASSERT(to_error_code(config_error::validation_error) == -752,
                 "validation_error code");
-    TEST_ASSERT(to_error_code(config_error::io_error) == -909,
+    TEST_ASSERT(to_error_code(config_error::io_error) == -759,
                 "io_error code");
 
     return true;

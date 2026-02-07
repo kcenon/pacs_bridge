@@ -26,29 +26,31 @@
 namespace pacs::bridge::emr {
 
 // =============================================================================
-// Result Tracker Error Codes (-1020 to -1029)
+// Result Tracker Error Codes (-1120 to -1124)
 // =============================================================================
 
 /**
  * @brief Result tracker specific error codes
  *
- * Allocated range: -1020 to -1029
+ * Allocated range: -1120 to -1124
+ * @note Relocated from -1020 to -1024 to resolve collision with oauth2_error.
+ *       See https://github.com/kcenon/pacs_bridge/issues/344
  */
 enum class tracker_error : int {
     /** Entry not found */
-    not_found = -1020,
+    not_found = -1120,
 
     /** Tracker is full (capacity exceeded) */
-    capacity_exceeded = -1021,
+    capacity_exceeded = -1121,
 
     /** Invalid entry data */
-    invalid_entry = -1022,
+    invalid_entry = -1122,
 
     /** Entry already exists (for unique operations) */
-    already_exists = -1023,
+    already_exists = -1123,
 
     /** Operation failed */
-    operation_failed = -1024
+    operation_failed = -1124
 };
 
 /**

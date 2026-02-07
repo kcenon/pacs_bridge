@@ -41,56 +41,59 @@ class mpps_adapter;
 namespace pacs::bridge::pacs_adapter {
 
 // =============================================================================
-// Error Codes (-970 to -979)
+// Error Codes (-880 to -893)
 // =============================================================================
 
 /**
  * @brief MPPS handler specific error codes
  *
- * Allocated range: -970 to -979
+ * Allocated range: -880 to -893
+ * @note Relocated from -970 to -983 to resolve collision with mllp_error
+ *       (-970 to -979) and mwl_error (-980 to -989).
+ *       See https://github.com/kcenon/pacs_bridge/issues/344
  */
 enum class mpps_error : int {
     /** Cannot connect to pacs_system MPPS SCP */
-    connection_failed = -970,
+    connection_failed = -880,
 
     /** Registration with MPPS SCP failed */
-    registration_failed = -971,
+    registration_failed = -881,
 
     /** Invalid MPPS dataset received */
-    invalid_dataset = -972,
+    invalid_dataset = -882,
 
     /** MPPS status parsing failed */
-    status_parse_failed = -973,
+    status_parse_failed = -883,
 
     /** Missing required attribute in MPPS */
-    missing_attribute = -974,
+    missing_attribute = -884,
 
     /** Callback invocation failed */
-    callback_failed = -975,
+    callback_failed = -885,
 
     /** Handler not registered */
-    not_registered = -976,
+    not_registered = -886,
 
     /** Handler already registered */
-    already_registered = -977,
+    already_registered = -887,
 
     /** Invalid MPPS SOP Instance UID */
-    invalid_sop_instance = -978,
+    invalid_sop_instance = -888,
 
     /** Unexpected MPPS operation */
-    unexpected_operation = -979,
+    unexpected_operation = -889,
 
     /** Database operation failed */
-    database_error = -980,
+    database_error = -890,
 
     /** MPPS record not found in database */
-    record_not_found = -981,
+    record_not_found = -891,
 
     /** Invalid state transition (e.g., updating final state) */
-    invalid_state_transition = -982,
+    invalid_state_transition = -892,
 
     /** Persistence is disabled */
-    persistence_disabled = -983
+    persistence_disabled = -893
 };
 
 /**

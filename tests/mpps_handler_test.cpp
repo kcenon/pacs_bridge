@@ -108,26 +108,26 @@ mpps_dataset create_test_mpps_dataset(
 // =============================================================================
 
 bool test_mpps_error_codes() {
-    TEST_ASSERT(to_error_code(mpps_error::connection_failed) == -970,
-                "connection_failed should be -970");
-    TEST_ASSERT(to_error_code(mpps_error::registration_failed) == -971,
-                "registration_failed should be -971");
-    TEST_ASSERT(to_error_code(mpps_error::invalid_dataset) == -972,
-                "invalid_dataset should be -972");
-    TEST_ASSERT(to_error_code(mpps_error::status_parse_failed) == -973,
-                "status_parse_failed should be -973");
-    TEST_ASSERT(to_error_code(mpps_error::missing_attribute) == -974,
-                "missing_attribute should be -974");
-    TEST_ASSERT(to_error_code(mpps_error::callback_failed) == -975,
-                "callback_failed should be -975");
-    TEST_ASSERT(to_error_code(mpps_error::not_registered) == -976,
-                "not_registered should be -976");
-    TEST_ASSERT(to_error_code(mpps_error::already_registered) == -977,
-                "already_registered should be -977");
-    TEST_ASSERT(to_error_code(mpps_error::invalid_sop_instance) == -978,
-                "invalid_sop_instance should be -978");
-    TEST_ASSERT(to_error_code(mpps_error::unexpected_operation) == -979,
-                "unexpected_operation should be -979");
+    TEST_ASSERT(to_error_code(mpps_error::connection_failed) == -880,
+                "connection_failed should be -880");
+    TEST_ASSERT(to_error_code(mpps_error::registration_failed) == -881,
+                "registration_failed should be -881");
+    TEST_ASSERT(to_error_code(mpps_error::invalid_dataset) == -882,
+                "invalid_dataset should be -882");
+    TEST_ASSERT(to_error_code(mpps_error::status_parse_failed) == -883,
+                "status_parse_failed should be -883");
+    TEST_ASSERT(to_error_code(mpps_error::missing_attribute) == -884,
+                "missing_attribute should be -884");
+    TEST_ASSERT(to_error_code(mpps_error::callback_failed) == -885,
+                "callback_failed should be -885");
+    TEST_ASSERT(to_error_code(mpps_error::not_registered) == -886,
+                "not_registered should be -886");
+    TEST_ASSERT(to_error_code(mpps_error::already_registered) == -887,
+                "already_registered should be -887");
+    TEST_ASSERT(to_error_code(mpps_error::invalid_sop_instance) == -888,
+                "invalid_sop_instance should be -888");
+    TEST_ASSERT(to_error_code(mpps_error::unexpected_operation) == -889,
+                "unexpected_operation should be -889");
 
     return true;
 }
@@ -967,14 +967,14 @@ bool test_persistence_statistics() {
  * @brief Test new error codes for persistence
  */
 bool test_persistence_error_codes() {
-    TEST_ASSERT(to_error_code(mpps_error::database_error) == -980,
-                "database_error should be -980");
-    TEST_ASSERT(to_error_code(mpps_error::record_not_found) == -981,
-                "record_not_found should be -981");
-    TEST_ASSERT(to_error_code(mpps_error::invalid_state_transition) == -982,
-                "invalid_state_transition should be -982");
-    TEST_ASSERT(to_error_code(mpps_error::persistence_disabled) == -983,
-                "persistence_disabled should be -983");
+    TEST_ASSERT(to_error_code(mpps_error::database_error) == -890,
+                "database_error should be -890");
+    TEST_ASSERT(to_error_code(mpps_error::record_not_found) == -891,
+                "record_not_found should be -891");
+    TEST_ASSERT(to_error_code(mpps_error::invalid_state_transition) == -892,
+                "invalid_state_transition should be -892");
+    TEST_ASSERT(to_error_code(mpps_error::persistence_disabled) == -893,
+                "persistence_disabled should be -893");
 
     TEST_ASSERT(std::string(to_string(mpps_error::database_error)) ==
                 "Database operation failed",
