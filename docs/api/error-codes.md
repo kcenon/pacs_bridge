@@ -1,7 +1,7 @@
 # Error Codes Reference
 
-> **Version:** 0.1.0.0
-> **Last Updated:** 2025-12-10
+> **Version:** 0.2.0.0
+> **Last Updated:** 2026-02-08
 
 ---
 
@@ -63,6 +63,56 @@ Where:
 | 5000-5999 | PACS | DICOM/PACS integration errors |
 | 6000-6999 | Security | Authentication and authorization errors |
 | 9000-9999 | System | Internal system errors |
+
+---
+
+## Internal Error Code Allocation (enum values)
+
+> **Note:** The `PACS-XXXX` codes above are user-facing identifiers. Internally, the
+> C++ codebase uses `enum class` types with negative integer values. This table
+> documents the internal allocation to prevent range collisions.
+> See [#344](https://github.com/kcenon/pacs_bridge/issues/344) for details.
+
+| Range | Module | Enum Type | Header |
+|-------|--------|-----------|--------|
+| -700 to -705 | Integration | `integration_error` | `integration/network_adapter.h` |
+| **-750 to -759** | **Configuration** | **`config_error`** | **`config/bridge_config.h`** |
+| -800 to -809 | Bridge Server | `bridge_server_error` | `bridge_server.h` |
+| -800 to -812 | Database | `database_error` | `integration/database_adapter.h` |
+| -850 to -863 | PACS Adapter | `pacs_error` | `integration/pacs_adapter.h` |
+| -850 to -859 | ADT Handler | `adt_error` | `protocol/hl7/adt_handler.h` |
+| -860 to -869 | ORM Handler | `orm_error` | `protocol/hl7/orm_handler.h` |
+| -870 to -878 | MWL Adapter | `mwl_adapter_error` | `integration/mwl_adapter.h` |
+| -870 to -879 | SIU Handler | `siu_error` | `protocol/hl7/siu_handler.h` |
+| **-880 to -893** | **MPPS Handler** | **`mpps_error`** | **`pacs_adapter/mpps_handler.h`** |
+| -900 to -909 | Workflow | `workflow_error` | `workflow/mpps_hl7_workflow.h` |
+| -910 to -919 | Queue | `queue_error` | `router/queue_manager.h` |
+| -920 to -925 | Cache | `cache_error` | `cache/patient_cache.h` |
+| -920 to -929 | Outbound | `outbound_error` | `router/outbound_router.h` |
+| -930 to -938 | Router | `router_error` | `router/message_router.h` |
+| -930 to -938 | DICOM-HL7 | `dicom_hl7_error` | `mapping/dicom_hl7_mapper.h` |
+| -940 to -949 | Performance | `performance_error` | `performance/performance_types.h` |
+| -950 to -958 | Access Control | `access_error` | `security/access_control.h` |
+| -950 to -967 | HL7 Protocol | `hl7_error` | `protocol/hl7/hl7_types.h` |
+| -960 to -969 | Load Testing | `load_error` | `testing/load_types.h` |
+| -960 to -969 | Validation | `validation_error` | `security/input_validator.h` |
+| -960 to -965 | Exporter | `exporter_error` | `tracing/exporter_factory.h` |
+| -970 to -979 | MLLP | `mllp_error` | `mllp/mllp_types.h` |
+| -980 to -987 | Network | `network_error` | `mllp/mllp_network_adapter.h` |
+| -980 to -985 | Health | `health_error` | `monitoring/health_types.h` |
+| -980 to -989 | MWL Client | `mwl_error` | `pacs_adapter/mwl_client.h` |
+| -990 to -999 | TLS | `tls_error` | `security/tls_types.h` |
+| -1000 to -1019 | EMR | `emr_error` | `emr/emr_types.h` |
+| -1020 to -1034 | OAuth2 | `oauth2_error` | `security/oauth2_types.h` |
+| -1040 to -1059 | Patient | `patient_error` | `emr/patient_record.h` |
+| -1060 to -1079 | Result | `result_error` | `emr/result_poster.h` |
+| -1080 to -1099 | Encounter | `encounter_error` | `emr/encounter_context.h` |
+| -1100 to -1108 | EMR Config | `emr_config_error` | `config/emr_config.h` |
+| -1100 to -1109 | EMR Adapter | `adapter_error` | `emr/emr_adapter.h` |
+| **-1120 to -1124** | **Result Tracker** | **`tracker_error`** | **`emr/result_tracker.h`** |
+
+> **Bold entries** were relocated in [#344](https://github.com/kcenon/pacs_bridge/issues/344).
+> Remaining collisions are tracked in a follow-up issue.
 
 ---
 
@@ -1031,7 +1081,10 @@ Error code range: -1080 to -1099
 ## Workflow Errors
 
 Workflow errors occur during MPPS to HL7 workflow orchestration.
-Error code range: -900 to -909
+Error code range: -900 to -909 (`workflow_error` enum)
+
+> **Note:** `config_error` previously shared this range (-900 to -909) but has been
+> relocated to -750 to -759. See [#344](https://github.com/kcenon/pacs_bridge/issues/344).
 
 ### PACS-900: Workflow Not Running
 

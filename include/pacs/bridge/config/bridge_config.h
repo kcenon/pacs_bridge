@@ -38,44 +38,46 @@
 namespace pacs::bridge::config {
 
 // =============================================================================
-// Error Codes (-900 to -909)
+// Error Codes (-750 to -759)
 // =============================================================================
 
 /**
  * @brief Configuration specific error codes
  *
- * Allocated range: -900 to -909
+ * Allocated range: -750 to -759
+ * @note Relocated from -900 to -909 to resolve collision with workflow_error.
+ *       See https://github.com/kcenon/pacs_bridge/issues/344
  */
 enum class config_error : int {
     /** Configuration file not found */
-    file_not_found = -900,
+    file_not_found = -750,
 
     /** Failed to parse configuration file */
-    parse_error = -901,
+    parse_error = -751,
 
     /** Configuration validation failed */
-    validation_error = -902,
+    validation_error = -752,
 
     /** Required field is missing */
-    missing_required_field = -903,
+    missing_required_field = -753,
 
     /** Invalid value for configuration field */
-    invalid_value = -904,
+    invalid_value = -754,
 
     /** Environment variable not found */
-    env_var_not_found = -905,
+    env_var_not_found = -755,
 
     /** Invalid file format (not YAML or JSON) */
-    invalid_format = -906,
+    invalid_format = -756,
 
     /** Configuration file is empty */
-    empty_config = -907,
+    empty_config = -757,
 
     /** Circular include detected */
-    circular_include = -908,
+    circular_include = -758,
 
     /** IO error reading file */
-    io_error = -909
+    io_error = -759
 };
 
 /**
