@@ -1,0 +1,147 @@
+# Performance Benchmarks CI
+#
+# Runs adapter and baseline benchmarks to detect performance regressions.
+# Results are posted to the GitHub Actions step summary and uploaded as
+# artifacts for historical tracking.
+#
+# Issue #287: Phase 5 Comprehensive Testing and Validation
+
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'include/**'
+      - 'benchmarks/**'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+
+concurrency:
+  group: benchmarks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout pacs_bridge
+      uses: actions/checkout@v4
+      with:
+        path: pacs_bridge
+
+    - name: Cache kcenon dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          common_system
+          thread_system
+          logger_system
+          container_system
+          network_system
+          monitoring_system
+          pacs_system
+        key: kcenon-deps-v2-Linux-${{ hashFiles('pacs_bridge/CMakeLists.txt') }}
+        restore-keys: |
+          kcenon-deps-v2-Linux-
+
+    - name: Checkout dependencies
+      run: |
+        [ -d common_system ] || git clone --depth 1 https://github.com/kcenon/common_system.git
+        [ -d thread_system ] || git clone --depth 1 https://github.com/kcenon/thread_system.git
+        [ -d logger_system ] || git clone --depth 1 https://github.com/kcenon/logger_system.git
+        [ -d container_system ] || git clone --depth 1 https://github.com/kcenon/container_system.git
+        [ -d network_system ] || git clone --depth 1 https://github.com/kcenon/network_system.git
+        [ -d monitoring_system ] || git clone --depth 1 https://github.com/kcenon/monitoring_system.git
+        [ -d pacs_system ] || git clone --depth 1 https://github.com/kcenon/pacs_system.git
+
+    - name: Install dependencies
+      run: |
+        for i in 1 2 3; do
+          sudo apt update && break || sleep 10
+        done
+        sudo apt install -y cmake build-essential ninja-build pkg-config
+        sudo apt install -y libsqlite3-dev libssl-dev libfmt-dev
+        sudo apt install -y libgtest-dev libgmock-dev
+
+    - name: Configure CMake
+      working-directory: pacs_bridge
+      run: |
+        cmake -B build \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBRIDGE_BUILD_BENCHMARKS=ON \
+          -DBRIDGE_BUILD_TESTS=OFF \
+          -DBRIDGE_BUILD_EXAMPLES=OFF \
+          -DBRIDGE_BUILD_HL7=ON \
+          -DBRIDGE_BUILD_FHIR=OFF
+
+    - name: Build
+      working-directory: pacs_bridge
+      run: cmake --build build --parallel
+
+    - name: Run adapter benchmarks
+      working-directory: pacs_bridge
+      run: |
+        echo "=== Adapter Performance Benchmarks ===" | tee benchmark_adapter.log
+        ./build/bin/adapter_benchmark 2>&1 | tee -a benchmark_adapter.log
+      continue-on-error: true
+
+    - name: Run baseline benchmarks
+      working-directory: pacs_bridge
+      run: |
+        echo "=== Baseline Comparison Benchmarks ===" | tee benchmark_baseline.log
+        ./build/bin/baseline_benchmark 2>&1 | tee -a benchmark_baseline.log
+      continue-on-error: true
+
+    - name: Validate SRS performance targets
+      working-directory: pacs_bridge
+      run: |
+        # Check if baseline benchmark passed (includes SRS target validation)
+        if grep -q "test_performance_targets.*PASSED" benchmark_baseline.log; then
+          echo "SRS Performance Targets: PASSED"
+        elif grep -q "test_performance_targets.*FAILED" benchmark_baseline.log; then
+          echo "::error::SRS Performance Targets: FAILED"
+          echo "Review baseline benchmark output for details."
+          exit 1
+        else
+          echo "::warning::SRS Performance Target validation not found in output"
+        fi
+
+    - name: Post benchmark summary
+      if: always()
+      working-directory: pacs_bridge
+      run: |
+        {
+          echo "## Performance Benchmark Results"
+          echo ""
+          echo "### Adapter Benchmarks"
+          echo '```'
+          # Extract key results (passed/failed lines and summary)
+          grep -E "(PASSED|FAILED|Results:)" benchmark_adapter.log || echo "No results"
+          echo '```'
+          echo ""
+          echo "### Baseline Comparisons"
+          echo '```'
+          grep -E "(PASSED|FAILED|Results:|Overhead|Operation)" benchmark_baseline.log || echo "No results"
+          echo '```'
+          echo ""
+          echo "### SRS Performance Targets"
+          echo '```'
+          grep -A 10 "SRS Performance Targets:" benchmark_baseline.log || echo "Not available"
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload benchmark logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: |
+          pacs_bridge/benchmark_adapter.log
+          pacs_bridge/benchmark_baseline.log
+        retention-days: 30

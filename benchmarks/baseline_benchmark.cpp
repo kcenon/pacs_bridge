@@ -324,9 +324,9 @@ bool test_baseline_mpps() {
     return true;
 }
 
-// Note: MWL baseline comparison is not included here because mwl_adapter.h
-// and pacs_adapter.h define the same class name in the same namespace.
-// MWL adapter benchmarks are in adapter_benchmark.cpp.
+// Note: MWL baseline comparison is in adapter_benchmark.cpp (test_baseline_mwl)
+// because mwl_adapter.h and pacs_adapter.h both define class mwl_adapter in
+// the same namespace, causing an ODR violation if included together.
 
 // =============================================================================
 // Performance Targets Validation
@@ -398,7 +398,7 @@ int main() {
 
     std::cout << "=============================================" << std::endl;
     std::cout << "PACS Bridge Baseline Comparison Benchmarks" << std::endl;
-    std::cout << "Issue #322: Phase 5d Performance Benchmarks" << std::endl;
+    std::cout << "Issue #287: Phase 5 Comprehensive Testing" << std::endl;
     std::cout << "=============================================" << std::endl;
 
     int passed = 0;
