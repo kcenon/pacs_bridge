@@ -104,8 +104,9 @@ macro(add_gtest_test TEST_NAME)
     )
 
     # Parse optional labels from additional arguments
+    # Note: use ARGC instead of ARGN in macros (ARGN text-substitution makes if() unreliable)
     set(_TEST_LABELS "unit")
-    if(ARGN)
+    if(${ARGC} GREATER 1)
         set(_TEST_LABELS "${ARGN}")
     endif()
 
@@ -119,6 +120,9 @@ macro(add_gtest_test TEST_NAME)
 
     if(PACS_BRIDGE_HAS_GTEST)
         # Use gtest_discover_tests for better CTest integration
+        # Known limitation: gtest_discover_tests expands LABELS list to space-separated
+        # tokens, so only the FIRST label is recognized by CTest. Place the most
+        # important label first (e.g., "performance" or "phase2" for exclusion filters).
         include(GoogleTest)
         gtest_discover_tests(${TEST_NAME}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -165,8 +169,9 @@ macro(add_bridge_test TEST_NAME)
     )
 
     # Parse optional labels from additional arguments
+    # Note: use ARGC instead of ARGN in macros (ARGN text-substitution makes if() unreliable)
     set(_TEST_LABELS "unit")
-    if(ARGN)
+    if(${ARGC} GREATER 1)
         set(_TEST_LABELS "${ARGN}")
     endif()
 
@@ -175,6 +180,8 @@ macro(add_bridge_test TEST_NAME)
     if(_TEST_LABELS MATCHES "performance")
         set(_TEST_TIMEOUT 120)
     elseif(_TEST_LABELS MATCHES "load")
+        set(_TEST_TIMEOUT 180)
+    elseif(_TEST_LABELS MATCHES "phase2")
         set(_TEST_TIMEOUT 180)
     endif()
 

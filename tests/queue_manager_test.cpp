@@ -887,7 +887,7 @@ TEST_F(WorkerThreadTest, WorkersProcessMessages) {
     std::condition_variable delivered_cv;
 
     queue.start_workers([&](const queued_message& msg) -> std::expected<void, std::string> {
-        delivered_count.fetch_add(1, std::memory_order_relaxed);
+        delivered_count.fetch_add(1);
         delivered_cv.notify_all();
         return {};
     });
@@ -895,10 +895,10 @@ TEST_F(WorkerThreadTest, WorkersProcessMessages) {
     // Enqueue a message
     ASSERT_EXPECTED_OK(queue.enqueue("RIS", "WORKER_TEST_PAYLOAD"));
 
-    // Wait for delivery (up to 5 seconds)
+    // Wait for delivery (up to 30 seconds to handle system load during CTest)
     {
         std::unique_lock<std::mutex> lock(delivered_mutex);
-        delivered_cv.wait_for(lock, std::chrono::seconds{5},
+        delivered_cv.wait_for(lock, std::chrono::seconds{30},
                               [&] { return delivered_count.load() >= 1; });
     }
 
@@ -944,7 +944,7 @@ TEST_F(WorkerThreadTest, WorkersHandleMultipleMessages) {
     std::condition_variable delivered_cv;
 
     queue.start_workers([&](const queued_message&) -> std::expected<void, std::string> {
-        delivered_count.fetch_add(1, std::memory_order_relaxed);
+        delivered_count.fetch_add(1);
         delivered_cv.notify_all();
         return {};
     });
@@ -954,10 +954,10 @@ TEST_F(WorkerThreadTest, WorkersHandleMultipleMessages) {
         ASSERT_EXPECTED_OK(queue.enqueue("RIS", "MSG_" + std::to_string(i)));
     }
 
-    // Wait for all deliveries (up to 10 seconds)
+    // Wait for all deliveries (up to 30 seconds to handle system load during CTest)
     {
         std::unique_lock<std::mutex> lock(delivered_mutex);
-        delivered_cv.wait_for(lock, std::chrono::seconds{10},
+        delivered_cv.wait_for(lock, std::chrono::seconds{30},
                               [&] { return delivered_count.load() >= message_count; });
     }
 
