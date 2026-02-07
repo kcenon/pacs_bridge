@@ -15,7 +15,7 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 ## Features
 
 - **HL7 v2.x Gateway** - ADT, ORM, ORU, SIU message support via MLLP
-- **FHIR R4/R5 Gateway** - RESTful API integration with modern EHR systems
+- **FHIR R4 Gateway** - RESTful API integration with modern EHR systems
 - **Modality Worklist Bridge** - MWL C-FIND to RIS/HIS query translation
 - **MPPS Notification** - Exam status propagation to RIS
 - **Flexible Routing** - Multi-gateway support with failover
