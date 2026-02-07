@@ -586,8 +586,6 @@ bool test_executor_throughput() {
 
 // =============================================================================
 // MWL Adapter (Memory) Benchmarks
-// Note: PACS adapter benchmarks (MPPS, MWL query, storage) are in
-// baseline_benchmark.cpp to avoid ODR conflict with mwl_adapter.h
 // =============================================================================
 
 /**
@@ -861,6 +859,169 @@ bool test_concurrent_mwl() {
     return true;
 }
 
+// =============================================================================
+// MWL Baseline Comparison (Direct vs Adapter)
+//
+// This baseline comparison lives here (not in baseline_benchmark.cpp) because
+// mwl_adapter.h and pacs_adapter.h both define class mwl_adapter in the same
+// namespace, causing an ODR violation when included together. Since this file
+// already includes mwl_adapter.h, the MWL baseline comparison is placed here.
+// =============================================================================
+
+struct comparison_result {
+    std::string label;
+    double direct_ns;
+    double adapter_ns;
+
+    double overhead_percent() const {
+        return direct_ns > 0
+                   ? ((adapter_ns - direct_ns) / direct_ns) * 100.0
+                   : 0.0;
+    }
+
+    void print() const {
+        std::cout << "    " << std::left << std::setw(24) << label << " | "
+                  << std::right << std::setw(10) << std::fixed
+                  << std::setprecision(0) << direct_ns << " ns"
+                  << " | " << std::setw(10) << adapter_ns << " ns"
+                  << " | " << std::setw(8) << std::setprecision(1)
+                  << overhead_percent() << "%" << std::endl;
+    }
+};
+
+static void print_comparison_header(const std::string& section) {
+    std::cout << "\n  " << section << ":" << std::endl;
+    std::cout << "    " << std::left << std::setw(24) << "Operation"
+              << " | " << std::right << std::setw(13) << "Direct"
+              << " | " << std::setw(13) << "Adapter"
+              << " | " << std::setw(9) << "Overhead" << std::endl;
+    std::cout << "    " << std::string(24, '-') << "-+-" << std::string(13, '-')
+              << "-+-" << std::string(13, '-') << "-+-"
+              << std::string(9, '-') << std::endl;
+}
+
+/**
+ * @brief Compare direct unordered_map operations vs memory_mwl_adapter
+ *
+ * Direct: unordered_map + manual linear scan for filtering
+ * Adapter: memory_mwl_adapter (add_item / query_items / get_item)
+ *
+ * Measures the overhead of adapter abstraction for MWL CRUD operations.
+ */
+bool test_baseline_mwl() {
+    using namespace performance;
+
+    const size_t warmup = 100;
+    const size_t iterations = 5000;
+    const size_t data_size = 500;
+
+    // ---- Setup: Direct implementation ----
+    struct direct_entry {
+        std::string accession;
+        std::string patient_id;
+        mapping::mwl_item item;
+    };
+    std::unordered_map<std::string, direct_entry> direct_map;
+    std::mutex direct_mu;
+
+    for (size_t i = 0; i < data_size; ++i) {
+        auto item = make_test_mwl(static_cast<int>(i));
+        std::string acc = item.imaging_service_request.accession_number;
+        direct_map.emplace(
+            acc, direct_entry{acc, item.patient.patient_id, item});
+    }
+
+    // ---- Setup: Adapter ----
+    auto mwl = integration::create_mwl_adapter("");
+    for (size_t i = 0; i < data_size; ++i) {
+        (void)mwl->add_item(make_test_mwl(static_cast<int>(i)));
+    }
+
+    // ---- Benchmark: add_item ----
+    auto direct_add_avg = benchmark_with_warmup(
+        [&, idx = data_size]() mutable {
+            auto item = make_test_mwl(static_cast<int>(idx));
+            std::string acc = item.imaging_service_request.accession_number;
+            std::lock_guard lock(direct_mu);
+            direct_map.emplace(
+                acc, direct_entry{acc, item.patient.patient_id, item});
+            idx++;
+        },
+        warmup, iterations);
+
+    auto adapter_add_avg = benchmark_with_warmup(
+        [&, idx = data_size]() mutable {
+            (void)mwl->add_item(make_test_mwl(static_cast<int>(idx++)));
+        },
+        warmup, iterations);
+
+    // ---- Benchmark: query by patient_id ----
+    auto direct_query_avg = benchmark_with_warmup(
+        [&, idx = size_t{0}]() mutable {
+            std::string pat_id = "PAT" + std::to_string(idx++ % data_size);
+            std::lock_guard lock(direct_mu);
+            std::vector<mapping::mwl_item> results;
+            for (const auto& [k, v] : direct_map) {
+                if (v.patient_id == pat_id) {
+                    results.push_back(v.item);
+                }
+            }
+            (void)results.size();
+        },
+        warmup, iterations);
+
+    auto adapter_query_avg = benchmark_with_warmup(
+        [&, idx = size_t{0}]() mutable {
+            integration::mwl_query_filter filter;
+            filter.patient_id = "PAT" + std::to_string(idx++ % data_size);
+            (void)mwl->query_items(filter);
+        },
+        warmup, iterations);
+
+    // ---- Benchmark: get by accession number ----
+    auto direct_get_avg = benchmark_with_warmup(
+        [&, idx = size_t{0}]() mutable {
+            std::string acc = "ACC" + std::to_string(idx++ % data_size);
+            std::lock_guard lock(direct_mu);
+            (void)direct_map.find(acc);
+        },
+        warmup, iterations);
+
+    auto adapter_get_avg = benchmark_with_warmup(
+        [&, idx = size_t{0}]() mutable {
+            (void)mwl->get_item(
+                "ACC" + std::to_string(idx++ % data_size));
+        },
+        warmup, iterations);
+
+    // ---- Print results ----
+    print_comparison_header("MWL Baseline Comparison");
+
+    comparison_result r1{
+        "add_item/emplace",
+        static_cast<double>(direct_add_avg.count()),
+        static_cast<double>(adapter_add_avg.count())};
+    r1.print();
+
+    comparison_result r2{
+        "query/linear scan",
+        static_cast<double>(direct_query_avg.count()),
+        static_cast<double>(adapter_query_avg.count())};
+    r2.print();
+
+    comparison_result r3{
+        "get_item/find",
+        static_cast<double>(direct_get_avg.count()),
+        static_cast<double>(adapter_get_avg.count())};
+    r3.print();
+
+    std::cout
+        << "\n    Note: Adapter includes validation + mutex + optional filter "
+           "matching"
+        << std::endl;
+    return true;
+}
+
 }  // namespace pacs::bridge::benchmark::adapter
 
 // =============================================================================
@@ -872,7 +1033,7 @@ int main() {
 
     std::cout << "=============================================" << std::endl;
     std::cout << "PACS Bridge Adapter Performance Benchmarks" << std::endl;
-    std::cout << "Issue #322: Phase 5d Performance Benchmarks" << std::endl;
+    std::cout << "Issue #287: Phase 5 Comprehensive Testing" << std::endl;
     std::cout << "=============================================" << std::endl;
 
     int passed = 0;
@@ -908,6 +1069,10 @@ int main() {
     std::cout << "\n--- Concurrent Adapter Stress Benchmarks ---" << std::endl;
     RUN_TEST(test_concurrent_database);
     RUN_TEST(test_concurrent_mwl);
+
+    // MWL Baseline Comparison (resolves ODR conflict with pacs_adapter.h)
+    std::cout << "\n--- MWL Baseline Comparison ---" << std::endl;
+    RUN_TEST(test_baseline_mwl);
 
     // Summary
     std::cout << "\n=============================================" << std::endl;
