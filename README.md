@@ -20,8 +20,8 @@ PACS Bridge enables healthcare facilities to integrate their PACS (Picture Archi
 - **MPPS Notification** - Exam status propagation to RIS
 - **Flexible Routing** - Multi-gateway support with failover
 - **IHE SWF Compliant** - Follows IHE Scheduled Workflow integration profile
-- **C++20 Concepts** - Type-safe templates with clear compile-time constraints
-- **C++20 Modules** - Experimental module support for improved compilation (CMake 3.28+)
+- **C++23 Concepts** - Type-safe templates with clear compile-time constraints
+- **C++23 Modules** - Experimental module support for improved compilation (CMake 3.28+)
 - **Prometheus Metrics** - Built-in metrics export for monitoring and alerting
 
 ## Architecture
