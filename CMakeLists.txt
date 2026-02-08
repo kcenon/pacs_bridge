@@ -26,7 +26,7 @@ cmake_minimum_required(VERSION 3.20)
 # =============================================================================
 
 project(pacs_bridge
-    VERSION 0.1.0.0
+    VERSION 0.2.0.0
     DESCRIPTION "HL7-DICOM Bridge for Healthcare Integration"
     HOMEPAGE_URL "https://github.com/kcenon/pacs_bridge"
     LANGUAGES CXX

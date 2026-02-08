@@ -1,8 +1,8 @@
 # SDS - Component Designs
 
-> **Version:** 0.1.6.0
+> **Version:** 0.2.0.0
 > **Parent Document:** [SDS.md](SDS.md)
-> **Last Updated:** 2025-12-10
+> **Last Updated:** 2026-02-08
 
 ---
 
@@ -5670,7 +5670,7 @@ pacs_bridge --config /etc/pacs_bridge/config.yaml
 
 ---
 
-*Document Version: 0.1.5.0*
+*Document Version: 0.2.0.0*
 *Created: 2025-12-07*
 *Updated: 2025-12-18 - Added Bridge Server Module (Section 13)*
 *Author: kcenon@naver.com*
