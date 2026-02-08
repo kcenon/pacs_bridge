@@ -1,6 +1,6 @@
 # SDS - 요구사항 추적성 매트릭스
 
-> **버전:** 0.2.0.0
+> **버전:** 0.2.1.0
 > **상위 문서:** [SDS_KO.md](SDS_KO.md)
 > **최종 수정일:** 2026-02-08
 
@@ -135,6 +135,26 @@
 | FR-5.2.3 | 환자 ID 도메인 매핑 설정 | DES-CFG-001 | - | ○ |
 | FR-5.2.4 | 사용자 정의 필드 매핑 지원 | DES-CFG-001 | - | ○ |
 
+### 2.6 FR-6: EMR 통합 (5단계)
+
+| 요구사항 ID | 요구사항 | 설계 요소 | 시퀀스 | 상태 |
+|------------|---------|----------|--------|------|
+| FR-6.1.1 | 아웃바운드 EMR 통신을 위한 FHIR R4 HTTP 클라이언트 구현 | DES-EMR-001 (fhir_client) | - | ✓ |
+| FR-6.1.2 | FHIR Bundle 연산 지원 (배치/트랜잭션) | DES-EMR-001 (fhir_bundle) | - | ✓ |
+| FR-6.1.3 | 연결 풀링을 갖춘 HTTP 클라이언트 어댑터 구현 | DES-EMR-002 (http_client_adapter) | - | ✓ |
+| FR-6.1.4 | EMR 엔드포인트용 OAuth2 인증 지원 | DES-SEC-001 (oauth2_client) | - | ✓ |
+| FR-6.2.1 | 외부 EMR에서 환자 인구통계 조회 | DES-EMR-003 (patient_lookup) | - | ✓ |
+| FR-6.2.2 | EMR 응답에서 FHIR Patient 리소스 파싱 | DES-EMR-003 (fhir_patient_parser) | - | ✓ |
+| FR-6.2.3 | 구성 가능한 기준으로 시스템 간 환자 매칭 | DES-EMR-004 (patient_matcher) | - | ✓ |
+| FR-6.2.4 | 구성 가능한 TTL로 EMR 환자 조회 캐싱 | DES-EMR-003 (patient_lookup) | - | ✓ |
+| FR-6.3.1 | 외부 EMR에 DiagnosticReport 리소스 전송 | DES-EMR-005 (result_poster) | - | ✓ |
+| FR-6.3.2 | PACS 스터디 결과로 FHIR DiagnosticReport 생성 | DES-EMR-006 (diagnostic_report_builder) | - | ✓ |
+| FR-6.3.3 | 결과 전달 상태 추적 및 재시도 처리 | DES-EMR-007 (result_tracker) | - | ✓ |
+| FR-6.3.4 | 임상 연관을 위한 Encounter 컨텍스트 지원 | DES-EMR-008 (encounter_context) | - | ✓ |
+| FR-6.4.1 | 추상 EMR 어댑터 인터페이스 제공 | DES-EMR-009 (emr_adapter) | - | ✓ |
+| FR-6.4.2 | 표준 EMR 시스템용 제네릭 FHIR 어댑터 구현 | DES-EMR-010 (generic_fhir_adapter) | - | ✓ |
+| FR-6.4.3 | EMR별 구성 지원 (엔드포인트, 인증, 매핑) | DES-EMR-009, DES-CFG-001 | - | ✓ |
+
 ---
 
 ## 3. 비기능 요구사항 추적성
@@ -215,6 +235,17 @@
 | DES-PACS-002 | mpps_handler | PACS 어댑터 | IR-1, FR-3.2 |
 | DES-PACS-003 | patient_cache | PACS 어댑터 | FR-4.1.1 |
 | DES-CFG-001 | bridge_config | 설정 | FR-5.1, FR-5.2 |
+| DES-EMR-001 | fhir_client | EMR 통합 | FR-6.1.1, FR-6.1.2 |
+| DES-EMR-002 | http_client_adapter | EMR 통합 | FR-6.1.3 |
+| DES-EMR-003 | patient_lookup | EMR 통합 | FR-6.2.1, FR-6.2.2, FR-6.2.4 |
+| DES-EMR-004 | patient_matcher | EMR 통합 | FR-6.2.3 |
+| DES-EMR-005 | result_poster | EMR 통합 | FR-6.3.1 |
+| DES-EMR-006 | diagnostic_report_builder | EMR 통합 | FR-6.3.2 |
+| DES-EMR-007 | result_tracker | EMR 통합 | FR-6.3.3 |
+| DES-EMR-008 | encounter_context | EMR 통합 | FR-6.3.4 |
+| DES-EMR-009 | emr_adapter | EMR 통합 | FR-6.4.1, FR-6.4.3 |
+| DES-EMR-010 | generic_fhir_adapter | EMR 통합 | FR-6.4.2 |
+| DES-SEC-001 | oauth2_client | 보안 | FR-6.1.4 |
 
 ### 4.2 인터페이스 명세
 
@@ -231,6 +262,8 @@
 | INT-ECO-002 | 로거 통합 | 통합 | NFR-4.2, NFR-5.5 |
 | INT-ERR-001 | 오류 코드 | 오류 처리 | 부록 C |
 | INT-CFG-001 | 설정 파일 | 설정 | FR-5, 부록 D |
+| INT-EXT-004 | EMR FHIR 인터페이스 | 외부 | FR-6.1, FR-6.2, FR-6.3 |
+| INT-SEC-001 | OAuth2/SMART 인증 | 보안 | FR-6.1.4 |
 
 ### 4.3 시퀀스 다이어그램
 
@@ -273,8 +306,12 @@
 | DES-PACS-002 | mpps_handler | tests/pacs/mpps_handler_test.cpp | 8 |
 | DES-PACS-003 | patient_cache | tests/pacs/patient_cache_test.cpp | 10 |
 | DES-CFG-001 | bridge_config | tests/config/bridge_config_test.cpp | 10 |
+| DES-EMR-001 | fhir_client | tests/emr_config_test.cpp | 15 |
+| DES-EMR-003 | patient_lookup | tests/emr_config_test.cpp | 10 |
+| DES-EMR-005 | result_poster | tests/emr_config_test.cpp | 10 |
+| DES-EMR-009 | emr_adapter | tests/emr_adapter_test.cpp | 15 |
 
-**총 추정 단위 테스트:** ~180
+**총 추정 단위 테스트:** ~230
 
 ### 5.2 통합 테스트 시나리오
 
@@ -288,6 +325,10 @@
 | IT-006 | 환자 캐시 동기화 | FR-4.1.1 |
 | IT-007 | 오더 취소 워크플로우 | FR-3.1.5 |
 | IT-008 | 오류 처리 및 NAK | 오류 처리 |
+| IT-009 | EMR 환자 조회 및 매칭 | FR-6.2, FR-6.4 |
+| IT-010 | EMR 결과 전송 및 추적 | FR-6.3, FR-6.4 |
+| IT-011 | EMR OAuth2 인증 흐름 | FR-6.1.4 |
+| IT-012 | 종단간 EMR 통합 워크플로우 | FR-6.1 - FR-6.4 |
 
 ### 5.3 적합성 테스트
 
@@ -337,29 +378,27 @@
 | FR-3 (DICOM 통합) | 14 | 12 | 0 | 86% 설계됨 |
 | FR-4 (메시지 라우팅) | 12 | 10 | 0 | 83% 설계됨 |
 | FR-5 (설정) | 8 | 6 | 0 | 75% 설계됨 |
-| **합계** | **62** | **55** | **0** | **89% 설계됨** |
+| FR-6 (EMR 통합) | 15 | 15 | 15 | 100% |
+| **합계** | **77** | **70** | **15** | **91% 설계됨** |
 
 ### 6.4 권장 조치
 
-1. **1단계 우선순위:**
-   - 모든 "Must Have" 요구사항 구현 완료
-   - 핵심 HL7/MLLP 및 ORM→MWL 흐름에 집중
-   - 포괄적인 단위 테스트 스위트 구축
+1. **즉시 (완료됨):**
+   - ~~EMR 클라이언트 모듈의 FR-6.x 요구사항 생성~~ (완료: PRD FR-6.1-6.4)
+   - ~~FHIR 클라이언트 기능의 SRS-EMR-xxx 요구사항 생성~~ (완료: SRS-EMR-001-007, SRS-SEC-006-007)
+   - ~~모든 문서에서 C++ 표준 참조 C++20→C++23 업데이트~~ (완료)
 
-2. **2단계 추가 사항:**
-   - SIU 메시지 지원 추가 (일정 관리)
-   - MLLP용 TLS 구현
-   - 오더 수정 처리 추가
-   - 라우팅 기능 강화
+2. **단기:**
+   - 분산 추적을 위한 NFR-6.x 요구사항 생성
+   - 성능 최적화를 위한 NFR-7.x 요구사항 생성
+   - 아키텍처 문서에 MLLP 어댑터 패턴 문서화
 
-3. **3단계 로드맵:**
-   - 완전한 FHIR R4 게이트웨이 구현
-   - 리포트 통합 (ORU 생성)
-   - 핫 리로드 설정
-   - 고급 매핑 기능
+3. **중기:**
+   - 전체 코드-요구사항 매핑 감사 수행
+   - PR 워크플로우에 연동된 문서 업데이트 정책 수립
 
 ---
 
-*문서 버전: 0.2.0.0*
+*문서 버전: 0.2.1.0*
 *작성일: 2025-12-07*
 *작성자: kcenon@naver.com*

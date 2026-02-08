@@ -1,8 +1,8 @@
 # SDS - Requirements Traceability Matrix
 
-> **Version:** 0.2.0.0
+> **Version:** 0.2.1.0
 > **Parent Document:** [SDS.md](SDS.md)
-> **Last Updated:** 2026-02-07
+> **Last Updated:** 2026-02-08
 
 ---
 
@@ -135,6 +135,26 @@ This document establishes bidirectional traceability between:
 | FR-5.2.3 | Configure patient ID domain mappings | DES-CFG-001 | - | ✓ |
 | FR-5.2.4 | Support custom field mappings | DES-CFG-001 | - | ◐ |
 
+### 2.6 FR-6: EMR Integration (Phase 5)
+
+| Requirement ID | Requirement | Design Element | Sequence | Status |
+|---------------|-------------|----------------|----------|--------|
+| FR-6.1.1 | Implement FHIR R4 HTTP client for outbound EMR communication | DES-EMR-001 (fhir_client) | - | ✓ |
+| FR-6.1.2 | Support FHIR Bundle operations (batch/transaction) | DES-EMR-001 (fhir_bundle) | - | ✓ |
+| FR-6.1.3 | Implement HTTP client adapter with connection pooling | DES-EMR-002 (http_client_adapter) | - | ✓ |
+| FR-6.1.4 | Support OAuth2 authentication for EMR endpoints | DES-SEC-001 (oauth2_client) | - | ✓ |
+| FR-6.2.1 | Query external EMR for patient demographics | DES-EMR-003 (patient_lookup) | - | ✓ |
+| FR-6.2.2 | Parse FHIR Patient resources from EMR responses | DES-EMR-003 (fhir_patient_parser) | - | ✓ |
+| FR-6.2.3 | Match patients across systems using configurable criteria | DES-EMR-004 (patient_matcher) | - | ✓ |
+| FR-6.2.4 | Cache EMR patient lookups with configurable TTL | DES-EMR-003 (patient_lookup) | - | ✓ |
+| FR-6.3.1 | Post DiagnosticReport resources to external EMR | DES-EMR-005 (result_poster) | - | ✓ |
+| FR-6.3.2 | Build FHIR DiagnosticReport from PACS study results | DES-EMR-006 (diagnostic_report_builder) | - | ✓ |
+| FR-6.3.3 | Track result delivery status and handle retries | DES-EMR-007 (result_tracker) | - | ✓ |
+| FR-6.3.4 | Support encounter context for clinical correlation | DES-EMR-008 (encounter_context) | - | ✓ |
+| FR-6.4.1 | Provide abstract EMR adapter interface | DES-EMR-009 (emr_adapter) | - | ✓ |
+| FR-6.4.2 | Implement generic FHIR adapter for standard EMR systems | DES-EMR-010 (generic_fhir_adapter) | - | ✓ |
+| FR-6.4.3 | Support EMR-specific configuration (endpoints, auth, mappings) | DES-EMR-009, DES-CFG-001 | - | ✓ |
+
 ---
 
 ## 3. Non-Functional Requirements Traceability
@@ -215,6 +235,17 @@ This document establishes bidirectional traceability between:
 | DES-PACS-002 | mpps_handler | PACS Adapter | IR-1, FR-3.2 |
 | DES-PACS-003 | patient_cache | PACS Adapter | FR-4.1.1 |
 | DES-CFG-001 | bridge_config | Configuration | FR-5.1, FR-5.2 |
+| DES-EMR-001 | fhir_client | EMR Integration | FR-6.1.1, FR-6.1.2 |
+| DES-EMR-002 | http_client_adapter | EMR Integration | FR-6.1.3 |
+| DES-EMR-003 | patient_lookup | EMR Integration | FR-6.2.1, FR-6.2.2, FR-6.2.4 |
+| DES-EMR-004 | patient_matcher | EMR Integration | FR-6.2.3 |
+| DES-EMR-005 | result_poster | EMR Integration | FR-6.3.1 |
+| DES-EMR-006 | diagnostic_report_builder | EMR Integration | FR-6.3.2 |
+| DES-EMR-007 | result_tracker | EMR Integration | FR-6.3.3 |
+| DES-EMR-008 | encounter_context | EMR Integration | FR-6.3.4 |
+| DES-EMR-009 | emr_adapter | EMR Integration | FR-6.4.1, FR-6.4.3 |
+| DES-EMR-010 | generic_fhir_adapter | EMR Integration | FR-6.4.2 |
+| DES-SEC-001 | oauth2_client | Security | FR-6.1.4 |
 
 ### 4.2 Interface Specifications
 
@@ -231,6 +262,8 @@ This document establishes bidirectional traceability between:
 | INT-ECO-002 | Logger Integration | Integration | NFR-4.2, NFR-5.5 |
 | INT-ERR-001 | Error Codes | Error Handling | Appendix C |
 | INT-CFG-001 | Configuration File | Configuration | FR-5, Appendix D |
+| INT-EXT-004 | EMR FHIR Interface | External | FR-6.1, FR-6.2, FR-6.3 |
+| INT-SEC-001 | OAuth2/SMART Auth | Security | FR-6.1.4 |
 
 ### 4.3 Sequence Diagrams
 
@@ -273,8 +306,12 @@ This document establishes bidirectional traceability between:
 | DES-PACS-002 | mpps_handler | tests/pacs/mpps_handler_test.cpp | 8 |
 | DES-PACS-003 | patient_cache | tests/pacs/patient_cache_test.cpp | 10 |
 | DES-CFG-001 | bridge_config | tests/config/bridge_config_test.cpp | 10 |
+| DES-EMR-001 | fhir_client | tests/emr_config_test.cpp | 15 |
+| DES-EMR-003 | patient_lookup | tests/emr_config_test.cpp | 10 |
+| DES-EMR-005 | result_poster | tests/emr_config_test.cpp | 10 |
+| DES-EMR-009 | emr_adapter | tests/emr_adapter_test.cpp | 15 |
 
-**Total Estimated Unit Tests:** ~180
+**Total Estimated Unit Tests:** ~230
 
 ### 5.2 Integration Test Scenarios
 
@@ -288,6 +325,10 @@ This document establishes bidirectional traceability between:
 | IT-006 | Patient cache synchronization | FR-4.1.1 |
 | IT-007 | Order cancellation workflow | FR-3.1.5 |
 | IT-008 | Error handling and NAK | Error Handling |
+| IT-009 | EMR patient lookup and matching | FR-6.2, FR-6.4 |
+| IT-010 | EMR result posting with tracking | FR-6.3, FR-6.4 |
+| IT-011 | EMR OAuth2 authentication flow | FR-6.1.4 |
+| IT-012 | End-to-end EMR integration workflow | FR-6.1 - FR-6.4 |
 
 ### 5.3 Conformance Tests
 
@@ -327,21 +368,22 @@ All originally planned design elements have been implemented. Remaining gaps are
 | FR-3 (DICOM Integration) | 14 | 14 | 13 | 93% implemented |
 | FR-4 (Message Routing) | 12 | 12 | 12 | 100% |
 | FR-5 (Configuration) | 8 | 8 | 7 | 88% implemented |
-| **Total (Planned)** | **62** | **62** | **57** | **92% implemented** |
+| FR-6 (EMR Integration) | 15 | 15 | 15 | 100% |
+| **Total** | **77** | **77** | **72** | **94% implemented** |
 
 ### 6.4 Undocumented Modules (Implemented Without PRD/SRS Coverage)
 
-The following modules were implemented during development but have no formal requirements traceability. Requirements should be retroactively created (see PRD FR-6.x series).
+The following modules were implemented during development but have no formal requirements traceability. Requirements should be retroactively created.
 
-| Module | Location | Source Files | Description | Proposed Requirement |
-|--------|----------|-------------|-------------|---------------------|
-| EMR Client | `src/emr/` | 13 | FHIR R4 client for external EMR integration (patient lookup, result posting) | FR-6.x (Phase 5) |
-| Distributed Tracing | `src/tracing/` | 6 | OpenTelemetry-compatible span tracking and context propagation | NFR-6.x |
-| Performance | `src/performance/` | 6 | Zero-copy parser, object pools, lock-free queues, thread pool manager | NFR-7.x |
-| Messaging Patterns | `src/messaging/` | 5 | Event bus, HL7 pipeline, async request handling | Internal architecture |
-| Load Testing | `src/testing/` | 3 | Load generation framework with reporting | Test infrastructure |
+| Module | Location | Source Files | Description | Proposed Requirement | Status |
+|--------|----------|-------------|-------------|---------------------|--------|
+| ~~EMR Client~~ | ~~`src/emr/`~~ | ~~13~~ | ~~FHIR R4 client for external EMR integration~~ | ~~FR-6.x (Phase 5)~~ | **Resolved** (SRS-EMR-001-007, SRS-SEC-006-007) |
+| Distributed Tracing | `src/tracing/` | 6 | OpenTelemetry-compatible span tracking and context propagation | NFR-6.x | Pending |
+| Performance | `src/performance/` | 6 | Zero-copy parser, object pools, lock-free queues, thread pool manager | NFR-7.x | Pending |
+| Messaging Patterns | `src/messaging/` | 5 | Event bus, HL7 pipeline, async request handling | Internal architecture | Pending |
+| Load Testing | `src/testing/` | 3 | Load generation framework with reporting | Test infrastructure | Pending |
 
-**Total undocumented: ~33 source files requiring retroactive requirements traceability.**
+**Total undocumented: ~20 source files requiring retroactive requirements traceability** (reduced from ~33 after EMR Client resolution).
 
 ### 6.5 MLLP Adapter Architecture (Undocumented in PRD)
 
@@ -357,10 +399,10 @@ This flexible architecture allows standalone deployment without ecosystem depend
 
 ### 6.6 Recommended Actions
 
-1. **Immediate:**
-   - Create FR-6.x requirements for EMR Client module in PRD addendum
-   - Create SRS-EMR-xxx requirements for FHIR Client functionality
-   - Update C++ standard references from C++20 to C++23 across all documents
+1. **Immediate (Completed):**
+   - ~~Create FR-6.x requirements for EMR Client module in PRD addendum~~ (Done: PRD FR-6.1-6.4)
+   - ~~Create SRS-EMR-xxx requirements for FHIR Client functionality~~ (Done: SRS-EMR-001-007, SRS-SEC-006-007)
+   - ~~Update C++ standard references from C++20 to C++23 across all documents~~ (Done)
 
 2. **Short-term:**
    - Create NFR-6.x requirements for distributed tracing
