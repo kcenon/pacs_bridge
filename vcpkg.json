@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "pacs-bridge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "HL7-DICOM Bridge for Healthcare Integration",
   "homepage": "https://github.com/kcenon/pacs_bridge",
   "license": "BSD-3-Clause",
