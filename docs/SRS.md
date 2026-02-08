@@ -170,7 +170,7 @@ This document is organized as follows:
 
 | Component | Requirement |
 |-----------|-------------|
-| **Operating System** | Linux (Ubuntu 22.04+), macOS 14+, Windows 10/11 |
+| **Operating System** | Linux (Ubuntu 24.04+), macOS 14+, Windows 10/11 |
 | **Compiler** | C++23 (GCC 13+, Clang 16+, MSVC 2022 v17.0+) |
 | **Memory** | Minimum 2 GB, Recommended 8 GB |
 | **Network** | 100 Mbps Ethernet minimum |
