@@ -559,6 +559,8 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 
 ### Phase 1: Core HL7 Gateway (Weeks 1-6)
 
+> **Status: Complete** — All deliverables implemented and validated (14 validation tests passing).
+
 **Objective**: Establish HL7 v2.x message processing and MWL integration
 
 | Deliverable | Description | Acceptance Criteria |
@@ -574,6 +576,8 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 
 ### Phase 2: MPPS and Bidirectional Flow (Weeks 7-10)
 
+> **Status: Complete** — All deliverables implemented and validated (7 validation tests passing).
+
 **Objective**: Implement MPPS notification and outbound HL7
 
 | Deliverable | Description | Acceptance Criteria |
@@ -587,6 +591,8 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 **Dependencies**: Phase 1 complete
 
 ### Phase 3: FHIR Gateway and Reporting (Weeks 11-16)
+
+> **Status: Core Implemented** — FHIR REST server, Patient, ServiceRequest, and ImagingStudy resources are implemented (~6,800 LOC across 14 source files) and validated (9 test files, 4 SRS requirements met). The build flag `BRIDGE_BUILD_FHIR` remains `OFF` by default because the FHIR module has optional ecosystem dependencies; set it to `ON` to include the FHIR gateway in the build.
 
 **Objective**: Add FHIR R4 support and report integration
 
@@ -602,6 +608,8 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 
 ### Phase 4: Production Hardening (Weeks 17-20)
 
+> **Status: Partially Implemented** — Key hardening features (TLS 1.2/1.3, OAuth 2.0, HIPAA-compliant audit logging, IP whitelisting, structured monitoring) were implemented ahead of schedule during Phases 1-2 due to the standalone build architecture requiring early security primitives. Remaining items include hot-reload configuration and complete user/admin documentation.
+
 **Objective**: Security, reliability, and operational readiness
 
 | Deliverable | Description | Acceptance Criteria |
@@ -615,6 +623,8 @@ To provide a reliable, high-performance integration bridge that seamlessly conne
 **Dependencies**: Phase 3 complete
 
 ### Phase 5: EMR Integration (Extension — Added v0.2.0)
+
+> **Status: In Progress** — Client framework implemented (~3,660 LOC) including FHIR HTTP client, bundle operations, patient lookup, and generic EMR adapter. End-to-end EMR integration and SRS requirement coverage are pending.
 
 > **Note:** This phase was added post-initial planning to address EMR integration requirements discovered during implementation.
 
