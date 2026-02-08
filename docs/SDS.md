@@ -1,8 +1,8 @@
 # Software Design Specification - PACS Bridge
 
 > **Document ID:** PACS-BRIDGE-SDS-001
-> **Version:** 0.1.0.0
-> **Last Updated:** 2025-12-07
+> **Version:** 0.2.0.0
+> **Last Updated:** 2026-02-08
 > **Language:** **English** | [한국어](SDS_KO.md)
 > **Status:** Draft
 
@@ -552,6 +552,6 @@ modality_mapping:
 
 ---
 
-*Document Version: 0.1.0.0*
+*Document Version: 0.2.0.0*
 *Created: 2025-12-07*
 *Author: kcenon@naver.com*

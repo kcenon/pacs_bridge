@@ -1,7 +1,7 @@
 # HL7 Message Reference
 
-> **Version:** 0.1.0.0
-> **Last Updated:** 2025-12-10
+> **Version:** 0.2.0.0
+> **Last Updated:** 2026-02-08
 
 ---
 
