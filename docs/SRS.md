@@ -1,7 +1,7 @@
 # Software Requirements Specification - PACS Bridge
 
-> **Version:** 0.2.0.0
-> **Last Updated:** 2026-02-07
+> **Version:** 0.2.1.0
+> **Last Updated:** 2026-02-08
 > **Language:** **English** | [한국어](SRS_KO.md)
 > **Standard:** IEEE 830-1998 based
 
@@ -925,6 +925,70 @@ pacs_system:
 2. Implement generic FHIR-based adapter as default
 3. Support EMR-specific configuration per deployment
 4. Allow runtime selection of EMR adapter
+5. Provide health-check and connection status monitoring
+6. Support vendor-specific configurations (Epic, Cerner, Meditech, Allscripts)
+
+---
+
+#### SRS-EMR-005: Encounter Context Service
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-005 |
+| **Title** | Clinical Encounter Context Provider |
+| **Description** | The system shall query external EMR systems for encounter/visit context to correlate radiology results with clinical encounters, supporting FHIR Encounter resource lookups with caching. |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.3.4 |
+
+**Acceptance Criteria:**
+1. Query encounters by encounter ID
+2. Find encounters by visit number with optional identifier system
+3. Find active encounters for a given patient
+4. Parse FHIR Encounter resources including status, class, participants, and locations
+5. Cache encounter lookups with configurable TTL
+6. Handle encounter statuses (planned, arrived, in-progress, finished, cancelled)
+
+---
+
+#### SRS-EMR-006: Result Delivery Tracking
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-006 |
+| **Title** | EMR Result Delivery Tracker |
+| **Description** | The system shall track the delivery status of results posted to external EMR systems, supporting lookup by study UID, accession number, or report ID, with configurable capacity and TTL-based expiration. |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.3.3 |
+
+**Acceptance Criteria:**
+1. Track posted results with study UID, accession number, and report ID
+2. Support lookup by study instance UID, accession number, or report ID
+3. Detect duplicate postings before submission
+4. Enforce configurable capacity limits (default: 10,000 entries)
+5. Implement TTL-based expiration with automatic cleanup (default: 7 days)
+6. Provide in-memory implementation with thread-safe operations
+
+---
+
+#### SRS-EMR-007: FHIR DiagnosticReport Builder
+| Attribute | Value |
+|-----------|-------|
+| **ID** | SRS-EMR-007 |
+| **Title** | FHIR DiagnosticReport Resource Builder |
+| **Description** | The system shall construct valid FHIR R4 DiagnosticReport resources from internal study results using a fluent builder pattern, with validation and support for standard coding systems (LOINC, SNOMED CT). |
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **Traces To** | FR-6.3.1, FR-6.3.2 |
+
+**Acceptance Criteria:**
+1. Build DiagnosticReport from internal study result data
+2. Support required fields: status, code, subject
+3. Include category (radiology), effective date/time, issued date
+4. Attach performer and results interpreter references
+5. Support conclusion text and coded conclusion (SNOMED CT)
+6. Include identifiers (accession number, study instance UID)
+7. Link to encounter, imaging study, and service request references
+8. Validate resource completeness before serialization
 
 ---
 
@@ -1066,6 +1130,28 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 
 ---
 
+### 5.6 Feature: EMR Integration
+
+**Description:** Post radiology results to external EMR systems and query patient/encounter context via FHIR R4.
+
+| Attribute | Value |
+|-----------|-------|
+| **Priority** | Should Have |
+| **Phase** | 5 |
+| **SRS Requirements** | SRS-EMR-001 - SRS-EMR-007, SRS-SEC-006, SRS-SEC-007 |
+| **PRD Requirements** | FR-6.1.x - FR-6.4.x |
+
+**Use Case:**
+1. PACS Bridge authenticates with EMR via OAuth2 (SMART on FHIR discovery)
+2. Queries EMR for patient demographics by MRN
+3. Matches patient across systems using configurable criteria
+4. Retrieves active encounter context for clinical correlation
+5. Builds FHIR DiagnosticReport from completed study
+6. Posts result to EMR with delivery tracking and retry
+7. Tracks delivery status for audit and duplicate prevention
+
+---
+
 ## 6. Non-Functional Requirements
 
 ### 6.1 Performance Requirements
@@ -1099,6 +1185,8 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 | SRS-SEC-003 | Audit trail | HIPAA compliant | NFR-4.3, SR-3 |
 | SRS-SEC-004 | Input validation | 100% | NFR-4.4 |
 | SRS-SEC-005 | Certificate management | X.509 | NFR-4.5 |
+| SRS-SEC-006 | OAuth2 client credentials for EMR endpoints | Token-based | FR-6.1.4 |
+| SRS-SEC-007 | SMART on FHIR endpoint discovery | Auto-discovery | FR-6.1.4 |
 
 ### 6.4 Scalability Requirements
 
@@ -1146,14 +1234,17 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 | FR-4.3.1-4 | SRS-ROUTE-003 | Specified |
 | FR-5.1.1-4 | SRS-CFG-001 | Specified |
 | FR-5.2.1-4 | SRS-CFG-002 | Specified |
-| FR-6.1.1-4 | SRS-EMR-001 | Specified |
+| FR-6.1.1-4 | SRS-EMR-001, SRS-SEC-006, SRS-SEC-007 | Specified |
 | FR-6.2.1-4 | SRS-EMR-002 | Specified |
-| FR-6.3.1-4 | SRS-EMR-003 | Specified |
+| FR-6.3.1-2 | SRS-EMR-003, SRS-EMR-007 | Specified |
+| FR-6.3.3 | SRS-EMR-006 | Specified |
+| FR-6.3.4 | SRS-EMR-005 | Specified |
 | FR-6.4.1-3 | SRS-EMR-004 | Specified |
 | NFR-1.1-6 | SRS-PERF-001-006 | Specified |
 | NFR-2.1-5 | SRS-REL-001-005 | Specified |
 | NFR-3.1-4 | SRS-SCALE-001-004 | Specified |
 | NFR-4.1-5 | SRS-SEC-001-005 | Specified |
+| FR-6.1.4 (OAuth2) | SRS-SEC-006, SRS-SEC-007 | Specified |
 | NFR-5.1-5 | SRS-MAINT-001-005 | Specified |
 
 ### 7.2 SRS to Test Case Traceability (Template)
@@ -1181,6 +1272,11 @@ The PACS Bridge provides no direct user interface. All interaction is through:
 | SRS-EMR-002 | TC-EMR-002 | Integration | Planned |
 | SRS-EMR-003 | TC-EMR-003 | Integration | Planned |
 | SRS-EMR-004 | TC-EMR-004 | Unit | Planned |
+| SRS-EMR-005 | TC-EMR-005 | Integration | Planned |
+| SRS-EMR-006 | TC-EMR-006 | Unit | Planned |
+| SRS-EMR-007 | TC-EMR-007 | Unit | Planned |
+| SRS-SEC-006 | TC-SEC-006 | Integration | Planned |
+| SRS-SEC-007 | TC-SEC-007 | Integration | Planned |
 
 ### 7.3 Cross-Reference Summary
 
@@ -1282,6 +1378,84 @@ pacs_system Integration Errors (-980 to -999):
   -981: MWL_UPDATE_FAILED
   -982: MPPS_HANDLER_ERROR
   -983: DICOM_TRANSLATION_ERROR
+
+EMR Integration error codes: -1000 to -1124
+
+EMR Client Errors (-1000 to -1019):
+  -1000: EMR_CONNECTION_FAILED
+  -1001: EMR_REQUEST_FAILED
+  -1002: EMR_RESPONSE_PARSE_ERROR
+  -1003: EMR_TIMEOUT
+  -1004: EMR_UNAUTHORIZED
+  -1005: EMR_FORBIDDEN
+  -1006: EMR_RESOURCE_NOT_FOUND
+  -1007: EMR_CONFLICT
+  -1008: EMR_GONE
+  -1009: EMR_PRECONDITION_FAILED
+  -1010: EMR_UNPROCESSABLE
+  -1011: EMR_TOO_MANY_REQUESTS
+  -1012: EMR_SERVER_ERROR
+
+OAuth2 Errors (-1020 to -1039):
+  -1020: OAUTH2_TOKEN_REQUEST_FAILED
+  -1021: OAUTH2_TOKEN_PARSE_ERROR
+  -1022: OAUTH2_TOKEN_EXPIRED
+  -1023: OAUTH2_REFRESH_FAILED
+  -1024: OAUTH2_INVALID_SCOPE
+  -1025: OAUTH2_DISCOVERY_FAILED
+  -1026: OAUTH2_INVALID_CONFIGURATION
+
+Patient Errors (-1040 to -1059):
+  -1040: PATIENT_NOT_FOUND
+  -1041: PATIENT_QUERY_FAILED
+  -1042: PATIENT_AMBIGUOUS_MATCH
+  -1043: PATIENT_NO_MATCH
+  -1044: PATIENT_PARSE_ERROR
+  -1045: PATIENT_CACHE_ERROR
+  -1046: PATIENT_INVALID_IDENTIFIER
+
+Result Posting Errors (-1060 to -1079):
+  -1060: RESULT_POST_FAILED
+  -1061: RESULT_UPDATE_FAILED
+  -1062: RESULT_DUPLICATE
+  -1063: RESULT_INVALID_DATA
+  -1064: RESULT_REJECTED
+  -1065: RESULT_NOT_FOUND
+  -1066: RESULT_INVALID_STATUS_TRANSITION
+  -1067: RESULT_MISSING_REFERENCE
+  -1068: RESULT_BUILD_FAILED
+  -1069: RESULT_TRACKER_ERROR
+
+Encounter Errors (-1080 to -1099):
+  -1080: ENCOUNTER_NOT_FOUND
+  -1081: ENCOUNTER_QUERY_FAILED
+  -1082: ENCOUNTER_MULTIPLE_ACTIVE
+  -1083: ENCOUNTER_ENDED
+  -1084: ENCOUNTER_INVALID_DATA
+  -1085: ENCOUNTER_VISIT_NOT_FOUND
+  -1086: ENCOUNTER_INVALID_STATUS
+  -1087: ENCOUNTER_LOCATION_NOT_FOUND
+  -1088: ENCOUNTER_PRACTITIONER_NOT_FOUND
+  -1089: ENCOUNTER_PARSE_FAILED
+
+Adapter Errors (-1100 to -1119):
+  -1100: ADAPTER_NOT_INITIALIZED
+  -1101: ADAPTER_CONNECTION_FAILED
+  -1102: ADAPTER_AUTHENTICATION_FAILED
+  -1103: ADAPTER_NOT_SUPPORTED
+  -1104: ADAPTER_INVALID_CONFIGURATION
+  -1105: ADAPTER_TIMEOUT
+  -1106: ADAPTER_RATE_LIMITED
+  -1107: ADAPTER_INVALID_VENDOR
+  -1108: ADAPTER_HEALTH_CHECK_FAILED
+  -1109: ADAPTER_FEATURE_UNAVAILABLE
+
+Tracker Errors (-1120 to -1124):
+  -1120: TRACKER_NOT_FOUND
+  -1121: TRACKER_CAPACITY_EXCEEDED
+  -1122: TRACKER_INVALID_ENTRY
+  -1123: TRACKER_ALREADY_EXISTS
+  -1124: TRACKER_OPERATION_FAILED
 ```
 
 ### Appendix C: IHE SWF Transaction Mapping
@@ -1300,6 +1474,7 @@ pacs_system Integration Errors (-980 to -999):
 |---------|------|--------|---------|
 | 1.0.0 | 2025-12-07 | kcenon | Initial version |
 | 2.0.0 | 2026-02-07 | kcenon | C++20→C++23, added SRS-EMR-001-004 (Phase 5 EMR Integration), split SRS-PERF-003 into creation/query, added requirement count reconciliation |
+| 2.1.0 | 2026-02-08 | kcenon | Expanded EMR Integration: added SRS-EMR-005 (Encounter Context), SRS-EMR-006 (Result Tracking), SRS-EMR-007 (DiagnosticReport Builder), SRS-SEC-006/007 (OAuth2/SMART), added EMR error code registry (-1000 to -1124), added Section 5.6 (EMR Integration feature) |
 
 ### Appendix E: Glossary
 
@@ -1316,11 +1491,11 @@ pacs_system Integration Errors (-980 to -999):
 
 ### Appendix F: Requirement Count Reconciliation
 
-> **Note**: The PRD defines **77 functional requirement items** at the FR-x.y.z granularity level (62 original + 15 new EMR requirements). The SRS aggregates these into **30 functional SRS requirements** (26 original + 4 EMR). This is intentional — each SRS requirement covers a group of related PRD items (e.g., FR-1.1.1 through FR-1.1.5 → SRS-HL7-001). Additionally, there are 25 non-functional SRS requirements, totaling **55 SRS requirements**.
+> **Note**: The PRD defines **77 functional requirement items** at the FR-x.y.z granularity level (62 original + 15 new EMR requirements). The SRS aggregates these into **33 functional SRS requirements** (26 original + 7 EMR). This is intentional — each SRS requirement covers a group of related PRD items (e.g., FR-1.1.1 through FR-1.1.5 → SRS-HL7-001). Additionally, there are **27 non-functional SRS requirements** (25 original + 2 EMR security), totaling **60 SRS requirements**.
 
 ---
 
-*Document Version: 0.2.0.0*
+*Document Version: 0.2.1.0*
 *Created: 2025-12-07*
-*Updated: 2026-02-07*
+*Updated: 2026-02-08*
 *Author: kcenon@naver.com*
