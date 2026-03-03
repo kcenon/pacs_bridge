@@ -604,8 +604,12 @@ public:
                       << "' - adapter will be non-functional" << std::endl;
             return;
         }
-        db_ = std::move(db_result.value());
+        db_ = std::shared_ptr<pacs::storage::index_database>(
+            db_result.value().release());
     }
+
+    explicit pacs_mwl_adapter(std::shared_ptr<pacs::storage::index_database> db)
+        : db_(std::move(db)) {}
 
     ~pacs_mwl_adapter() override = default;
 
@@ -800,7 +804,7 @@ public:
     }
 
 private:
-    std::unique_ptr<pacs::storage::index_database> db_;
+    std::shared_ptr<pacs::storage::index_database> db_;
 };
 
 #endif  // PACS_BRIDGE_HAS_PACS_SYSTEM
@@ -828,5 +832,17 @@ create_mwl_adapter(const std::string& database_path) {
     // Fallback: in-memory adapter for testing and standalone mode
     return std::make_shared<memory_mwl_adapter>();
 }
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+std::shared_ptr<mwl_adapter>
+create_mwl_adapter(std::shared_ptr<pacs::storage::index_database> db) {
+    if (db && db->is_open()) {
+        return std::make_shared<pacs_mwl_adapter>(std::move(db));
+    }
+    std::cerr << "create_mwl_adapter: shared database unavailable, "
+                 "falling back to in-memory adapter" << std::endl;
+    return std::make_shared<memory_mwl_adapter>();
+}
+#endif
 
 }  // namespace pacs::bridge::integration

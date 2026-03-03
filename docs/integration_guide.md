@@ -85,6 +85,23 @@ filter.patient_id = "PAT001";
 auto items = mwl->query_items(filter);
 ```
 
+### Shared Database (Full Build Only)
+
+```cpp
+// Share a single index_database across PACS and MWL adapters
+#include "pacs/bridge/integration/pacs_adapter.h"
+#include "pacs/bridge/integration/mwl_adapter.h"
+#include <pacs/storage/index_database.hpp>
+
+auto db_result = pacs::storage::index_database::open("pacs_bridge.db");
+auto db = std::shared_ptr<pacs::storage::index_database>(
+    db_result.value().release());
+
+auto pacs = create_pacs_adapter(pacs_config{}, db);
+auto mwl  = create_mwl_adapter(db);
+// Both adapters share the same database connection
+```
+
 ### Executor Adapter (Full Build Only)
 
 ```cpp

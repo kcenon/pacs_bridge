@@ -25,6 +25,13 @@
 #include <string_view>
 #include <vector>
 
+// Forward declaration for shared database support
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+namespace pacs::storage {
+class index_database;
+}
+#endif
+
 namespace pacs::bridge::integration {
 
 // =============================================================================
@@ -249,15 +256,31 @@ public:
 /**
  * @brief Create appropriate MWL adapter based on build configuration
  *
- * Returns:
- * - memory_mwl_adapter if PACS_BRIDGE_STANDALONE_BUILD is defined
- * - pacs_mwl_adapter if PACS_BRIDGE_HAS_PACS_SYSTEM is defined
+ * Opens its own database connection based on database_path.
+ * For sharing a database instance with other adapters (e.g., pacs_adapter),
+ * use the overload that accepts a shared_ptr<index_database>.
  *
  * @param database_path Path to pacs_system database (used only for pacs_mwl_adapter)
  * @return Shared pointer to mwl_adapter implementation
  */
 [[nodiscard]] std::shared_ptr<mwl_adapter>
 create_mwl_adapter(const std::string& database_path = "");
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+/**
+ * @brief Create MWL adapter with a pre-opened shared database
+ *
+ * Allows sharing the same index_database instance across multiple
+ * adapters (e.g., pacs_adapter and mwl_adapter) to avoid duplicate
+ * connections to the same SQLite file.
+ *
+ * @param db Shared database instance (must not be nullptr and must be open)
+ * @return Shared pointer to mwl_adapter backed by the given database,
+ *         or memory_mwl_adapter if db is null/closed
+ */
+[[nodiscard]] std::shared_ptr<mwl_adapter>
+create_mwl_adapter(std::shared_ptr<pacs::storage::index_database> db);
+#endif
 
 }  // namespace pacs::bridge::integration
 

@@ -537,6 +537,34 @@ TEST_F(MwlAdapterFactoryTest, UpdateItemUpdatesAllFields) {
               "CT1");  // Unchanged
 }
 
+TEST_F(MwlAdapterFactoryTest, FactoryOverloadsAreBackwardCompatible) {
+    // Existing factory with empty path should still work
+    auto adapter1 = create_mwl_adapter("");
+    ASSERT_NE(adapter1, nullptr);
+    EXPECT_TRUE(adapter1->is_available());
+
+    // Existing factory with default parameter should still work
+    auto adapter2 = create_mwl_adapter();
+    ASSERT_NE(adapter2, nullptr);
+    EXPECT_TRUE(adapter2->is_available());
+
+    // Both should be functional memory adapters
+    mapping::mwl_item item;
+    item.imaging_service_request.accession_number = "ACC_COMPAT_001";
+    item.patient.patient_id = "PAT001";
+
+    EXPECT_TRUE(adapter1->add_item(item).has_value());
+    EXPECT_TRUE(adapter1->exists("ACC_COMPAT_001"));
+
+    item.imaging_service_request.accession_number = "ACC_COMPAT_002";
+    EXPECT_TRUE(adapter2->add_item(item).has_value());
+    EXPECT_TRUE(adapter2->exists("ACC_COMPAT_002"));
+
+    // Each adapter should have its own independent storage
+    EXPECT_FALSE(adapter1->exists("ACC_COMPAT_002"));
+    EXPECT_FALSE(adapter2->exists("ACC_COMPAT_001"));
+}
+
 // =============================================================================
 // Cross-Adapter Resource Cleanup Tests
 // =============================================================================

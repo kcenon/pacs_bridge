@@ -26,6 +26,13 @@
 #include <string_view>
 #include <vector>
 
+// Forward declaration for shared database support
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+namespace pacs::storage {
+class index_database;
+}
+#endif
+
 namespace pacs::bridge::integration {
 
 // =============================================================================
@@ -425,13 +432,34 @@ struct pacs_config {
 // =============================================================================
 
 /**
- * @brief Create PACS adapter (standalone mode with stub implementation)
+ * @brief Create PACS adapter
+ *
+ * Opens its own database connection based on config.database_path.
+ * For sharing a database instance with other adapters (e.g., mwl_adapter),
+ * use the overload that accepts a shared_ptr<index_database>.
  *
  * @param config PACS configuration
  * @return Shared pointer to PACS adapter
  */
 [[nodiscard]] std::shared_ptr<pacs_adapter>
 create_pacs_adapter(const pacs_config& config);
+
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+/**
+ * @brief Create PACS adapter with a pre-opened shared database
+ *
+ * Allows sharing the same index_database instance across multiple
+ * adapters (e.g., pacs_adapter and mwl_adapter) to avoid duplicate
+ * connections to the same SQLite file.
+ *
+ * @param config PACS configuration
+ * @param db Shared database instance (must not be nullptr)
+ * @return Shared pointer to PACS adapter backed by the given database
+ */
+[[nodiscard]] std::shared_ptr<pacs_adapter>
+create_pacs_adapter(const pacs_config& config,
+                    std::shared_ptr<pacs::storage::index_database> db);
+#endif
 
 }  // namespace pacs::bridge::integration
 

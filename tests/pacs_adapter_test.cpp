@@ -204,6 +204,30 @@ TEST(MppsRecordTest, ValidStatuses) {
 }
 
 // =============================================================================
+// Factory Backward Compatibility Tests
+// =============================================================================
+
+TEST(PacsFactoryTest, CreateWithDefaultConfig) {
+    auto adapter = create_pacs_adapter(pacs_config{});
+    ASSERT_NE(adapter, nullptr);
+    // Stub adapter starts disconnected
+    EXPECT_FALSE(adapter->is_connected());
+    // Can connect and use
+    EXPECT_TRUE(adapter->connect().has_value());
+    EXPECT_NE(adapter->get_mpps_adapter(), nullptr);
+    EXPECT_NE(adapter->get_storage_adapter(), nullptr);
+}
+
+TEST(PacsFactoryTest, CreateWithNonexistentDbPath) {
+    pacs_config config;
+    config.database_path = "/nonexistent/path/to/db.sqlite";
+    auto adapter = create_pacs_adapter(config);
+    ASSERT_NE(adapter, nullptr);
+    // Falls back to stub adapter
+    EXPECT_TRUE(adapter->connect().has_value());
+}
+
+// =============================================================================
 // PACS Adapter Connection Tests
 // =============================================================================
 
