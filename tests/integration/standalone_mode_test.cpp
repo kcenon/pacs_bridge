@@ -19,6 +19,7 @@
 #include "test_utilities.h"
 
 #include "pacs/bridge/integration/database_adapter.h"
+#include "pacs/bridge/integration/mwl_adapter.h"
 #include "pacs/bridge/integration/pacs_adapter.h"
 #include "pacs/bridge/mllp/mllp_network_adapter.h"
 
@@ -436,6 +437,48 @@ TEST_F(StandaloneMllpTest, SessionStatsDefaultValues) {
     EXPECT_EQ(stats.bytes_sent, 0u);
     EXPECT_EQ(stats.messages_received, 0u);
     EXPECT_EQ(stats.messages_sent, 0u);
+}
+
+// =============================================================================
+// MWL Adapter Factory Fallback Tests
+// =============================================================================
+
+class MwlAdapterFactoryTest : public Test {};
+
+TEST_F(MwlAdapterFactoryTest, EmptyPathReturnsMemoryAdapter) {
+    auto adapter = create_mwl_adapter("");
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_STREQ(adapter->adapter_type(), "memory");
+}
+
+TEST_F(MwlAdapterFactoryTest, DefaultPathReturnsMemoryAdapter) {
+    auto adapter = create_mwl_adapter();
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_STREQ(adapter->adapter_type(), "memory");
+}
+
+TEST_F(MwlAdapterFactoryTest, NonexistentPathReturnsMemoryAdapter) {
+    auto adapter = create_mwl_adapter("/nonexistent/path/to/db.sqlite");
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_STREQ(adapter->adapter_type(), "memory");
+}
+
+TEST_F(MwlAdapterFactoryTest, MemoryAdapterIsFunctional) {
+    auto adapter = create_mwl_adapter("");
+    ASSERT_NE(adapter, nullptr);
+
+    // Verify the adapter is operational
+    mapping::mwl_item item;
+    item.imaging_service_request.accession_number = "ACC_FACTORY_001";
+    item.patient.patient_id = "PAT001";
+    item.patient.patient_name = "DOE^JOHN";
+
+    auto add_result = adapter->add_item(item);
+    EXPECT_TRUE(add_result.has_value());
+
+    auto get_result = adapter->get_item("ACC_FACTORY_001");
+    ASSERT_TRUE(get_result.has_value());
+    EXPECT_EQ(get_result->patient.patient_id, "PAT001");
 }
 
 // =============================================================================
