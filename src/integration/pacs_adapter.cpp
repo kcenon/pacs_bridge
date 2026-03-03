@@ -736,4 +736,16 @@ std::shared_ptr<pacs_adapter> create_pacs_adapter(const pacs_config& config) {
     return std::make_shared<stub_pacs_adapter>(config);
 }
 
+#ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
+std::shared_ptr<pacs_adapter>
+create_pacs_adapter(const pacs_config& config,
+                    std::shared_ptr<pacs::storage::index_database> db) {
+    if (db && db->is_open()) {
+        return std::make_shared<pacs_system_adapter>(std::move(db));
+    }
+    // Fallback to stub if database is null or not open
+    return std::make_shared<stub_pacs_adapter>(config);
+}
+#endif
+
 }  // namespace pacs::bridge::integration
