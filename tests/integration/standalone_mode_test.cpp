@@ -336,19 +336,6 @@ TEST_F(StandalonePacsTest, MppsUpdateValidRecord) {
     EXPECT_TRUE(update.has_value());
 }
 
-TEST_F(StandalonePacsTest, MwlQuery) {
-    auto connect = adapter_->connect();
-    ASSERT_TRUE(connect.has_value());
-
-    auto mwl = adapter_->get_mwl_adapter();
-    ASSERT_NE(mwl, nullptr);
-
-    mwl_query_params params;
-    params.max_results = 10;
-    auto result = mwl->query_mwl(params);
-    EXPECT_TRUE(result.has_value());
-}
-
 TEST_F(StandalonePacsTest, StorageStubBehavior) {
     auto connect = adapter_->connect();
     ASSERT_TRUE(connect.has_value());
@@ -393,7 +380,6 @@ TEST_F(StandalonePacsTest, SubAdaptersAvailable) {
     ASSERT_TRUE(connect.has_value());
 
     EXPECT_NE(adapter_->get_mpps_adapter(), nullptr);
-    EXPECT_NE(adapter_->get_mwl_adapter(), nullptr);
     EXPECT_NE(adapter_->get_storage_adapter(), nullptr);
 }
 

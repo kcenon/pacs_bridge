@@ -6,18 +6,16 @@
  * - Database: direct sqlite3_exec() vs. database_adapter->execute()
  * - Thread: std::async vs. simple_executor->execute()
  * - MPPS: std::unordered_map vs. stub_mpps_adapter
- * - MWL: std::unordered_map + filter vs. memory_mwl_adapter
+ * - MWL: memory_mwl_adapter (from mwl_adapter.h)
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/322
  */
 
-// Note: This file uses pacs_adapter.h only (for MPPS/storage baseline).
-// The ODR conflict between pacs_adapter.h and mwl_adapter.h has been resolved
-// by renaming pacs_adapter.h's class to mwl_query_adapter (see issue #361).
 #include "pacs/bridge/integration/database_adapter.h"
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
 #include "pacs/bridge/integration/executor_adapter.h"
 #endif
+#include "pacs/bridge/integration/mwl_adapter.h"
 #include "pacs/bridge/integration/pacs_adapter.h"
 #include "pacs/bridge/performance/benchmark_runner.h"
 #include "pacs/bridge/performance/performance_types.h"
@@ -353,17 +351,16 @@ bool test_performance_targets() {
               << performance_targets::MAX_MEMORY_BASELINE_MB << " MB"
               << std::endl;
 
-    // Validate MWL latency target using PACS adapter's MWL sub-adapter
-    auto pacs = integration::create_pacs_adapter({});
-    auto mwl = pacs->get_mwl_adapter();
-    TEST_ASSERT(mwl != nullptr, "MWL sub-adapter should be available");
+    // Validate MWL latency target using mwl_adapter
+    auto mwl = integration::create_mwl_adapter("");
+    TEST_ASSERT(mwl != nullptr, "MWL adapter should be available");
 
     auto mwl_latency = benchmark_with_warmup(
         [&, idx = 0]() mutable {
-            integration::mwl_query_params params;
-            params.patient_id = "TGT" + std::to_string(idx++ % 100);
-            params.modality = "CT";
-            (void)mwl->query_mwl(params);
+            integration::mwl_query_filter filter;
+            filter.patient_id = "TGT" + std::to_string(idx++ % 100);
+            filter.modality = "CT";
+            (void)mwl->query_items(filter);
         },
         50, 1000);
 

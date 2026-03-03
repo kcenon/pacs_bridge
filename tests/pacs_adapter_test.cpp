@@ -71,7 +71,6 @@ TEST(PacsErrorTest, ErrorCodeConversion) {
     EXPECT_EQ(to_error_code(pacs_error::validation_failed), -858);
     EXPECT_EQ(to_error_code(pacs_error::mpps_create_failed), -859);
     EXPECT_EQ(to_error_code(pacs_error::mpps_update_failed), -860);
-    EXPECT_EQ(to_error_code(pacs_error::mwl_query_failed), -861);
     EXPECT_EQ(to_error_code(pacs_error::storage_failed), -862);
     EXPECT_EQ(to_error_code(pacs_error::invalid_sop_uid), -863);
 }
@@ -80,7 +79,6 @@ TEST(PacsErrorTest, ErrorMessages) {
     EXPECT_EQ(to_string(pacs_error::connection_failed), "Connection to PACS server failed");
     EXPECT_EQ(to_string(pacs_error::query_failed), "Query execution failed");
     EXPECT_EQ(to_string(pacs_error::mpps_create_failed), "MPPS N-CREATE failed");
-    EXPECT_EQ(to_string(pacs_error::mwl_query_failed), "MWL query failed");
 }
 
 // =============================================================================
@@ -203,33 +201,6 @@ TEST(MppsRecordTest, ValidStatuses) {
 
     record.status = "DISCONTINUED";
     EXPECT_TRUE(record.is_valid());
-}
-
-// =============================================================================
-// MWL Item Tests
-// =============================================================================
-
-TEST(MwlItemTest, ValidItem) {
-    mwl_item item;
-    item.accession_number = "ACC123";
-    item.scheduled_procedure_step_id = "SPS001";
-    item.patient_id = "PAT123";
-    item.patient_name = "Test^Patient";
-    item.modality = "CT";
-
-    EXPECT_TRUE(item.is_valid());
-}
-
-TEST(MwlItemTest, MissingRequiredFields) {
-    mwl_item item;
-
-    // Missing all required fields
-    EXPECT_FALSE(item.is_valid());
-
-    // Missing accession_number
-    item.scheduled_procedure_step_id = "SPS001";
-    item.patient_id = "PAT123";
-    EXPECT_FALSE(item.is_valid());
 }
 
 // =============================================================================
@@ -504,53 +475,6 @@ TEST_F(PacsAdapterTest, GetNonExistentMpps) {
     auto result = mpps->get_mpps("999.999.999.999");
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error(), pacs_error::not_found);
-}
-
-// =============================================================================
-// MWL Adapter Tests
-// =============================================================================
-
-TEST_F(PacsAdapterTest, GetMwlAdapter) {
-    auto mwl = adapter_->get_mwl_adapter();
-    ASSERT_NE(mwl, nullptr);
-}
-
-TEST_F(PacsAdapterTest, QueryMwl) {
-    ASSERT_TRUE(adapter_->connect().has_value());
-
-    auto mwl = adapter_->get_mwl_adapter();
-    ASSERT_NE(mwl, nullptr);
-
-    mwl_query_params params;
-    params.max_results = 100;
-
-    auto result = mwl->query_mwl(params);
-    EXPECT_TRUE(result.has_value());
-}
-
-TEST_F(PacsAdapterTest, QueryMwlByPatientId) {
-    ASSERT_TRUE(adapter_->connect().has_value());
-
-    auto mwl = adapter_->get_mwl_adapter();
-    ASSERT_NE(mwl, nullptr);
-
-    mwl_query_params params;
-    params.patient_id = "PAT123";
-    params.max_results = 100;
-
-    auto result = mwl->query_mwl(params);
-    EXPECT_TRUE(result.has_value());
-}
-
-TEST_F(PacsAdapterTest, GetMwlItem) {
-    ASSERT_TRUE(adapter_->connect().has_value());
-
-    auto mwl = adapter_->get_mwl_adapter();
-    ASSERT_NE(mwl, nullptr);
-
-    auto result = mwl->get_mwl_item("ACC123");
-    // May return not_found if no item exists
-    EXPECT_TRUE(result.has_value() || result.error() == pacs_error::not_found);
 }
 
 // =============================================================================

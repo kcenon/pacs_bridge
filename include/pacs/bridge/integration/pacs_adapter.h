@@ -7,8 +7,9 @@
  *
  * Provides adapters that abstract DICOM operations and enable integration
  * with pacs_system while maintaining standalone capability. This adapter
- * consolidates PACS-related functionality scattered across multiple files
- * (mpps_handler.cpp, mwl_client.cpp) into a consistent interface.
+ * provides MPPS and storage services through a consistent interface.
+ *
+ * @note MWL operations use the full CRUD mwl_adapter from mwl_adapter.h
  *
  * @see https://github.com/kcenon/pacs_bridge/issues/283
  * @see https://github.com/kcenon/pacs_bridge/issues/273
@@ -18,7 +19,6 @@
 #include <chrono>
 #include <cstdint>
 #include <expected>
-#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -70,9 +70,6 @@ enum class pacs_error : int {
 
     /** MPPS N-SET failed */
     mpps_update_failed = -860,
-
-    /** MWL query failed */
-    mwl_query_failed = -861,
 
     /** DICOM storage failed */
     storage_failed = -862,
@@ -221,51 +218,6 @@ struct mpps_record {
 };
 
 // =============================================================================
-// MWL Item Abstraction
-// =============================================================================
-
-/**
- * @brief Modality Worklist (MWL) item
- *
- * Represents a worklist item from a DICOM Worklist query.
- */
-struct mwl_item {
-    /** Accession Number */
-    std::string accession_number;
-
-    /** Scheduled Procedure Step ID */
-    std::string scheduled_procedure_step_id;
-
-    /** Requested Procedure ID */
-    std::string requested_procedure_id;
-
-    /** Scheduled Station AE Title */
-    std::string scheduled_station_ae_title;
-
-    /** Scheduled Procedure Step Start Date/Time */
-    std::chrono::system_clock::time_point scheduled_datetime;
-
-    /** Modality */
-    std::string modality;
-
-    /** Patient ID */
-    std::string patient_id;
-
-    /** Patient Name */
-    std::string patient_name;
-
-    /** Study Instance UID */
-    std::string study_instance_uid;
-
-    /**
-     * @brief Validate MWL item fields
-     *
-     * @return true if all required fields are present and valid
-     */
-    [[nodiscard]] bool is_valid() const;
-};
-
-// =============================================================================
 // Query Parameters
 // =============================================================================
 
@@ -296,26 +248,6 @@ struct mpps_query_params {
 
     /** Start datetime range (to) */
     std::optional<std::chrono::system_clock::time_point> to_datetime;
-
-    /** Maximum number of results */
-    std::size_t max_results = 100;
-};
-
-/**
- * @brief Query parameters for MWL items
- */
-struct mwl_query_params {
-    /** Patient ID filter (optional) */
-    std::optional<std::string> patient_id;
-
-    /** Accession Number filter (optional) */
-    std::optional<std::string> accession_number;
-
-    /** Modality filter (optional) */
-    std::optional<std::string> modality;
-
-    /** Scheduled date filter (optional) */
-    std::optional<std::chrono::system_clock::time_point> scheduled_date;
 
     /** Maximum number of results */
     std::size_t max_results = 100;
@@ -372,42 +304,6 @@ public:
 };
 
 // =============================================================================
-// MWL Query Adapter
-// =============================================================================
-
-/**
- * @brief Modality Worklist (MWL) query adapter interface
- *
- * Provides read-only abstraction for DICOM Worklist Query/Retrieve operations.
- * Named mwl_query_adapter to avoid ODR collision with the full CRUD
- * mwl_adapter defined in integration/mwl_adapter.h.
- *
- * @see integration/mwl_adapter.h for the full CRUD interface used by mwl_client
- */
-class mwl_query_adapter {
-public:
-    virtual ~mwl_query_adapter() = default;
-
-    /**
-     * @brief Query worklist
-     *
-     * @param params Query parameters
-     * @return Vector of matching MWL items or error
-     */
-    [[nodiscard]] virtual std::expected<std::vector<mwl_item>, pacs_error>
-        query_mwl(const mwl_query_params& params) = 0;
-
-    /**
-     * @brief Get single MWL item by accession number
-     *
-     * @param accession_number Accession Number
-     * @return MWL item or error
-     */
-    [[nodiscard]] virtual std::expected<mwl_item, pacs_error>
-        get_mwl_item(std::string_view accession_number) = 0;
-};
-
-// =============================================================================
 // Storage Service Adapter
 // =============================================================================
 
@@ -454,7 +350,8 @@ public:
 /**
  * @brief Combined PACS adapter interface
  *
- * Provides unified access to all PACS services (MPPS, MWL, Storage).
+ * Provides unified access to PACS services (MPPS, Storage).
+ * For MWL operations, use mwl_adapter from mwl_adapter.h.
  */
 class pacs_adapter {
 public:
@@ -464,11 +361,6 @@ public:
      * @brief Get MPPS service adapter
      */
     [[nodiscard]] virtual std::shared_ptr<mpps_adapter> get_mpps_adapter() = 0;
-
-    /**
-     * @brief Get MWL query adapter
-     */
-    [[nodiscard]] virtual std::shared_ptr<mwl_query_adapter> get_mwl_adapter() = 0;
 
     /**
      * @brief Get storage service adapter
