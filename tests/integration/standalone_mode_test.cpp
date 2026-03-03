@@ -495,6 +495,62 @@ TEST_F(MwlAdapterFactoryTest, MemoryAdapterIsFunctional) {
     EXPECT_EQ(get_result->patient.patient_id, "PAT001");
 }
 
+TEST_F(MwlAdapterFactoryTest, UpdateItemUpdatesAllFields) {
+    auto adapter = create_mwl_adapter("");
+    ASSERT_NE(adapter, nullptr);
+
+    // Add initial item with all fields populated
+    mapping::mwl_item item;
+    item.imaging_service_request.accession_number = "ACC_UPD_001";
+    item.patient.patient_id = "PAT001";
+    item.patient.patient_name = "DOE^JOHN";
+    item.patient.patient_birth_date = "19800101";
+    item.patient.patient_sex = "M";
+    item.requested_procedure.referring_physician_name = "SMITH^DR";
+
+    mapping::dicom_scheduled_procedure_step sps;
+    sps.scheduled_step_id = "SPS001";
+    sps.modality = "CT";
+    sps.scheduled_station_ae_title = "CT1";
+    sps.scheduled_start_date = "20260301";
+    sps.scheduled_start_time = "090000";
+    item.scheduled_steps.push_back(sps);
+
+    auto add_result = adapter->add_item(item);
+    ASSERT_TRUE(add_result.has_value());
+
+    // Update multiple fields (not just status)
+    mapping::mwl_item updates;
+    updates.imaging_service_request.accession_number = "ACC_UPD_001";
+    updates.patient.patient_name = "DOE^JANE";
+    updates.requested_procedure.referring_physician_name = "JONES^DR";
+
+    mapping::dicom_scheduled_procedure_step sps_update;
+    sps_update.modality = "MR";
+    sps_update.scheduled_start_date = "20260315";
+    sps_update.scheduled_start_time = "140000";
+    updates.scheduled_steps.push_back(sps_update);
+
+    auto update_result = adapter->update_item("ACC_UPD_001", updates);
+    ASSERT_TRUE(update_result.has_value());
+
+    // Verify ALL updated fields are reflected
+    auto get_result = adapter->get_item("ACC_UPD_001");
+    ASSERT_TRUE(get_result.has_value());
+    EXPECT_EQ(get_result->patient.patient_name, "DOE^JANE");
+    EXPECT_EQ(get_result->patient.patient_id, "PAT001");  // Unchanged
+    EXPECT_EQ(get_result->patient.patient_sex, "M");       // Unchanged
+    EXPECT_EQ(get_result->requested_procedure.referring_physician_name,
+              "JONES^DR");
+
+    ASSERT_FALSE(get_result->scheduled_steps.empty());
+    EXPECT_EQ(get_result->scheduled_steps[0].modality, "MR");
+    EXPECT_EQ(get_result->scheduled_steps[0].scheduled_start_date, "20260315");
+    EXPECT_EQ(get_result->scheduled_steps[0].scheduled_start_time, "140000");
+    EXPECT_EQ(get_result->scheduled_steps[0].scheduled_station_ae_title,
+              "CT1");  // Unchanged
+}
+
 // =============================================================================
 // Cross-Adapter Resource Cleanup Tests
 // =============================================================================

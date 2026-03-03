@@ -470,6 +470,44 @@ from_worklist_item(const pacs::storage::worklist_item& wl) {
     return item;
 }
 
+// Merge non-empty fields from updates into existing worklist_item
+[[nodiscard]] pacs::storage::worklist_item
+merge_worklist_item(const pacs::storage::worklist_item& existing,
+                    const pacs::storage::worklist_item& updates) {
+    pacs::storage::worklist_item merged = existing;
+
+    // Patient information
+    if (!updates.patient_id.empty()) merged.patient_id = updates.patient_id;
+    if (!updates.patient_name.empty()) merged.patient_name = updates.patient_name;
+    if (!updates.birth_date.empty()) merged.birth_date = updates.birth_date;
+    if (!updates.sex.empty()) merged.sex = updates.sex;
+
+    // Requested procedure
+    if (!updates.requested_proc_id.empty())
+        merged.requested_proc_id = updates.requested_proc_id;
+    if (!updates.study_uid.empty()) merged.study_uid = updates.study_uid;
+    if (!updates.referring_phys.empty())
+        merged.referring_phys = updates.referring_phys;
+    if (!updates.referring_phys_id.empty())
+        merged.referring_phys_id = updates.referring_phys_id;
+
+    // Scheduled procedure step
+    if (!updates.station_ae.empty()) merged.station_ae = updates.station_ae;
+    if (!updates.station_name.empty())
+        merged.station_name = updates.station_name;
+    if (!updates.modality.empty()) merged.modality = updates.modality;
+    if (!updates.procedure_desc.empty())
+        merged.procedure_desc = updates.procedure_desc;
+    if (!updates.step_status.empty())
+        merged.step_status = updates.step_status;
+    if (!updates.scheduled_datetime.empty())
+        merged.scheduled_datetime = updates.scheduled_datetime;
+    if (!updates.protocol_code.empty())
+        merged.protocol_code = updates.protocol_code;
+
+    return merged;
+}
+
 // Convert mwl_query_filter to pacs_system worklist_query
 [[nodiscard]] pacs::storage::worklist_query
 to_worklist_query(const mwl_query_filter& filter) {
@@ -620,18 +658,20 @@ public:
 
         const auto& existing_wl = query_result.value()[0];
 
-        // Convert updated item
-        auto wl_item = to_worklist_item(item);
+        // Merge non-empty update fields into existing record
+        auto wl_updates = to_worklist_item(item);
+        auto merged = merge_worklist_item(existing_wl, wl_updates);
 
-        // Update status
-        std::string new_status = wl_item.step_status.empty()
-                                     ? existing_wl.step_status
-                                     : wl_item.step_status;
+        // index_database only provides update_worklist_status() for
+        // status-only updates. To update all fields, delete and re-add.
+        auto delete_result = db_->delete_worklist_item(
+            existing_wl.step_id, std::string(accession_number));
+        if (delete_result.is_err()) {
+            return std::unexpected(mwl_adapter_error::update_failed);
+        }
 
-        auto update_result = db_->update_worklist_status(
-            existing_wl.step_id, std::string(accession_number), new_status);
-
-        if (update_result.is_err()) {
+        auto add_result = db_->add_worklist_item(merged);
+        if (add_result.is_err()) {
             return std::unexpected(mwl_adapter_error::update_failed);
         }
 
