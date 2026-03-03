@@ -496,21 +496,6 @@ TEST_F(AdapterErrorTest, MppsRecordValidation) {
     EXPECT_TRUE(record.is_valid());
 }
 
-TEST_F(AdapterErrorTest, MwlItemValidation) {
-    mwl_item item;
-    EXPECT_FALSE(item.is_valid());
-
-    // All required fields: accession_number, scheduled_procedure_step_id,
-    // patient_id, patient_name, modality
-    item.accession_number = "ACC001";
-    item.scheduled_procedure_step_id = "SPS001";
-    item.patient_id = "PAT001";
-    item.patient_name = "DOE^JOHN";
-    item.modality = "CT";
-    item.scheduled_datetime = std::chrono::system_clock::now();
-    EXPECT_TRUE(item.is_valid());
-}
-
 // =============================================================================
 // Conditional System Integration Tests
 // =============================================================================

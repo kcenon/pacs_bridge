@@ -47,7 +47,7 @@ int result = future.get();  // 42
 pool->shutdown(true);
 ```
 
-### PACS Adapter (MPPS / MWL / Storage)
+### PACS Adapter (MPPS / Storage)
 
 ```cpp
 #include "pacs/bridge/integration/pacs_adapter.h"
@@ -55,7 +55,6 @@ using namespace pacs::bridge::integration;
 
 auto pacs = create_pacs_adapter({});
 auto mpps = pacs->get_mpps_adapter();
-auto mwl  = pacs->get_mwl_adapter();
 
 // Create MPPS record
 mpps_record record;
@@ -159,7 +158,7 @@ executor->shutdown(true);
 
 **Priority Levels**: `task_priority::low`, `normal`, `high`, `critical`
 
-### pacs_adapter (MPPS + MWL + Storage)
+### pacs_adapter (MPPS + Storage)
 
 | Item | Detail |
 |------|--------|
@@ -170,12 +169,9 @@ executor->shutdown(true);
 
 **Sub-adapters**:
 - `get_mpps_adapter()` → `mpps_adapter` (N-CREATE, N-SET, query, get)
-- `get_mwl_adapter()` → `mwl_query_adapter` (query, get_item)
 - `get_storage_adapter()` → `storage_adapter` (store, retrieve, exists)
 
-> **Note**: The read-only `mwl_query_adapter` in `pacs_adapter.h` is distinct from
-> the full CRUD `mwl_adapter` in `mwl_adapter.h`. Both headers can now be safely
-> included in the same translation unit.
+> **Note**: For MWL operations, use the full CRUD `mwl_adapter` from `mwl_adapter.h`.
 
 ### mwl_adapter (Standalone)
 

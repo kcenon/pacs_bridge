@@ -43,8 +43,6 @@ std::string_view to_string(pacs_error error) noexcept {
             return "MPPS N-CREATE failed";
         case pacs_error::mpps_update_failed:
             return "MPPS N-SET failed";
-        case pacs_error::mwl_query_failed:
-            return "MWL query failed";
         case pacs_error::storage_failed:
             return "DICOM storage failed";
         case pacs_error::invalid_sop_uid:
@@ -107,21 +105,6 @@ bool mpps_record::is_valid() const {
     if (status == "COMPLETED" && !end_datetime.has_value()) {
         return false;
     }
-
-    return true;
-}
-
-// =============================================================================
-// mwl_item Implementation
-// =============================================================================
-
-bool mwl_item::is_valid() const {
-    // Check required fields
-    if (accession_number.empty()) return false;
-    if (scheduled_procedure_step_id.empty()) return false;
-    if (patient_id.empty()) return false;
-    if (patient_name.empty()) return false;
-    if (modality.empty()) return false;
 
     return true;
 }
@@ -221,33 +204,6 @@ private:
 };
 
 // =============================================================================
-// Stub MWL Query Adapter
-// =============================================================================
-
-/**
- * @brief Stub implementation of MWL query adapter (standalone mode)
- *
- * Provides no-op implementations for testing and standalone usage.
- */
-class stub_mwl_query_adapter : public mwl_query_adapter {
-public:
-    std::expected<std::vector<mwl_item>, pacs_error> query_mwl(
-        const mwl_query_params& params) override {
-        // Stub: return empty result
-        return std::vector<mwl_item>{};
-    }
-
-    std::expected<mwl_item, pacs_error> get_mwl_item(
-        std::string_view accession_number) override {
-        if (accession_number.empty()) {
-            return std::unexpected(pacs_error::validation_failed);
-        }
-        // Stub: not found
-        return std::unexpected(pacs_error::not_found);
-    }
-};
-
-// =============================================================================
 // Stub Storage Adapter
 // =============================================================================
 
@@ -296,16 +252,11 @@ public:
     explicit stub_pacs_adapter(const pacs_config& config)
         : config_(config)
         , mpps_adapter_(std::make_shared<stub_mpps_adapter>())
-        , mwl_adapter_(std::make_shared<stub_mwl_query_adapter>())
         , storage_adapter_(std::make_shared<stub_storage_adapter>())
         , connected_(false) {}
 
     std::shared_ptr<mpps_adapter> get_mpps_adapter() override {
         return mpps_adapter_;
-    }
-
-    std::shared_ptr<mwl_query_adapter> get_mwl_adapter() override {
-        return mwl_adapter_;
     }
 
     std::shared_ptr<storage_adapter> get_storage_adapter() override {
@@ -335,7 +286,6 @@ public:
 private:
     pacs_config config_;
     std::shared_ptr<stub_mpps_adapter> mpps_adapter_;
-    std::shared_ptr<stub_mwl_query_adapter> mwl_adapter_;
     std::shared_ptr<stub_storage_adapter> storage_adapter_;
     bool connected_;
 };
@@ -349,7 +299,6 @@ private:
 #include <pacs/storage/index_database.hpp>
 #include <pacs/storage/instance_record.hpp>
 #include <pacs/storage/mpps_record.hpp>
-#include <pacs/storage/worklist_record.hpp>
 
 namespace {
 
@@ -533,61 +482,6 @@ to_pacs_mpps_query(const mpps_query_params& params) {
     return query;
 }
 
-// =============================================================================
-// MWL Conversion
-// =============================================================================
-
-mwl_item from_pacs_worklist_item(const pacs::storage::worklist_item& wl) {
-    mwl_item item;
-
-    item.accession_number = wl.accession_no;
-    item.scheduled_procedure_step_id = wl.step_id;
-    item.requested_procedure_id = wl.requested_proc_id;
-    item.scheduled_station_ae_title = wl.station_ae;
-    item.modality = wl.modality;
-    item.patient_id = wl.patient_id;
-    item.patient_name = wl.patient_name;
-    item.study_instance_uid = wl.study_uid;
-
-    if (!wl.scheduled_datetime.empty()) {
-        auto tp = parse_datetime_string(wl.scheduled_datetime);
-        if (tp) {
-            item.scheduled_datetime = *tp;
-        }
-    }
-
-    return item;
-}
-
-pacs::storage::worklist_query
-to_pacs_worklist_query(const mwl_query_params& params) {
-    pacs::storage::worklist_query query;
-
-    if (params.patient_id) {
-        query.patient_id = *params.patient_id;
-    }
-    if (params.accession_number) {
-        query.accession_no = *params.accession_number;
-    }
-    if (params.modality) {
-        query.modality = *params.modality;
-    }
-    if (params.scheduled_date) {
-        auto date_str = format_datetime_string(*params.scheduled_date);
-        // Use date portion only (YYYYMMDD)
-        query.scheduled_date_from = date_str.substr(0, 8);
-        query.scheduled_date_to = date_str.substr(0, 8);
-    }
-
-    query.include_all_status = false;
-
-    if (params.max_results > 0) {
-        query.limit = params.max_results;
-    }
-
-    return query;
-}
-
 }  // anonymous namespace
 
 // =============================================================================
@@ -678,70 +572,6 @@ public:
         }
 
         return from_pacs_mpps_record(result.value());
-    }
-
-private:
-    std::shared_ptr<pacs::storage::index_database> db_;
-};
-
-// =============================================================================
-// pacs_system MWL Query Adapter
-// =============================================================================
-
-/**
- * @brief MWL query adapter backed by pacs_system index_database
- *
- * Provides worklist query operations through pacs_system's index database.
- * For the full MWL adapter with add/update/delete, see mwl_adapter.cpp.
- */
-class pacs_system_mwl_query_adapter : public mwl_query_adapter {
-public:
-    explicit pacs_system_mwl_query_adapter(
-        std::shared_ptr<pacs::storage::index_database> db)
-        : db_(std::move(db)) {}
-
-    std::expected<std::vector<mwl_item>, pacs_error>
-    query_mwl(const mwl_query_params& params) override {
-        if (!db_) {
-            return std::unexpected(pacs_error::connection_failed);
-        }
-
-        auto wl_query = to_pacs_worklist_query(params);
-        auto result = db_->query_worklist(wl_query);
-        if (result.is_err()) {
-            return std::unexpected(pacs_error::mwl_query_failed);
-        }
-
-        std::vector<mwl_item> items;
-        items.reserve(result.value().size());
-        for (const auto& wl : result.value()) {
-            items.push_back(from_pacs_worklist_item(wl));
-        }
-
-        return items;
-    }
-
-    std::expected<mwl_item, pacs_error>
-    get_mwl_item(std::string_view accession_number) override {
-        if (accession_number.empty()) {
-            return std::unexpected(pacs_error::validation_failed);
-        }
-        if (!db_) {
-            return std::unexpected(pacs_error::connection_failed);
-        }
-
-        // Query by accession number with limit 1
-        pacs::storage::worklist_query query;
-        query.accession_no = std::string(accession_number);
-        query.include_all_status = true;
-        query.limit = 1;
-
-        auto result = db_->query_worklist(query);
-        if (result.is_err() || result.value().empty()) {
-            return std::unexpected(pacs_error::not_found);
-        }
-
-        return from_pacs_worklist_item(result.value()[0]);
     }
 
 private:
@@ -843,16 +673,11 @@ public:
         std::shared_ptr<pacs::storage::index_database> db)
         : db_(std::move(db))
         , mpps_adapter_(std::make_shared<pacs_system_mpps_adapter>(db_))
-        , mwl_adapter_(std::make_shared<pacs_system_mwl_query_adapter>(db_))
         , storage_adapter_(std::make_shared<pacs_system_storage_adapter>(db_))
         , connected_(false) {}
 
     std::shared_ptr<mpps_adapter> get_mpps_adapter() override {
         return mpps_adapter_;
-    }
-
-    std::shared_ptr<mwl_query_adapter> get_mwl_adapter() override {
-        return mwl_adapter_;
     }
 
     std::shared_ptr<storage_adapter> get_storage_adapter() override {
@@ -882,7 +707,6 @@ public:
 private:
     std::shared_ptr<pacs::storage::index_database> db_;
     std::shared_ptr<pacs_system_mpps_adapter> mpps_adapter_;
-    std::shared_ptr<pacs_system_mwl_query_adapter> mwl_adapter_;
     std::shared_ptr<pacs_system_storage_adapter> storage_adapter_;
     bool connected_;
 };

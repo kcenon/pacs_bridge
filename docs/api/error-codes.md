@@ -216,7 +216,6 @@ collisions.
 | -858 | `validation_failed` | Validation failed | Review data format |
 | -859 | `mpps_create_failed` | MPPS N-CREATE failed | Check PACS MPPS configuration |
 | -860 | `mpps_update_failed` | MPPS N-SET failed | Verify MPPS state |
-| -861 | `mwl_query_failed` | MWL query failed | Check MWL SCP configuration |
 | -862 | `storage_failed` | DICOM storage failed | Check disk space and permissions |
 | -863 | `invalid_sop_uid` | Invalid SOP Instance UID | Validate UID format |
 
