@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iostream>
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
@@ -560,7 +561,9 @@ public:
     explicit pacs_mwl_adapter(const std::string& database_path) {
         auto db_result = pacs::storage::index_database::open(database_path);
         if (db_result.is_err()) {
-            // Database failed to open - will return errors on all operations
+            std::cerr << "pacs_mwl_adapter: failed to open database '"
+                      << database_path
+                      << "' - adapter will be non-functional" << std::endl;
             return;
         }
         db_ = std::move(db_result.value());
@@ -752,12 +755,7 @@ public:
         return "pacs_system";
     }
 
-    /**
-     * @brief Check if the underlying database was successfully opened
-     *
-     * @return true if database is available and operational
-     */
-    [[nodiscard]] bool is_available() const noexcept {
+    [[nodiscard]] bool is_available() const noexcept override {
         return db_ != nullptr && db_->is_open();
     }
 
@@ -781,7 +779,8 @@ create_mwl_adapter(const std::string& database_path) {
         if (adapter->is_available()) {
             return adapter;
         }
-        // Database open failed - fall through to memory adapter
+        std::cerr << "create_mwl_adapter: database unavailable, "
+                     "falling back to in-memory adapter" << std::endl;
     }
 #else
     (void)database_path;  // Unused in standalone mode

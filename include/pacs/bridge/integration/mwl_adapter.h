@@ -224,6 +224,17 @@ public:
     delete_items_before(std::string_view before_date) = 0;
 
     /**
+     * @brief Check if the adapter is available and operational
+     *
+     * For memory adapters, always returns true. For database-backed
+     * adapters, returns true only if the underlying database was
+     * successfully opened and is accessible.
+     *
+     * @return true if the adapter is ready for operations
+     */
+    [[nodiscard]] virtual bool is_available() const noexcept { return true; }
+
+    /**
      * @brief Get adapter type name (for debugging)
      *
      * @return Adapter type name (e.g., "memory", "pacs_system")

@@ -463,6 +463,20 @@ TEST_F(MwlAdapterFactoryTest, NonexistentPathReturnsMemoryAdapter) {
     EXPECT_STREQ(adapter->adapter_type(), "memory");
 }
 
+TEST_F(MwlAdapterFactoryTest, MemoryAdapterIsAvailable) {
+    auto adapter = create_mwl_adapter("");
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_TRUE(adapter->is_available());
+}
+
+TEST_F(MwlAdapterFactoryTest, NonexistentPathAdapterIsAvailable) {
+    // Even with a nonexistent path, factory falls back to memory adapter
+    // which should report as available
+    auto adapter = create_mwl_adapter("/nonexistent/path/to/db.sqlite");
+    ASSERT_NE(adapter, nullptr);
+    EXPECT_TRUE(adapter->is_available());
+}
+
 TEST_F(MwlAdapterFactoryTest, MemoryAdapterIsFunctional) {
     auto adapter = create_mwl_adapter("");
     ASSERT_NE(adapter, nullptr);
