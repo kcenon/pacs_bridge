@@ -12,8 +12,8 @@
  */
 
 // Note: This file uses pacs_adapter.h only (for MPPS/storage baseline).
-// mwl_adapter.h is NOT included here to avoid ODR conflict (both headers
-// define class mwl_adapter in the same namespace).
+// The ODR conflict between pacs_adapter.h and mwl_adapter.h has been resolved
+// by renaming pacs_adapter.h's class to mwl_query_adapter (see issue #361).
 #include "pacs/bridge/integration/database_adapter.h"
 #ifndef PACS_BRIDGE_STANDALONE_BUILD
 #include "pacs/bridge/integration/executor_adapter.h"
@@ -325,8 +325,7 @@ bool test_baseline_mpps() {
 }
 
 // Note: MWL baseline comparison is in adapter_benchmark.cpp (test_baseline_mwl)
-// because mwl_adapter.h and pacs_adapter.h both define class mwl_adapter in
-// the same namespace, causing an ODR violation if included together.
+// which uses the full CRUD mwl_adapter from mwl_adapter.h.
 
 // =============================================================================
 // Performance Targets Validation

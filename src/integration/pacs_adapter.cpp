@@ -221,15 +221,15 @@ private:
 };
 
 // =============================================================================
-// Stub MWL Adapter
+// Stub MWL Query Adapter
 // =============================================================================
 
 /**
- * @brief Stub implementation of MWL adapter (standalone mode)
+ * @brief Stub implementation of MWL query adapter (standalone mode)
  *
  * Provides no-op implementations for testing and standalone usage.
  */
-class stub_mwl_adapter : public mwl_adapter {
+class stub_mwl_query_adapter : public mwl_query_adapter {
 public:
     std::expected<std::vector<mwl_item>, pacs_error> query_mwl(
         const mwl_query_params& params) override {
@@ -296,7 +296,7 @@ public:
     explicit stub_pacs_adapter(const pacs_config& config)
         : config_(config)
         , mpps_adapter_(std::make_shared<stub_mpps_adapter>())
-        , mwl_adapter_(std::make_shared<stub_mwl_adapter>())
+        , mwl_adapter_(std::make_shared<stub_mwl_query_adapter>())
         , storage_adapter_(std::make_shared<stub_storage_adapter>())
         , connected_(false) {}
 
@@ -304,7 +304,7 @@ public:
         return mpps_adapter_;
     }
 
-    std::shared_ptr<mwl_adapter> get_mwl_adapter() override {
+    std::shared_ptr<mwl_query_adapter> get_mwl_adapter() override {
         return mwl_adapter_;
     }
 
@@ -335,7 +335,7 @@ public:
 private:
     pacs_config config_;
     std::shared_ptr<stub_mpps_adapter> mpps_adapter_;
-    std::shared_ptr<stub_mwl_adapter> mwl_adapter_;
+    std::shared_ptr<stub_mwl_query_adapter> mwl_adapter_;
     std::shared_ptr<stub_storage_adapter> storage_adapter_;
     bool connected_;
 };
@@ -685,18 +685,18 @@ private:
 };
 
 // =============================================================================
-// pacs_system MWL Adapter
+// pacs_system MWL Query Adapter
 // =============================================================================
 
 /**
- * @brief MWL adapter backed by pacs_system index_database
+ * @brief MWL query adapter backed by pacs_system index_database
  *
  * Provides worklist query operations through pacs_system's index database.
  * For the full MWL adapter with add/update/delete, see mwl_adapter.cpp.
  */
-class pacs_system_mwl_adapter : public mwl_adapter {
+class pacs_system_mwl_query_adapter : public mwl_query_adapter {
 public:
-    explicit pacs_system_mwl_adapter(
+    explicit pacs_system_mwl_query_adapter(
         std::shared_ptr<pacs::storage::index_database> db)
         : db_(std::move(db)) {}
 
@@ -843,7 +843,7 @@ public:
         std::shared_ptr<pacs::storage::index_database> db)
         : db_(std::move(db))
         , mpps_adapter_(std::make_shared<pacs_system_mpps_adapter>(db_))
-        , mwl_adapter_(std::make_shared<pacs_system_mwl_adapter>(db_))
+        , mwl_adapter_(std::make_shared<pacs_system_mwl_query_adapter>(db_))
         , storage_adapter_(std::make_shared<pacs_system_storage_adapter>(db_))
         , connected_(false) {}
 
@@ -851,7 +851,7 @@ public:
         return mpps_adapter_;
     }
 
-    std::shared_ptr<mwl_adapter> get_mwl_adapter() override {
+    std::shared_ptr<mwl_query_adapter> get_mwl_adapter() override {
         return mwl_adapter_;
     }
 
@@ -882,7 +882,7 @@ public:
 private:
     std::shared_ptr<pacs::storage::index_database> db_;
     std::shared_ptr<pacs_system_mpps_adapter> mpps_adapter_;
-    std::shared_ptr<pacs_system_mwl_adapter> mwl_adapter_;
+    std::shared_ptr<pacs_system_mwl_query_adapter> mwl_adapter_;
     std::shared_ptr<pacs_system_storage_adapter> storage_adapter_;
     bool connected_;
 };
