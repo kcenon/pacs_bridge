@@ -170,12 +170,12 @@ executor->shutdown(true);
 
 **Sub-adapters**:
 - `get_mpps_adapter()` → `mpps_adapter` (N-CREATE, N-SET, query, get)
-- `get_mwl_adapter()` → `mwl_adapter` (query, get_item)
+- `get_mwl_adapter()` → `mwl_query_adapter` (query, get_item)
 - `get_storage_adapter()` → `storage_adapter` (store, retrieve, exists)
 
-> **Note**: The `mwl_adapter` class in `pacs_adapter.h` and `mwl_adapter.h` are
-> different types in the same namespace. Do NOT include both headers in the same
-> translation unit (ODR violation).
+> **Note**: The read-only `mwl_query_adapter` in `pacs_adapter.h` is distinct from
+> the full CRUD `mwl_adapter` in `mwl_adapter.h`. Both headers can now be safely
+> included in the same translation unit.
 
 ### mwl_adapter (Standalone)
 

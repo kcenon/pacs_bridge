@@ -372,17 +372,21 @@ public:
 };
 
 // =============================================================================
-// MWL Service Adapter
+// MWL Query Adapter
 // =============================================================================
 
 /**
- * @brief Modality Worklist (MWL) service adapter interface
+ * @brief Modality Worklist (MWL) query adapter interface
  *
- * Provides abstraction for DICOM Worklist Query/Retrieve operations.
+ * Provides read-only abstraction for DICOM Worklist Query/Retrieve operations.
+ * Named mwl_query_adapter to avoid ODR collision with the full CRUD
+ * mwl_adapter defined in integration/mwl_adapter.h.
+ *
+ * @see integration/mwl_adapter.h for the full CRUD interface used by mwl_client
  */
-class mwl_adapter {
+class mwl_query_adapter {
 public:
-    virtual ~mwl_adapter() = default;
+    virtual ~mwl_query_adapter() = default;
 
     /**
      * @brief Query worklist
@@ -462,9 +466,9 @@ public:
     [[nodiscard]] virtual std::shared_ptr<mpps_adapter> get_mpps_adapter() = 0;
 
     /**
-     * @brief Get MWL service adapter
+     * @brief Get MWL query adapter
      */
-    [[nodiscard]] virtual std::shared_ptr<mwl_adapter> get_mwl_adapter() = 0;
+    [[nodiscard]] virtual std::shared_ptr<mwl_query_adapter> get_mwl_adapter() = 0;
 
     /**
      * @brief Get storage service adapter
