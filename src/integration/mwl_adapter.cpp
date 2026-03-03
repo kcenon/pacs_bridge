@@ -752,6 +752,15 @@ public:
         return "pacs_system";
     }
 
+    /**
+     * @brief Check if the underlying database was successfully opened
+     *
+     * @return true if database is available and operational
+     */
+    [[nodiscard]] bool is_available() const noexcept {
+        return db_ != nullptr && db_->is_open();
+    }
+
 private:
     std::unique_ptr<pacs::storage::index_database> db_;
 };
@@ -765,11 +774,20 @@ private:
 std::shared_ptr<mwl_adapter>
 create_mwl_adapter(const std::string& database_path) {
 #ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
-    return std::make_shared<pacs_mwl_adapter>(database_path);
+    // When pacs_system is available and database_path is configured,
+    // create a pacs_system-backed adapter for persistent MWL storage.
+    if (!database_path.empty()) {
+        auto adapter = std::make_shared<pacs_mwl_adapter>(database_path);
+        if (adapter->is_available()) {
+            return adapter;
+        }
+        // Database open failed - fall through to memory adapter
+    }
 #else
     (void)database_path;  // Unused in standalone mode
-    return std::make_shared<memory_mwl_adapter>();
 #endif
+    // Fallback: in-memory adapter for testing and standalone mode
+    return std::make_shared<memory_mwl_adapter>();
 }
 
 }  // namespace pacs::bridge::integration
