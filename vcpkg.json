@@ -40,6 +40,9 @@
       ]
     }
   },
-  "overrides": [],
-  "builtin-baseline": "a42af01b72c28a8e1d7b48107b33e4f286a55ef6"
+  "overrides": [
+    { "name": "gtest", "version": "1.17.0" },
+    { "name": "benchmark", "version": "1.9.5" },
+    { "name": "spdlog", "version": "1.15.3" }
+  ]
 }
