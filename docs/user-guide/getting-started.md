@@ -127,7 +127,7 @@ PACS Bridge is a C++20 integration gateway that connects Hospital Information Sy
 
 ### Step 1: Install PACS Bridge
 
-#### Option A: Build from Source
+#### Option A: Build from Source (Standalone)
 
 ```bash
 # Clone the repository
@@ -135,11 +135,28 @@ git clone https://github.com/kcenon/pacs_bridge.git
 cd pacs_bridge
 
 # Build in standalone mode (no external dependencies)
-cmake -B build -DBRIDGE_STANDALONE_BUILD=ON
-cmake --build build
+cmake --preset standalone
+cmake --build --preset standalone
 ```
 
-#### Option B: Docker Deployment
+#### Option B: Build with vcpkg (Full Features)
+
+Requires [vcpkg](https://github.com/microsoft/vcpkg) installed and `VCPKG_ROOT` set.
+
+```bash
+# Clone the repository
+git clone https://github.com/kcenon/pacs_bridge.git
+cd pacs_bridge
+
+# Build with vcpkg ecosystem features using CMake Presets
+cmake --preset default
+cmake --build --preset default
+```
+
+See [`CMakePresets.json`](https://github.com/kcenon/pacs_bridge/blob/main/CMakePresets.json) for all available presets
+(`default`, `debug`, `standalone`, `dev-fetchcontent`, `ci`, `asan`, `tsan`).
+
+#### Option C: Docker Deployment
 
 ```bash
 # Pull the latest image

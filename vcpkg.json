@@ -27,6 +27,32 @@
     }
   ],
   "features": {
+    "ecosystem": {
+      "description": "Enable kcenon ecosystem dependencies (requires vcpkg registry)",
+      "dependencies": [
+        "kcenon-common-system",
+        "kcenon-thread-system",
+        "kcenon-container-system"
+      ]
+    },
+    "monitoring": {
+      "description": "Enable runtime monitoring integration",
+      "dependencies": [
+        "kcenon-monitoring-system"
+      ]
+    },
+    "pacs": {
+      "description": "Enable PACS/DICOM system integration",
+      "dependencies": [
+        "kcenon-pacs-system"
+      ]
+    },
+    "database": {
+      "description": "Enable database persistence support",
+      "dependencies": [
+        "kcenon-database-system"
+      ]
+    },
     "tests": {
       "description": "Build with test dependencies",
       "dependencies": [
