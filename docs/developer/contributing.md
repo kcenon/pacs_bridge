@@ -47,16 +47,41 @@ Thank you for your interest in contributing to PACS Bridge! This document provid
 | C++ Compiler | GCC 13+, Clang 14+, MSVC 2022+ | C++23 support required |
 | CMake | 3.20+ | Build system |
 | Git | Latest | Version control |
-| vcpkg | Latest | Package management |
+| vcpkg | Latest | Package management (optional for standalone builds) |
 
 ### Clone and Build
+
+#### Using CMake Presets (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/kcenon/pacs_bridge.git
 cd pacs_bridge
 
-# Clone dependencies (optional for full build)
+# Option 1: Debug build with vcpkg (requires VCPKG_ROOT set)
+cmake --preset debug
+cmake --build --preset debug
+
+# Option 2: FetchContent build (no vcpkg, clones kcenon deps via Git)
+cmake --preset dev-fetchcontent
+cmake --build --preset dev-fetchcontent
+
+# Option 3: Standalone build (no external kcenon dependencies)
+cmake --preset standalone
+cmake --build --preset standalone
+
+# Run tests
+ctest --test-dir build-debug --output-on-failure
+```
+
+#### Using Manual CMake Configuration
+
+```bash
+# Clone the repository
+git clone https://github.com/kcenon/pacs_bridge.git
+cd pacs_bridge
+
+# Clone dependencies (optional for full build without vcpkg)
 cd ..
 git clone https://github.com/kcenon/common_system.git
 git clone https://github.com/kcenon/thread_system.git

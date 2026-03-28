@@ -235,20 +235,65 @@ Module partitions:
 
 ### vcpkg Integration
 
-The project uses vcpkg manifest mode (`vcpkg.json`) for managing standard third-party
-dependencies (OpenSSL, GTest, fmt, spdlog, etc.). The kcenon ecosystem packages are
-managed via CMake FetchContent.
+The project uses vcpkg manifest mode (`vcpkg.json`) for managing both standard third-party
+dependencies (OpenSSL, GTest, fmt, spdlog, etc.) and kcenon ecosystem packages via a
+[custom vcpkg registry](https://github.com/kcenon/vcpkg-registry).
+
+#### Prerequisites
+
+- [vcpkg](https://github.com/microsoft/vcpkg) installed
+- `VCPKG_ROOT` environment variable set to your vcpkg installation path
+
+#### Using CMake Presets (Recommended)
+
+CMakePresets.json provides pre-configured build profiles:
 
 ```bash
-# With vcpkg (recommended for cross-platform builds)
-cmake -B build -DCMAKE_TOOLCHAIN_FILE=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+# Default release build with vcpkg ecosystem features
+cmake --preset default
+cmake --build --preset default
+
+# Debug build with tests
+cmake --preset debug
+cmake --build --preset debug
+```
+
+#### Available Presets
+
+| Preset | Description |
+|--------|-------------|
+| `default` | Release build with vcpkg ecosystem features (ecosystem, monitoring, pacs, tls) |
+| `debug` | Debug build with vcpkg toolchain and tests enabled |
+| `standalone` | Release build without external kcenon dependencies (no vcpkg required) |
+| `dev-fetchcontent` | Debug build using FetchContent for kcenon deps (preserves existing dev workflow) |
+| `ci` | RelWithDebInfo with full features and pedantic warnings |
+| `asan` | Debug build with AddressSanitizer enabled |
+| `tsan` | Debug build with ThreadSanitizer enabled |
+
+#### Manual vcpkg Configuration
+
+```bash
+# With explicit toolchain file
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 cmake --build build
 
-# Or using VCPKG_ROOT environment variable
-export VCPKG_ROOT=/path/to/vcpkg
-cmake -B build
+# Enable specific vcpkg features
+cmake -B build \
+  -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_MANIFEST_FEATURES="ecosystem;monitoring;pacs;tls"
 cmake --build build
 ```
+
+#### vcpkg Manifest Features
+
+| Feature | Description |
+|---------|-------------|
+| `ecosystem` | Enable kcenon ecosystem dependencies (common, thread, container systems) |
+| `monitoring` | Enable runtime monitoring integration (monitoring_system) |
+| `pacs` | Enable PACS/DICOM system integration (pacs_system) |
+| `database` | Enable database persistence support (database_system) |
+| `tls` | Enable TLS support (OpenSSL) |
+| `tests` | Build with test dependencies (GTest) |
 
 ## Configuration
 
