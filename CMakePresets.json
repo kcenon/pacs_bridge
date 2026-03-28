@@ -1,0 +1,95 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (Release, vcpkg)",
+      "description": "Release build with vcpkg ecosystem features enabled",
+      "binaryDir": "${sourceDir}/build-default",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_FEATURES": "ecosystem;monitoring;pacs;tls"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug (vcpkg)",
+      "description": "Debug build with vcpkg toolchain",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_FEATURES": "ecosystem;monitoring;pacs;tls;tests"
+      }
+    },
+    {
+      "name": "standalone",
+      "displayName": "Standalone (no kcenon deps)",
+      "description": "Release build without external kcenon dependencies",
+      "binaryDir": "${sourceDir}/build-standalone",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BRIDGE_STANDALONE_BUILD": "ON"
+      }
+    },
+    {
+      "name": "dev-fetchcontent",
+      "displayName": "Dev FetchContent (Debug)",
+      "description": "Debug build using FetchContent for kcenon deps (no vcpkg)",
+      "binaryDir": "${sourceDir}/build-dev-fetchcontent",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BRIDGE_STANDALONE_BUILD": "OFF",
+        "PACS_BRIDGE_USE_FETCHCONTENT": "ON",
+        "BRIDGE_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI (RelWithDebInfo, full features)",
+      "description": "CI build with full features and pedantic warnings",
+      "binaryDir": "${sourceDir}/build-ci",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_FEATURES": "ecosystem;monitoring;pacs;database;tls;tests",
+        "BRIDGE_BUILD_TESTS": "ON",
+        "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic -Werror"
+      }
+    },
+    {
+      "name": "asan",
+      "displayName": "AddressSanitizer (Debug)",
+      "description": "Debug build with AddressSanitizer enabled",
+      "binaryDir": "${sourceDir}/build-asan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_FEATURES": "ecosystem;monitoring;pacs;tests",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address"
+      }
+    },
+    {
+      "name": "tsan",
+      "displayName": "ThreadSanitizer (Debug)",
+      "description": "Debug build with ThreadSanitizer enabled",
+      "binaryDir": "${sourceDir}/build-tsan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_MANIFEST_FEATURES": "ecosystem;monitoring;pacs;tests",
+        "CMAKE_CXX_FLAGS": "-fsanitize=thread",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=thread",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=thread"
+      }
+    }
+  ]
+}
