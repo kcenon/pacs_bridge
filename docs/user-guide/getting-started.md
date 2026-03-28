@@ -153,7 +153,7 @@ cmake --preset default
 cmake --build --preset default
 ```
 
-See [CMakePresets.json](../../CMakePresets.json) for all available presets
+See [`CMakePresets.json`](https://github.com/kcenon/pacs_bridge/blob/main/CMakePresets.json) for all available presets
 (`default`, `debug`, `standalone`, `dev-fetchcontent`, `ci`, `asan`, `tsan`).
 
 #### Option C: Docker Deployment
