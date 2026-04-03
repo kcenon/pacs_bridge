@@ -296,9 +296,9 @@ private:
 
 #ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
 
-#include <pacs/storage/index_database.hpp>
-#include <pacs/storage/instance_record.hpp>
-#include <pacs/storage/mpps_record.hpp>
+#include <kcenon/pacs/storage/index_database.h>
+#include <kcenon/pacs/storage/instance_record.h>
+#include <kcenon/pacs/storage/mpps_record.h>
 
 namespace {
 
