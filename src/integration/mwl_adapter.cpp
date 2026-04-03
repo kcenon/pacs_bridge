@@ -18,8 +18,8 @@
 #include <vector>
 
 #ifdef PACS_BRIDGE_HAS_PACS_SYSTEM
-#include <pacs/storage/index_database.hpp>
-#include <pacs/storage/worklist_record.hpp>
+#include <kcenon/pacs/storage/index_database.h>
+#include <kcenon/pacs/storage/worklist_record.h>
 #endif
 
 namespace pacs::bridge::integration {
