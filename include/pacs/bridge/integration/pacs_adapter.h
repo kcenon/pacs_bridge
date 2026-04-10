@@ -308,6 +308,28 @@ public:
      */
     [[nodiscard]] virtual std::expected<mpps_record, pacs_error>
         get_mpps(std::string_view sop_instance_uid) = 0;
+
+    /**
+     * @brief Connect to the MPPS service endpoint
+     *
+     * Default implementation succeeds immediately (for adapters that
+     * manage connections internally or do not require explicit connect).
+     */
+    [[nodiscard]] virtual std::expected<void, pacs_error> connect() {
+        return {};
+    }
+
+    /**
+     * @brief Disconnect from the MPPS service endpoint
+     */
+    virtual void disconnect() {}
+
+    /**
+     * @brief Check if the adapter is connected
+     *
+     * Default returns true (for adapters without connection state).
+     */
+    [[nodiscard]] virtual bool is_connected() const { return true; }
 };
 
 // =============================================================================
