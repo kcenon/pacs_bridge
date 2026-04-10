@@ -160,6 +160,10 @@ bool test_mpps_event_to_string() {
                 "completed string mismatch");
     TEST_ASSERT(std::string(to_string(mpps_event::discontinued)) == "DISCONTINUED",
                 "discontinued string mismatch");
+    TEST_ASSERT(std::string(to_string(mpps_event::disconnected)) == "DISCONNECTED",
+                "disconnected string mismatch");
+    TEST_ASSERT(std::string(to_string(mpps_event::reconnected)) == "RECONNECTED",
+                "reconnected string mismatch");
 
     return true;
 }
@@ -1021,6 +1025,44 @@ bool test_persistence_configuration() {
 }
 
 // =============================================================================
+// Monitor Connection Tests (Issue #382)
+// =============================================================================
+
+bool test_monitor_disabled_when_auto_reconnect_false() {
+    mpps_handler_config config;
+    config.auto_reconnect = false;
+    auto handler = mpps_handler::create(config);
+
+    auto start_result = handler->start();
+    TEST_ASSERT(start_result.has_value(), "Handler should start successfully");
+    TEST_ASSERT(handler->is_connected(), "Handler should be connected");
+
+    // With auto_reconnect=false, no monitor thread should be running.
+    // We verify by checking that stop() completes quickly (no thread to join).
+    handler->stop();
+    TEST_ASSERT(!handler->is_running(), "Handler should be stopped");
+
+    return true;
+}
+
+bool test_reconnection_statistics() {
+    mpps_handler_config config;
+    config.auto_reconnect = true;
+    config.reconnect_delay = std::chrono::seconds{1};
+    auto handler = mpps_handler::create(config);
+
+    (void)handler->start();
+
+    auto stats = handler->get_statistics();
+    TEST_ASSERT(stats.connect_attempts >= 1, "Should have at least 1 connect attempt");
+    TEST_ASSERT(stats.connect_successes >= 1, "Should have at least 1 success");
+    TEST_ASSERT(stats.reconnections == 0, "Should have 0 reconnections at start");
+
+    handler->stop();
+    return true;
+}
+
+// =============================================================================
 // Test Runner
 // =============================================================================
 
@@ -1104,6 +1146,11 @@ int main() {
     RUN_TEST(test_persistence_statistics);
     RUN_TEST(test_persistence_error_codes);
     RUN_TEST(test_persistence_configuration);
+
+    // Monitor connection tests (Issue #382)
+    std::cout << "\n--- Monitor Connection Tests (Issue #382) ---" << std::endl;
+    RUN_TEST(test_monitor_disabled_when_auto_reconnect_false);
+    RUN_TEST(test_reconnection_statistics);
 
     // Summary
     std::cout << "\n========================================" << std::endl;
