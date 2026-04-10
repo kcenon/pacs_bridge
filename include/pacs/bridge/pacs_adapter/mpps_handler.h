@@ -161,7 +161,13 @@ enum class mpps_event {
     completed,
 
     /** Procedure step discontinued/cancelled (N-SET with DISCONTINUED) */
-    discontinued
+    discontinued,
+
+    /** Connection lost — monitor detected disconnect */
+    disconnected,
+
+    /** Connection restored after automatic reconnection */
+    reconnected
 };
 
 /**
@@ -175,6 +181,10 @@ enum class mpps_event {
             return "COMPLETED";
         case mpps_event::discontinued:
             return "DISCONTINUED";
+        case mpps_event::disconnected:
+            return "DISCONNECTED";
+        case mpps_event::reconnected:
+            return "RECONNECTED";
         default:
             return "UNKNOWN";
     }
@@ -644,6 +654,9 @@ public:
 
         /** Reconnection count */
         size_t reconnections = 0;
+
+        /** Last reconnection timestamp */
+        std::chrono::system_clock::time_point last_reconnection_time;
 
         /** Last event timestamp */
         std::chrono::system_clock::time_point last_event_time;
