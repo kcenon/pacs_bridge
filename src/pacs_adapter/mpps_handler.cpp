@@ -657,14 +657,58 @@ private:
     // =========================================================================
 
     void monitor_connection() {
+        auto backoff = config_.reconnect_delay;
+        constexpr auto max_backoff = std::chrono::seconds(60);
+        size_t consecutive_failures = 0;
+
         while (!stop_requested_) {
-            std::this_thread::sleep_for(config_.reconnect_delay);
+            std::this_thread::sleep_for(backoff);
 
             if (stop_requested_) {
                 break;
             }
 
-            std::shared_lock lock(state_mutex_);
+            // Check connection health via adapter
+            bool needs_reconnect = false;
+            {
+                std::shared_lock lock(state_mutex_);
+                if (!connected_ || (adapter_ && !adapter_->is_connected())) {
+                    needs_reconnect = true;
+                }
+            }
+
+            if (needs_reconnect) {
+                // Respect max_reconnect_attempts (0 = unlimited)
+                if (config_.max_reconnect_attempts > 0
+                    && consecutive_failures >= config_.max_reconnect_attempts) {
+                    break;
+                }
+
+                bool success = false;
+                if (adapter_) {
+                    auto result = adapter_->connect();
+                    success = result.has_value();
+                }
+
+                if (success) {
+                    connected_ = true;
+                    backoff = config_.reconnect_delay;
+                    consecutive_failures = 0;
+
+                    std::unique_lock lock(stats_mutex_);
+                    stats_.reconnections++;
+                } else {
+                    connected_ = false;
+                    consecutive_failures++;
+                    backoff = std::min(
+                        std::chrono::duration_cast<std::chrono::seconds>(backoff * 2),
+                        max_backoff);
+                }
+            } else {
+                // Connection is healthy — reset backoff
+                backoff = config_.reconnect_delay;
+                consecutive_failures = 0;
+            }
         }
     }
 
